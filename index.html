@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>🐠 Aquarium Vivant</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="hud">
+  <div id="depth-gauge"><div id="depth-marker"></div></div>
+  <div id="clock">☀️</div>
+  <div id="food-bar">
+    <button class="food-btn active" data-food="generic" title="Graines standard">🌾</button>
+    <button class="food-btn" data-food="plancton_dore" title="Plancton doré">✨</button>
+    <button class="food-btn" data-food="micro_crevettes" title="Micro-crevettes">🦐</button>
+    <button class="food-btn" data-food="vers_de_sable" title="Vers de sable">🪱</button>
+    <button id="info-btn" title="Fiches d'identité au survol">🔍</button>
+    <button id="legend-btn" title="Légende des bulles et des expressions">❔</button>
+  </div>
+  <div id="info"></div>
+</div>
+<script src="js/boot.js"></script>
+</body>
+</html>

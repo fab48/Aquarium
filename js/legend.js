@@ -1,0 +1,73 @@
+// Légende : ce que veulent dire les bulles de BD et les expressions des poissons.
+// Panneau HTML (pas du canvas) : c'est du texte, autant le laisser au navigateur.
+
+const Legend = {
+  BULLES: [
+    ['❗', 'repère une proie et part en chasse'],
+    ['💥', 'une proie vient de se faire attraper'],
+    ['😋', 'vient de manger'],
+    ['❤', 'amoureux · parade · câlin d\'étoile de mer'],
+    ['ha', 'chatouillé par le Poisson-clown, il se marre'],
+    ['PROUT !', 'le Poisson-perroquet Pétomane se soulage'],
+    ['🥚', 'ponte'],
+    ['★', 'sonné après un raté'],
+    ['💨', 'le nuage du Pétomane'],
+    ['💦', 'la murène a raté son coup'],
+    ['BOUH !', 'le Dauphin Farceur surgit et fait sursauter un banc'],
+    ['♥ ♥ ♥', 'petits cœurs : un couple s\'embrasse avant de pondre'],
+    ['♪', 'la Raie Ronron ronronne (survole-la lentement)'],
+    ['○', 'la Sardine Bulle-fofolle fait son glouglou'],
+    ['ZzZ', 'endormi (yeux fermés, bouche qui ronfle)'],
+    ['BOUM !', 'trop nourri : il a atteint 5x sa taille et il a éclaté'],
+    ['!', 'a peur'],
+  ],
+
+  // Chaque action du jeu a son émotion attitrée. Tenir cette table à jour :
+  // c'est elle qui garantit qu'on lit ce que fait un poisson sur son visage.
+  EXPRESSIONS: [
+    ['tranquille', 'idle — sourcil neutre, la pupille suit votre souris'],
+    ['chasse une proie', 'angry — sourcil lourd, croc, veine de colère'],
+    ['prend la fuite', 'scared — œil énorme, pupille minuscule, cri'],
+    ['vient d\'attraper', 'eating — bouche qui mâche, la queue de la proie dépasse'],
+    ['régale (nourriture favorite)', 'happy — grand sourire, étincelles'],
+    ['affamé', 'sad — sourcils tombants, goutte'],
+    ['dort', 'sleeping — yeux fermés, bouche qui ronfle, ZzZ qui flottent'],
+    ['sonné (attaque ratée)', 'dizzy — yeux en spirale, bouche ondulée'],
+    ['cherche un partenaire', 'love — yeux brillants, petits cœurs'],
+    ['embrasse (couple ou bisou du clown)', 'kiss — yeux fermés, lèvres en avant'],
+    ['chatouillé', 'laughing — bouche grande ouverte, sourcils qui gigotent'],
+    ['sent le pétomane, ou vient d’avaler un caca', 'disgust — joues VERTES, sourire inversé, sourcils froncés — et il perd de l’état'],
+    ['a un caca en route', 'ashamed puis happy — il s’arrête, se concentre, soulagement'],
+    ['gavé (plus de 2,5× sa taille)', 'surprise puis scared — il tremble de plus en plus fort avant d’exploser'],
+    ['avant de lâcher son prout', 'ashamed — regard fuyant, sourcils tombants'],
+    ['après son prout', 'blush — tout rouge'],
+    ['surpris (BOUH, éclosion, fausse charge)', 'surprise — œil rond, sourcils au plafond'],
+    ['fait semblant de charger (orque)', 'wink — clin d\'œil complice'],
+    ['approche en douce (dauphin)', 'smug — paupière basse, sourire en coin'],
+    ['plongeon raté (oiseau)', 'sad — trempé et dépité'],
+    ['gênée d\'avoir raté (murène)', 'blush'],
+    ['timide (hippocampe, curseur proche)', 'blush'],
+  ],
+
+  visible: false,
+
+  init() {
+    const panel = document.createElement('div');
+    panel.id = 'legend';
+    panel.innerHTML =
+      '<h3>Bulles</h3><table>' +
+      this.BULLES.map(([s, d]) => `<tr><td class="sym">${s}</td><td>${d}</td></tr>`).join('') +
+      '</table><h3>Ce que fait le poisson &rarr; son visage</h3><table>' +
+      this.EXPRESSIONS.map(([a, d]) => `<tr><td class="sym">${a}</td><td>${d}</td></tr>`).join('') +
+      '</table>';
+    document.getElementById('hud').appendChild(panel);
+    this.panel = panel;
+
+    const btn = document.getElementById('legend-btn');
+    btn.addEventListener('click', () => {
+      this.visible = !this.visible;
+      panel.classList.toggle('open', this.visible);
+      btn.classList.toggle('active', this.visible);
+    });
+  },
+};

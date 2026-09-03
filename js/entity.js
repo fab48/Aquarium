@@ -619,8 +619,11 @@ class Entity {
   limiteLarge() {
     if (this._limiteLarge != null) return this._limiteLarge;
     // Les colosses gardent une marge confortable ; pour les autres, il suffit
-    // qu'ils tiennent dans la colonne d'eau sans racler ni dépasser.
-    const besoin = this.def.size * (this.def.size >= 70 ? 2.6 : 2.2);
+    // qu'ils tiennent dans la colonne d'eau sans racler ni dépasser. Une espèce
+    // peut exiger davantage (`offshore`) : les petits nageurs de surface tiennent
+    // dans 30 px d'eau, donc leur barrière tombait littéralement dans le ressac.
+    const besoin = Math.max(this.def.offshore ?? 0,
+                            this.def.size * (this.def.size >= 70 ? 2.6 : 2.2));
     let x = World.shoreX;
     const pas = CONFIG.DEPTH_COLUMN_WIDTH / 2;
     while (x < CONFIG.WORLD_WIDTH && World.floorY(x) - CONFIG.SURFACE_Y < besoin) x += pas;
@@ -968,6 +971,11 @@ class Entity {
         // Sous l'eau : monte en ligne droite vers la surface ; en l'air : arc balistique
         if (this.y <= CONFIG.SURFACE_Y) this.vy += 500 * dt;
         this.x += this.vx * dt; this.y += this.vy * dt;
+        // Filet de sécurité : la barrière du rivage vaut AUSSI en vol. Un saut
+        // déclenché au large mais rattrapé par une fuite finissait au-dessus du
+        // sable, seul cas où un poisson traverse la plage.
+        const bord = this.limiteLarge();
+        if (this.x < bord) { this.x = bord; this.vx = Math.abs(this.vx); }
         this.speedNow = Math.hypot(this.vx, this.vy);
         this.angle = Math.atan2(this.vy, this.vx || 1) * 0.6; // pique du nez en retombant
         // Sortie de l'eau (montée qui croise la surface)
@@ -988,8 +996,14 @@ class Entity {
         this.jumpState = 'air';
         this._airborne = false;
         this.vy = -U.rand(240, 330);
-        // élan horizontal : un saut en cloche, pas une chandelle sur place
-        this.vx = (this.vx >= 0 ? 1 : -1) * Math.max(Math.abs(this.vx), U.rand(70, 130));
+        // élan horizontal : un saut en cloche, pas une chandelle sur place.
+        // JAMAIS vers la plage quand on en est déjà près : la phase aérienne
+        // court-circuite toutes les contraintes horizontales, et le sauteur
+        // retombait sur le sable — spectaculairement, quand la fuite lui avait
+        // déjà donné de l'élan dans cette direction.
+        const versLeLarge = this.x < this.limiteLarge() + 300;
+        const sens = versLeLarge ? 1 : (this.vx >= 0 ? 1 : -1);
+        this.vx = sens * Math.max(Math.abs(this.vx), U.rand(70, 130));
         return;
       }
     }

@@ -143,8 +143,12 @@ const Ecosystem = {
           // un tirage au sort laisse de grands vides en pleine mer et entasse
           // tout près du rivage.
           let valid = [];
+          // `offshore` : espèce tenue au large (petits nageurs de surface que le
+          // haut-fond piège contre la plage). Sans ce filtre, le premier groupe
+          // de la répartition régulière atterrissait dans le ressac.
+          const colonneMin = Math.max(def.depthBand[0] + 80, def.offshore ?? 0);
           for (let cx = World.shoreX + 200; cx < CONFIG.WORLD_WIDTH - 200; cx += 200) {
-            if (World.depthAt(cx) >= def.depthBand[0] + 80) valid.push(cx);
+            if (World.depthAt(cx) >= colonneMin) valid.push(cx);
           }
           // Habitat préféré (hippocampes dans les herbiers, GDD §12)
           if (def.habitat) {
@@ -160,7 +164,7 @@ const Ecosystem = {
             // fait quelques dizaines de pixels, et un banc qui y apparaît se
             // retrouve coincé entre la surface et le sable — les confettis
             // finissaient projetés sur la plage dès le premier instant.
-            const besoin = def.depthBand[0] + def.size * 6;
+            const besoin = Math.max(def.depthBand[0] + def.size * 6, def.offshore ?? 0);
             let essai = 0;
             do {
               x = U.rand(World.shoreX + 200, CONFIG.WORLD_WIDTH - 200);
@@ -192,7 +196,7 @@ const Ecosystem = {
         // banc, coincé entre la surface et le sable, se faisait éjecter sur la
         // plage. On le repousse au large jusqu'à avoir de quoi nager.
         if (!bottomDweller && def.movement !== 'crawl' && !def.aerial) {
-          const besoin = def.depthBand[0] + def.size * 8;
+          const besoin = Math.max(def.depthBand[0] + def.size * 8, def.offshore ?? 0);
           let garde = 0;
           while (World.depthAt(sx) < besoin && sx < CONFIG.WORLD_WIDTH - 200 && garde++ < 80) sx += 100;
         }
@@ -278,7 +282,13 @@ const Ecosystem = {
       const span = CONFIG.WORLD_WIDTH - World.shoreX - 900;
       // Les colosses fraient plus au large : un haut-fond où ils s'échoueraient
       // n'est pas une frayère viable pour eux.
-      const start = World.shoreX + (def.size >= 70 ? 1800 : 500);
+      let start = World.shoreX + (def.size >= 70 ? 1800 : 500);
+      // Idem pour une espèce tenue au large (`offshore`) : sa frayère tombait de
+      // l'autre côté de sa propre barrière, et le banc migrait pour venir s'y
+      // écraser — exactement l'entassement contre la plage qu'on veut éviter.
+      if (def.offshore) {
+        while (start < CONFIG.WORLD_WIDTH * 0.5 && World.depthAt(start) < def.offshore) start += 150;
+      }
       const x = start + (e.id % 6) * (span / 6);
       const y = CONFIG.SURFACE_Y
         + U.clamp(World.depthAt(x) * 0.35, def.size * 2.2, 400);

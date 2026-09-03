@@ -18,6 +18,9 @@
 //   lure: {range, missChance} — pêche à la lampe : hypnotise les proies alentour et
 //                               les attire à sa bouche (Poisson-lanterne)
 //   ink: true               — lâche un rideau d'encre en fuyant : le poursuivant perd sa trace
+//   offshore: <px>          — colonne d'eau minimale sous l'espèce : elle est tenue AU LARGE
+//                             de ce point (barrière, spawn et frayère). Sert aux espèces de
+//                             surface que le haut-fond piège contre la plage.
 //   spanRatio: n            — demi-emprise DESSINÉE, en multiples de `size` (défaut 1,05).
 //                             À déclarer dès qu'une silhouette déborde nettement de sa
 //                             taille nominale : c'est ce que lit l'anti-chevauchement des colosses.
@@ -44,6 +47,10 @@ const SPECIES = {
     name: 'Sardine Bulle-fofolle', realName: 'Petite sardine de surface', trophic: 2, movement: 'wideband',
     nursery: 'shallow',
     depthBand: [10, 110], size: 13, speed: 90,
+    // AU LARGE. Sa barrière de rivage, calculée sur sa taille, tombait à 40 px
+    // de colonne d'eau : poursuivie par le Fou Moustachu, elle finissait
+    // plaquée dans le ressac, et ses sauts la déposaient carrément sur le sable.
+    offshore: 950,
     schooling: true, groupSize: [5, 8],
     favoriteFood: 'plancton_dore', eatsFood: true,
     colors: ['#7fd8ff', '#a8e6ff'],
@@ -155,6 +162,7 @@ const SPECIES = {
     name: 'Poisson Volant Cascadeur', realName: 'Exocet', trophic: 2, movement: 'wideband',
     nursery: 'shallow',
     depthBand: [10, 100], size: 14, speed: 95,
+    offshore: 950,   // même raison que la Sardine Bulle-fofolle : le haut-fond la piégeait
     schooling: true, groupSize: [4, 6],
     favoriteFood: 'plancton_dore', eatsFood: true,
     colors: ['#5ecfff', '#9be8ff'],

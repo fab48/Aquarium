@@ -318,13 +318,18 @@ const FishBody = {
     if (!sp) { this.drawFish(ctx, e, t); return; }   // pas encore chargé : on ne saute pas de frame
 
     const s = e.size;
-    // ÉCHELLE. Référence mesurée : une silhouette procédurale occupe environ
-    // 2,5 fois `size` en longueur (99 px relevés sur un requin de 40). Un sprite
-    // doit remplir la même place, sinon il paraît rabougri au milieu des autres —
-    // c'était le cas à `size * 2` (77 px) comme à `size * 2 * spanRatio` (84 px).
-    // `spriteScale` rattrape ensuite un dessin plus serré ou plus large que la
-    // moyenne, sans toucher à l'emprise physique (`spanRatio`, cf. les colosses).
-    const k = (s * 2.5 * (e.def.spriteScale || 1)) / sp.w;
+    // ÉCHELLE, dans l'ordre de préséance.
+    // 1. Le document la DÉCLARE (`echelle` / `tailleJeu`) : c'est le cas de tout
+    //    ce qui sort de `SVGExport`, et la seule façon d'être juste.
+    // 2. Sinon, référence mesurée : une silhouette procédurale occupe environ
+    //    2,5 fois `size` en longueur (99 px relevés sur un requin de 40). Cette
+    //    règle suppose un poisson ALLONGÉ ; sur une créature verticale elle se
+    //    trompe lourdement (hippocampe +83 %, poisson-lune +29 % au relevé).
+    //    `spriteScale` est là pour ça.
+    const ajust = sp.spriteScale || e.def.spriteScale || 1;
+    const k = (sp.echelle && sp.tailleJeu)
+      ? sp.echelle * (s / sp.tailleJeu) * ajust
+      : (s * 2.5 * ajust) / sp.w;
 
     // Battement de queue : la fréquence suit l'allure RÉELLE, pas une constante.
     // Un requin qui charge doit visiblement forcer.
@@ -351,9 +356,20 @@ const FishBody = {
         ctx.rotate(battement * (forme.amp || 15) * 0.007);
         ctx.translate(-forme.pivot[0], -forme.pivot[1]);
       }
-      ctx.fillStyle = forme.fill || '#888';
       this.tracerForme(ctx, forme, sp, onde, fins, battement);
-      ctx.fill();
+      // Une forme peut être remplie, tracée au trait, ou les deux. Les
+      // tentacules et les antennes sont des TRAITS : les traiter comme des
+      // polygones les rendrait difformes, les ignorer les ferait disparaître.
+      if (forme.fill !== null || !forme.stroke) {
+        ctx.fillStyle = forme.fill || '#888';
+        ctx.fill();
+      }
+      if (forme.stroke) {
+        ctx.strokeStyle = forme.stroke;
+        ctx.lineWidth = forme.lineWidth || 1;
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        ctx.stroke();
+      }
       ctx.restore();
     });
     ctx.restore();
@@ -429,23 +445,35 @@ const FishBody = {
       }
       P[i] = [x, y];
     }
+    // Un trait ouvert (tentacule, antenne) ne se referme pas : le boucler
+    // dessinerait une corde en travers de la créature.
+    const ferme = forme.ferme !== false;
     ctx.beginPath();
     if (forme.smooth && n > 2) {
-      // Contour fermé lissé : on passe par les MILIEUX des segments, les sommets
+      // Contour lissé : on passe par les MILIEUX des segments, les sommets
       // servant de points de contrôle. Relier les sommets en droites donnait des
       // poissons taillés à la serpe.
       const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-      const d = mid(P[n - 1], P[0]);
-      ctx.moveTo(d[0], d[1]);
-      for (let i = 0; i < n; i++) {
-        const m = mid(P[i], P[(i + 1) % n]);
-        ctx.quadraticCurveTo(P[i][0], P[i][1], m[0], m[1]);
+      if (ferme) {
+        const d = mid(P[n - 1], P[0]);
+        ctx.moveTo(d[0], d[1]);
+        for (let i = 0; i < n; i++) {
+          const m = mid(P[i], P[(i + 1) % n]);
+          ctx.quadraticCurveTo(P[i][0], P[i][1], m[0], m[1]);
+        }
+      } else {
+        ctx.moveTo(P[0][0], P[0][1]);
+        for (let i = 1; i < n - 1; i++) {
+          const m = mid(P[i], P[i + 1]);
+          ctx.quadraticCurveTo(P[i][0], P[i][1], m[0], m[1]);
+        }
+        ctx.lineTo(P[n - 1][0], P[n - 1][1]);
       }
     } else {
       ctx.moveTo(P[0][0], P[0][1]);
       for (let i = 1; i < n; i++) ctx.lineTo(P[i][0], P[i][1]);
     }
-    ctx.closePath();
+    if (ferme) ctx.closePath();
   },
 
   // --- Silhouettes ------------------------------------------------------------

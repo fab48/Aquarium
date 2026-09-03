@@ -115,13 +115,17 @@ d'espèce reste lu : le manifeste ne fait que le compléter ou l'annuler.
 | Champ | Rôle | Si absent |
 |---|---|---|
 | `naturalW`, `naturalH` | dimensions du dessin | la boîte des points fait foi |
+| `echelle`, `tailleJeu` | **échelle déclarée** : une unité de dessin vaut `echelle` unités de jeu, pour une créature de taille `tailleJeu` | règle du poisson allongé (ci-dessous) |
+| `spriteScale` | rattrapage d'échelle du document | `def.spriteScale`, puis 1 |
 | `points.center` | **origine de la créature** : le point posé à `(entity.x, entity.y)` | centre de la boîte |
 | `points.eye` | ancre de l'œil (et du sourcil, de la joue) | pas de visage |
 | `points.eye.r` | **taille de l'œil, en unités du dessin** — la calibration à préférer | on passe à `faceK` |
 | `points.mouth` | ancre de la bouche, **honorée séparément** | bouche à sa place par défaut |
 | `points.nose`, `points.tail` | repères de l'atelier | ignorés par le jeu |
 | `shapes[].points` | contour, `[[x,y], …]` | — |
-| `shapes[].fill` | couleur pleine | gris |
+| `shapes[].fill` | couleur pleine, ou `null` pour un tracé au trait seul | gris |
+| `shapes[].stroke`, `.lineWidth` | **trait** — tentacule, antenne, patte | pas de trait |
+| `shapes[].ferme` | contour refermé (`false` pour un trait ouvert) | fermé |
 | `shapes[].smooth` | contour lissé plutôt qu'en ligne brisée | lignes droites |
 | `shapes[].pivot` | rotation en bloc — **repli** quand aucun `fins[]` ne vise la forme | elle ondule |
 | `shapes[].amp` | amplitude d'animation, en degrés pour une nageoire | 15 |
@@ -137,12 +141,16 @@ d'espèce reste lu : le manifeste ne fait que le compléter ou l'annuler.
    l'éditeur l'a presque à la verticale. Elle atterrissait 4 px trop en avant,
    **sur le museau**. D'où `FishBody.bouche()`, extraite de `drawFace` — même
    rôle que `FishBody.oeil()` pour l'œil isolé du crabe.
-2. **Le dessin est mis à la largeur d'une silhouette procédurale**, mesurée à
-   ~2,5 fois `size` (99 px relevés sur un requin de 40). À `size * 2` (77 px)
-   puis à `size * 2 * spanRatio` (84 px) le requin paraissait rabougri au milieu
-   des autres. `spriteScale` rattrape un dessin plus serré ou plus large, **sans
-   toucher à l'emprise physique** (`spanRatio`, que lisent l'anti-chevauchement
-   des colosses et les distances de prise).
+2. **L'échelle vient du document quand il la déclare.** `SVGExport` écrit
+   `echelle` et `tailleJeu` dans la métadonnée : le jeu sait alors exactement à
+   quelle taille dessiner. À défaut — un dessin fait à la main — il retombe sur
+   une règle mesurée : une silhouette procédurale occupe ~2,5 fois `size` en
+   longueur (99 px relevés sur un requin de 40). **Cette règle suppose un poisson
+   allongé** et se trompe lourdement sur tout ce qui est vertical : au relevé sur
+   les 27 espèces, l'hippocampe ressortait **83 %** trop grand et le poisson-lune
+   29 %. C'est à ça que sert `spriteScale`, qui rattrape **sans toucher à
+   l'emprise physique** (`spanRatio`, que lisent l'anti-chevauchement des
+   colosses et les distances de prise).
 3. **La taille du visage** vient de `points.eye.r` (converti par le 0,22 de
    `drawFace`), sinon de `faceK`, sinon de `def.spriteFace`, sinon de **0,75 ×
    `size`**. À 1 — la valeur des silhouettes procédurales — l'œil débordait du
@@ -195,8 +203,25 @@ rien à maintenir. Les points sont ensuite réduits (**Douglas-Peucker**) : sans
 on obtient 200 points par contour, illisibles à éditer et inutilement chers à
 dessiner soixante fois par seconde.
 
+**Les tracés au trait comptent autant que les remplissages.** Les tentacules
+d'une méduse, les bras d'un poulpe, les antennes d'une crevette sont des
+`stroke`. En ne gardant que les formes remplies, la méduse perdait la moitié de
+sa hauteur et le poulpe un tiers de sa largeur. Un trait garde sa couleur, son
+épaisseur, ses bouts ronds, et **ne se referme pas** — le boucler dessinerait une
+corde en travers de la créature.
+
 Mesuré sur un vrai dessin fait main (`Assets/clownfish.svg`, 17 ko) : **10
 formes, 430 points, 255 ms**, couleurs conservées.
+
+### Contrôle sur les 27 espèces
+
+Reprise de la silhouette, rendu hors écran, comparaison de l'emprise de l'encre
+avec la silhouette procédurale, **au même instant d'animation** (sinon on compare
+deux positions de nageoires et tout paraît faux). Résultat : **19 des 27 à moins
+de 12 %** d'écart. Les huit restantes le sont pour une raison connue et voulue —
+le visage commun est plus grand que les petits yeux dessinés à la main du
+coquillage, du crabe ou du poisson-clown. C'est le curseur de taille d'œil de
+l'atelier qui tranche, espèce par espèce.
 
 Les ancres manquantes reçoivent des valeurs de départ (le dessin regarde vers la
 **droite**, comme toutes les silhouettes du jeu), et le rayon de l'œil est

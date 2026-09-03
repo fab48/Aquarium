@@ -278,6 +278,14 @@ const SVGExport = {
       name: cap.def.name,
       realName: cap.def.realName,
       size: cap.def.size,
+      // ÉCHELLE DÉCLARÉE. Sans elle, le jeu doit deviner à quelle taille
+      // dessiner un document, et sa seule règle possible — « la largeur vaut
+      // 2,5 fois `size` » — est une hypothèse de poisson allongé. Elle casse sur
+      // tout ce qui est vertical : l'hippocampe ressortait 83 % trop grand, le
+      // poisson-lune 29 %. Ici on SAIT : une unité de dessin vaut `echelle`
+      // unités de jeu, pour une créature de taille `tailleJeu`.
+      echelle: 1 / ECHELLE,
+      tailleJeu: +cap.entity.size.toFixed(2),
       points: anc,
       // Suggestions : l'éditeur peut les reprendre telles quelles.
       tailBlend: n(tx([x0 + (x1 - x0) * 0.28, 0])),

@@ -73,17 +73,33 @@ const SVGImport = {
       const H = vb.length === 4 ? vb[3] : (parseFloat(svg.getAttribute('height')) || 200);
 
       const shapes = [];
-      const geo = svg.querySelectorAll('path, polygon, polyline, circle, ellipse, rect');
+      const geo = svg.querySelectorAll('path, polygon, polyline, circle, ellipse, rect, line');
       for (const el of geo) {
-        const remplissage = getComputedStyle(el).fill;
-        if (!remplissage || remplissage === 'none') continue;
+        const st = getComputedStyle(el);
+        const remplissage = st.fill && st.fill !== 'none' ? this.enHex(st.fill) : null;
+        // LES TRACÉS AU TRAIT COMPTENT AUTANT. Les tentacules d'une méduse, les
+        // bras d'un poulpe, les antennes d'une crevette sont des `stroke`, pas
+        // des remplissages. En les ignorant, la méduse perdait la moitié de sa
+        // hauteur et le poulpe un tiers de sa largeur.
+        const trait = st.stroke && st.stroke !== 'none' ? this.enHex(st.stroke) : null;
+        if (!remplissage && !trait) continue;
         let pts = this.echantillonner(el);
-        if (pts.length < 3) continue;
+        if (pts.length < 2) continue;
         pts = this.reduire(pts, Math.max(W, H) * 0.0018);
-        if (pts.length < 3) continue;
-        shapes.push({ points: pts, fill: this.enHex(remplissage), smooth: true, pivot: null, amp: 15 });
+        if (pts.length < 2) continue;
+        if (!remplissage && pts.length < 3) { /* un simple segment reste valable */ }
+        else if (pts.length < 3) continue;
+        // Une forme remplie est fermée ; un trait ne l'est que si le chemin
+        // l'était (`getPointAtLength` boucle alors sur lui-même).
+        const ferme = !!remplissage || this.boucle(pts, Math.max(W, H));
+        shapes.push({
+          points: pts, fill: remplissage, smooth: true, pivot: null, amp: 15,
+          stroke: trait,
+          lineWidth: trait ? Math.max(0.4, parseFloat(st.strokeWidth) || 1) : 0,
+          ferme,
+        });
       }
-      if (!shapes.length) throw new Error('aucune forme remplie trouvée');
+      if (!shapes.length) throw new Error('aucune forme trouvée');
 
       // Métadonnée de nos propres exports : les ancres y sont déjà.
       let meta = null;
@@ -92,7 +108,9 @@ const SVGImport = {
 
       return this.finaliser({ naturalW: W, naturalH: H, shapes,
                               points: (meta && meta.points) || null,
-                              tailBlend: meta && meta.tailBlend, nom });
+                              tailBlend: meta && meta.tailBlend,
+                              echelle: meta && meta.echelle,
+                              tailleJeu: meta && meta.tailleJeu, nom });
     } finally {
       hote.remove();
     }
@@ -134,6 +152,12 @@ const SVGImport = {
       points: p,
       fins: doc.fins || [],
       tailBlend: doc.tailBlend != null ? doc.tailBlend : x0 + L * 0.28,
+      // Échelle déclarée : une unité de dessin vaut `echelle` unités de jeu,
+      // pour une créature de taille `tailleJeu`. Absente d'un dessin fait à la
+      // main — le jeu retombe alors sur sa règle de poisson allongé, que
+      // `spriteScale` rattrape.
+      echelle: doc.echelle, tailleJeu: doc.tailleJeu,
+      spriteScale: doc.spriteScale,
       shapes: doc.shapes,
       espece: doc.espece || null,
       nom: doc.nom || null,
@@ -151,6 +175,12 @@ const SVGImport = {
     }
     if (!isFinite(y0) || y1 - y0 < 1) return Math.max(2, largeur * 0.05);
     return Math.round((y1 - y0) * 0.25 * 10) / 10;
+  },
+
+  // Le tracé revient-il à son point de départ ?
+  boucle(pts, taille) {
+    const a = pts[0], b = pts[pts.length - 1];
+    return Math.hypot(a[0] - b[0], a[1] - b[1]) < taille * 0.01;
   },
 
   enHex(c) {

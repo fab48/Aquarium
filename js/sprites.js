@@ -58,7 +58,10 @@ const Sprites = {
   get(nom) { return this.cache[nom] || null; },
 
   preparer(d) {
-    const shapes = (d.shapes || []).filter(sh => sh.points && sh.points.length > 2);
+    // 2 points suffisent pour un trait ouvert (un segment de tentacule) ; il en
+    // faut 3 pour un contour rempli.
+    const shapes = (d.shapes || []).filter(sh => sh.points
+      && sh.points.length >= (sh.fill == null && sh.stroke ? 2 : 3));
     let minX = Infinity, maxX = -Infinity;
     for (const sh of shapes) for (const p of sh.points) {
       if (p[0] < minX) minX = p[0];
@@ -82,6 +85,7 @@ const Sprites = {
       //    d'où la conversion.
       // 2. `faceK`/`faceTx`/`faceTy` — la forme en multiples de `size`, plus
       //    abstraite mais utile pour un rattrapage grossier.
+      echelle: d.echelle, tailleJeu: d.tailleJeu, spriteScale: d.spriteScale,
       faceR: d.points && d.points.eye && d.points.eye.r,
       faceK: d.faceK, faceTx: d.faceTx, faceTy: d.faceTy,
       shapes,

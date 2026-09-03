@@ -86,15 +86,15 @@ const SPECIES = {
   requin: {
     name: 'Requin Dents-Molles', realName: 'Requin', trophic: 4, movement: 'free',
     nursery: 'shallow',
-    // TAILLE x3 (46 -> 138) : au-dela de 70 il bascule dans les regles des
-    // colosses — tirant d'eau, garde au sol, barriere dure au rivage, liste
-    // de separation dediee. Remettre 46 suffit a tout annuler.
-    depthBand: [500, 1700], size: 138, speed: 80, sprintSpeed: 360,
-    // Un colosse mange moins souvent, comme la Baleine, le Cachalot et le
-    // Poisson-lune. Sans ça, le requin triplé vidait le Thon et le
-    // Poisson-perroquet jusqu'à leur plancher de report, puis mourait de faim
-    // lui-même (3 morts de faim en 8 min, effectif tombé à 2).
-    schooling: false, groupSize: [1, 2], popCap: 6, metabolism: 0.5,
+    // Gabarit d'ORQUE (70). C'est le seuil exact des colosses : il en prend
+    // donc toutes les regles — tirant d'eau, garde au sol, barriere dure au
+    // rivage, liste de separation dediee.
+    depthBand: [500, 1700], size: 70, speed: 80, sprintSpeed: 360,
+    // Pas de `metabolism` ralenti : l'Orque, exactement du même gabarit et
+    // soumise aux mêmes règles de colosse, n'en a pas. Il n'était nécessaire
+    // qu'à taille triplée (138), où le rayon de prise du requin vidait ses
+    // proies jusqu'à leur plancher de report avant qu'il ne s'affame lui-même.
+    schooling: false, groupSize: [1, 2], popCap: 6,
     prey: ['thon', 'perroquet'], missChance: 0.5,   // rate souvent (gag signature)
     colors: ['#8aa3b8'],
     bodyRatio: 0.42, tail: 'shark', fin: true,

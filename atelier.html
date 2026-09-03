@@ -168,6 +168,7 @@ let manifeste = {};     // espèce -> nom de fichier sprite
 const brouillons = {};  // espèce -> doc pas encore enregistré
 let vueT = { x: 0, y: 0, k: 1 };
 let anime = false;
+let fantome = false;    // superposition de la silhouette procédurale
 let attrape = null;     // ce que la souris tient en ce moment
 
 const CLE_ANCRES = ['center', 'nose', 'eye', 'mouth', 'tail'];
@@ -237,6 +238,16 @@ function brancher() {
 }
 function debrancher() { const d = defEspece(); if (d.sprite === '__atelier__') delete d.sprite; }
 
+// Même règle que `FishBody.drawSprite` : l'échelle déclarée si elle existe,
+// sinon la règle du poisson allongé. Dupliquée ici parce que l'atelier doit
+// convertir les coordonnées du DESSIN en coordonnées écran pour ses poignées.
+function echelleRendu(sp, def) {
+  const ajust = sp.spriteScale || def.spriteScale || 1;
+  return (sp.echelle && sp.tailleJeu)
+    ? sp.echelle * (def.size / sp.tailleJeu) * ajust
+    : (def.size * 2.5 * ajust) / sp.w;
+}
+
 function bornes(sp) {
   let y0 = Infinity, y1 = -Infinity;
   for (const sh of sp.shapes) for (const p of sh.points) {
@@ -280,9 +291,25 @@ function dessiner() {
   // Échelle : `FishBody.draw` travaille en unités de jeu autour de l'origine,
   // il faut donc défaire sa mise à l'échelle pour retrouver les coordonnées du
   // dessin, sur lesquelles portent les poignées.
-  const kJeu = (def.size * 2.5 * (def.spriteScale || 1)) / sp.w;
+  const kJeu = echelleRendu(sp, def);
   const t = anime ? performance.now() / 1000 : 1.2;
   Main.time = t;
+
+  // Fantôme : la silhouette procédurale que ce dessin remplace, en gris, calée
+  // sur la MÊME origine. C'est la seule façon de juger d'un coup d'œil si un
+  // dessin importé est à la bonne taille — la règle de repli du jeu suppose un
+  // poisson allongé et se trompe sur tout ce qui est vertical.
+  if (fantome) {
+    debrancher();
+    ctx.save();
+    ctx.globalAlpha = 0.3;
+    ctx.translate(sp.cx * vueT.k + vueT.x, sp.cy * vueT.k + vueT.y);
+    ctx.scale(vueT.k / kJeu, vueT.k / kJeu);
+    try { FishBody.draw(ctx, poser('idle', t), t); } catch (err) { /* ignore */ }
+    ctx.restore();
+    brancher();
+  }
+
   ctx.save();
   ctx.translate(sp.cx * vueT.k + vueT.x, sp.cy * vueT.k + vueT.y);
   ctx.scale(vueT.k / kJeu, vueT.k / kJeu);
@@ -370,7 +397,7 @@ function bandeau() {
   if (!doc) return;
   const sp = brancher(); const def = defEspece();
   const b = bornes(sp);
-  const kJeu = (def.size * 2.5 * (def.spriteScale || 1)) / sp.w;
+  const kJeu = echelleRendu(sp, def);
   const pas = W / HUMEURS.length;
   const k = Math.min((pas - 16) / (sp.w * kJeu), (H - 34) / Math.max(1, (b.y1 - b.y0) * kJeu));
   const t = anime ? performance.now() / 1000 : 1.2;
@@ -436,7 +463,16 @@ function panneau() {
         <kbd>Ctrl</kbd>+<kbd>Z</kbd> annule, partout dans l'atelier.</p>`;
     }
 
-    h += `<h2>Formes</h2><div class="formes">` + doc.shapes.map((sh, i) =>
+    h += `<h2>Taille</h2>
+      <label>Échelle <span class="val" id="vEch">${(doc.spriteScale || 1).toFixed(2)}</span>×</label>
+      <input type="range" id="sEch" min="0.3" max="3" step="0.01" value="${doc.spriteScale || 1}">
+      <p class="aide">${doc.echelle
+        ? 'Le document déclare son échelle : ce curseur ne fait que la corriger.'
+        : '<b>Dessin sans échelle déclarée.</b> Le jeu suppose alors un poisson allongé (largeur ≈ 2,5 × taille), ce qui est faux sur une créature verticale.'}</p>
+      <div class="rangee"><button id="bFantome" class="${fantome ? 'on' : ''}">Silhouette d'origine</button></div>
+      <p class="aide">Superpose en gris la silhouette procédurale que ce dessin remplace : c'est le repère pour juger de la taille.</p>
+
+      <h2>Formes</h2><div class="formes">` + doc.shapes.map((sh, i) =>
       `<div class="forme ${i === formeSel ? 'sel' : ''}" data-i="${i}">
          <span class="pastel" style="background:${sh.fill}"></span>
          <span class="info">forme ${i + 1} · ${sh.points.length} pts</span>
@@ -500,6 +536,13 @@ function cabler() {
   on('#bEnreg', 'click', enregistrer);
   on('#bActiver', 'click', () => activer($('#nomFichier').value.trim()));
   on('#bDesactiver', 'click', () => activer(null));
+  on('#sEch', 'pointerdown', instantane);
+  on('#sEch', 'input', e => {
+    doc.spriteScale = +e.target.value;
+    $('#vEch').textContent = (+e.target.value).toFixed(2);
+    marquer();
+  });
+  on('#bFantome', 'click', () => { fantome = !fantome; panneau(); dessiner(); });
   on('#bAnime', 'click', () => { anime = !anime; panneau(); });
   on('#bRecadrer', 'click', cadrer);
 }

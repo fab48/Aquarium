@@ -58,6 +58,11 @@ orange = brouillon non enregistré, grise = silhouette procédurale.
 - **Points** — tirer les carrés retouche le contour ; clic sur le trait insère un
   point, <kbd>alt</kbd>+clic en supprime un.
 
+Plus, dans le panneau : un curseur d'**échelle** et un bouton **silhouette
+d'origine**, qui superpose en gris la silhouette procédurale que le dessin
+remplace. C'est le repère pour juger d'une taille — surtout sur un dessin importé
+sans échelle déclarée, où le jeu suppose un poisson allongé.
+
 <kbd>Ctrl</kbd>+<kbd>Z</kbd> annule, partout. Molette pour zoomer, glissé du fond
 pour déplacer la vue.
 

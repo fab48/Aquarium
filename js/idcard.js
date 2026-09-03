@@ -33,7 +33,11 @@ const IdCard = {
     return parts.length ? parts.join(' · ') : '—';
   },
 
-  draw(ctx, e) {
+  // `eviter` : rectangle d'une fiche déjà dessinée, que celle-ci contourne.
+  // `epinglee` : fiche de la créature SUIVIE (double-clic) — liseré doré, comme
+  // le cerceau qui l'entoure, pour qu'on comprenne pourquoi elle ne bouge pas.
+  // Renvoie son propre rectangle, pour que l'appelant l'enchaîne.
+  draw(ctx, e, eviter = null, epinglee = false) {
     const def = e.def;
     const pad = 12, W = 264, LH = 17;
 
@@ -53,7 +57,18 @@ const IdCard = {
     const H = pad * 2 + 36 + rows.length * LH + 14;
     let bx = cx + 26, by = cy - H / 2;
     if (bx + W > Camera.vw - 8) bx = cx - W - 26;
+    // Bornée dans les DEUX axes : une créature près du bord gauche (ou hors
+    // champ, cas de la fiche épinglée quand la caméra n'a pas fini de la
+    // rattraper) envoyait sa fiche à un x négatif, donc invisible.
+    bx = U.clamp(bx, 8, Math.max(8, Camera.vw - W - 8));
     by = U.clamp(by, 8, Camera.vh - H - 8);
+    // Deux fiches à l'écran (l'épinglée + le survol) : la seconde se décale
+    // au-dessus ou en dessous de la première plutôt que de la recouvrir.
+    if (eviter && bx < eviter.x + eviter.w && bx + W > eviter.x
+        && by < eviter.y + eviter.h && by + H > eviter.y) {
+      const dessous = eviter.y + eviter.h + 10;
+      by = dessous + H <= Camera.vh - 8 ? dessous : Math.max(8, eviter.y - H - 10);
+    }
 
     // Trait de rattachement à la créature
     ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1.5;
@@ -62,7 +77,8 @@ const IdCard = {
 
     // Cadre
     ctx.fillStyle = 'rgba(8,26,44,0.92)';
-    ctx.strokeStyle = 'rgba(255,255,255,0.28)'; ctx.lineWidth = 1.5;
+    ctx.strokeStyle = epinglee ? 'rgba(255,215,94,0.85)' : 'rgba(255,255,255,0.28)';
+    ctx.lineWidth = epinglee ? 2.5 : 1.5;
     this.roundRect(ctx, bx, by, W, H, 10);
     ctx.fill(); ctx.stroke();
 
@@ -74,6 +90,12 @@ const IdCard = {
     if (e.stage !== 'adult') {
       ctx.fillStyle = '#8fd8f5'; ctx.font = '12px "Segoe UI", system-ui, sans-serif';
       ctx.fillText(e.stage === 'fry' ? '(alevin)' : '(œuf)', bx + pad + ctx.measureText(def.name).width + 8, by + pad + 3);
+    }
+    if (epinglee) {
+      ctx.textAlign = 'right';
+      ctx.font = '13px "Segoe UI", system-ui, sans-serif';
+      ctx.fillText('🎯', bx + W - pad, by + pad);
+      ctx.textAlign = 'left';
     }
     // Vraie espèce, en sous-titre
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
@@ -97,6 +119,8 @@ const IdCard = {
     this.roundRect(ctx, bx + pad, gy, gw, 6, 3); ctx.fill();
     ctx.fillStyle = e.hunger > 0.7 ? '#ff7a6b' : (e.hunger > 0.4 ? '#ffc75e' : '#7fe08a');
     this.roundRect(ctx, bx + pad, gy, gw * (1 - e.hunger), 6, 3); ctx.fill();
+
+    return { x: bx, y: by, w: W, h: H };
   },
 
   stateLabel(e) {

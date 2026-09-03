@@ -23,11 +23,20 @@ déplacement) · **double-clic sur une créature = la caméra la suit** (cerceau
 double-clic dans le vide ou déplacement manuel pour la relâcher) · bouton 🔍 =
 fiches d'identité au survol · bouton ❔ = légende.
 
+Avec la loupe active, la créature **suivie garde sa fiche affichée** en
+permanence (liseré doré + 🎯, comme son cerceau) et le survol en ajoute une
+seconde, décalée pour ne pas la recouvrir (`IdCard.draw(ctx, e, eviter,
+epinglee)` renvoie son propre rectangle). Le rayon de survol a un **minimum en
+pixels écran** (`Input.RAYON_SURVOL`, 34 px) et une **hystérésis** : la créature
+déjà survolée est conservée dans un rayon 1,7× plus large. Sans ces deux règles
+une crevette (7 px de monde) se visait au pixel près et sa fiche clignotait dès
+qu'elle bougeait.
+
 ## Architecture (js/)
 
 - `config.js` — constantes monde, zones écologiques, types de nourriture. 1 m = 40 px, surface à y=300.
 - `utils.js` — helpers math/couleur (`U`).
-- `species.js` — **espèces 100 % data-driven**. Chaque fiche a un `name` rigolo **contenant la vraie espèce** ("Baleine Gros Dodo", "Poisson Confetti") et un `realName` affiché en sous-titre de la fiche d'identité. Ajouter une espèce = ajouter une entrée `SPECIES` (mouvement, bande de profondeur, proies, nourriture favorite, silhouette). **Roster complet : 27 espèces + anémones-refuges.** Flags génériques documentés en tête du fichier (`refuge`, `anchorToRefuge`, `ambush`, `lure`, `ink`, `aerial`, `jumps`, `stealthy`, `trickster`, `nocturnal`, `sizeVar`, `spanRatio`, `gag(e,dt,t)`).
+- `species.js` — **espèces 100 % data-driven**. Chaque fiche a un `name` rigolo **contenant la vraie espèce** ("Baleine Gros Dodo", "Poisson Confetti") et un `realName` affiché en sous-titre de la fiche d'identité. Ajouter une espèce = ajouter une entrée `SPECIES` (mouvement, bande de profondeur, proies, nourriture favorite, silhouette). **Roster complet : 27 espèces + anémones-refuges.** Flags génériques documentés en tête du fichier (`refuge`, `anchorToRefuge`, `ambush`, `lure`, `ink`, `aerial`, `jumps`, `stealthy`, `trickster`, `nocturnal`, `sizeVar`, `spanRatio`, `offshore`, `gag(e,dt,t)`).
 - `world.js` — triangle de profondeur en grille "profondeur max par colonne" (reco GDD §14), zones, fond sableux.
 - `camera.js` — scroll bi-axial borné par le triangle (impossible d'atteindre les abysses près de la plage).
 - `particles.js` — socle feedback réutilisable : splash, nuage de sable, bulles, sillage, **bulles d'action comiques** (`Particles.comic/hearts/stars`).
@@ -249,6 +258,22 @@ Pièges vérifiés (ne pas réintroduire) :
   d'un individu, pas sur le point du groupe : les ±90 px du groupe plus les
   ±80 px de l'individu ramenaient les bancs sur le haut-fond, où ils se
   faisaient éjecter sur la plage (colonne minimale au spawn : 3 px → 119 px).
+- **La barrière de rivage calculée sur la taille ne protège pas les petits.**
+  `limiteLarge()` cherche le x où la colonne d'eau atteint `size * 2,2` : pour
+  une sardine de 13 px, ça tombe dans **40 px d'eau**, c'est-à-dire le ressac.
+  Poursuivies par le Fou Moustachu, la Sardine Bulle-fofolle et le Poisson
+  Volant y finissaient plaquées dès les premières secondes de jeu. D'où
+  **`offshore: <px>`** : une colonne d'eau minimale déclarée par l'espèce, lue
+  par `limiteLarge()`, par le spawn (colonnes valides **et** position finale) et
+  par la frayère `shallow` — sinon la migration de ponte les renvoie de l'autre
+  côté de leur propre barrière. Barrière portée de x=1070 à x=2510.
+- **La phase aérienne d'un sauteur (`jumps`) court-circuite TOUTES les
+  contraintes horizontales** : elle sort de `move()` avant les barrières. Un
+  poisson volant lancé par une fuite retombait donc littéralement sur le sable —
+  le seul cas où une créature traverse la plage. Deux garde-fous : le saut n'est
+  jamais **orienté** vers la côte quand on en est près, et la barrière de rivage
+  est réappliquée **en vol**. Mesuré : **0 relevé sur le sable sec sur 53 730**
+  (dont 2 239 en phase aérienne) sur 8,5 min.
 - `sleeps: true` = **siestes à toute heure**, pas « dort ». C'est un gag réservé
   à la Baleine Gros Dodo et au Poisson-lune Zen. Le Dauphin Farceur et l'Orque
   Blagueuse l'avaient par erreur : des farceurs qui font la sieste en plein
@@ -275,6 +300,109 @@ Pièges vérifiés (ne pas réintroduire) :
   dans les abysses, où un calamar rate à 1500 px au-dessus du sable).
 
 Audit rapide en console (`FF` = avance rapide sans rendu) — voir l'historique : instrumenter `Entity.prototype.die` révèle `wellFed: 0` sur un prédateur qui n'a jamais réussi à manger.
+### La peur : qui voit venir qui
+
+Audit fait en instrumentant `Ecosystem.eat` pour relever **l'état de la proie au
+moment de la prise**. Verdict de départ : **14 %** des captures visaient une
+proie qui n'avait rien vu. Quatre trous distincts, tous corrigés :
+
+1. **Le jaillissement d'un embusqué n'était pas une menace.** `nearestPredatorOf`
+   ne regardait que l'état `hunt` ; la murène et le Poisson-Tapis attaquent en
+   `strike`. Leurs victimes se faisaient cueillir sans broncher.
+2. **Un dormeur ne se réveillait jamais.** La branche `sleep` sort de `think`
+   avant le test de fuite : requin et dauphin cueillaient des perroquets
+   endormis. Il y a maintenant un **réveil en sursaut** (`scared`, puis fuite).
+3. **Les charognards étaient exemptés** (`def.trophic !== 'scavenger'`). Le
+   Poulpe Ninja, proie du Cachalot ET du Calamar Géant, ne prenait donc jamais
+   peur — il n'échappait à quoi que ce soit que par son encre. L'exemption était
+   de toute façon redondante : `nearestPredatorOf` ne renvoie une menace que si
+   elle a vraiment l'espèce à son menu, donc le crabe n'a jamais rien à craindre.
+4. **La distance d'alerte était fixe à 180 px.** Une orque de 70 px qui charge à
+   340 px/s avalait cet écart en une demi-seconde, et un Cachalot lancé sur un
+   Calamar Géant entrait en contact (178 px, les deux corps réunis) **avant** le
+   seuil d'alerte : la proie ne *pouvait pas* avoir peur. `Ecosystem.alerteDe()`
+   la calcule maintenant sur le gabarit et l'allure du chasseur.
+
+Deux conséquences structurelles :
+
+- La recherche passe par **`Ecosystem.chasseurs`**, liste plate des prédateurs en
+  action reconstruite chaque frame — même raison que `colosses` : la grille ne
+  porte qu'à ~195 px, très en deçà des distances d'alerte voulues.
+- Un **embusqué garde sa surprise** (`alerteDe` lui rend `40 + size * 2,2`) : la
+  victime sursaute et détale, mais tard. Comme deux modes d'échec se cumulaient
+  alors — la proie esquive *et* `missChance` — la murène est morte de faim. Son
+  `missChance` a été abaissé en compensation (0,35 → 0,22 ; Poisson-Tapis
+  0,45 → 0,30) : le raté se raconte mieux ainsi, c'est la victime qui l'esquive
+  plutôt que la murène qui vise mal.
+
+Résultat mesuré sur 8 min : **2,9 % de proies prises sans avoir eu peur** (contre
+14 %), et les rares cas restants sont des collisions d'ordonnancement — le
+prédateur passe en chasse dans la frame même où il atteint sa cible.
+
+Le seul cas *volontaire* de proie sereine est le halo du Poisson-lanterne : une
+crevette hypnotisée est censée nager droit dans la gueule. Il est donc exclu du
+décompte.
+
+### Le ciel
+
+Il valait un dégradé deux couleurs et un disque de 24 px qui changeait de teinte
+à minuit — le même objet servait de soleil ET de lune. Cinq règles depuis :
+
+- **Une palette par moment de la journée** (`Background.CIEL`), interpolée sur
+  `Main.dayT()`. `Main.nightAmount()` ne distingue pas l'aube du crépuscule : les
+  deux plus beaux moments du cycle passaient donc par exactement le même bleu.
+- **Deux astres qui se relaient** : le soleil parcourt la première moitié du
+  cycle, la lune la seconde, et ils se croisent au crépuscule. Chacun **rase
+  l'horizon** à son lever et à son coucher — c'est ça qui rend l'heure lisible,
+  plus encore que la couleur du ciel — et vire à l'orange en le rasant.
+- **La lune a des phases**, une par nuit, en huit temps. C'est le seul élément du
+  décor qui change d'un jour à l'autre.
+- **Étoiles et nuages se rebouclent** sur une bande de 3 200 px
+  (`CIEL_LARGEUR`) avec un parallax très lent : le ciel est loin, mais pas peint
+  sur la vitre. Semer des étoiles sur les 8 000 px du monde pour n'en voir qu'un
+  écran serait du gâchis.
+- **Le reflet sur l'eau** raccroche le ciel à la mer ; sans lui l'astre flotte
+  dans son coin. Plus l'astre est bas, plus la traînée est **longue et vive** :
+  à intensité fixe elle était invisible sur l'eau sombre de la nuit (mesuré en
+  lisant les pixels : 273 sous la lune contre 161 de part et d'autre).
+
+Piège rencontré : **un nuage se dessine en UN SEUL tracé.** Rempli bulle par
+bulle, chaque recouvrement cumulait l'alpha et le nuage se lisait comme une
+grappe de ronds soudés — flagrant en plein ciel.
+
+### Sprites vectoriels (`js/sprites.js`)
+
+Les silhouettes procédurales peuvent être remplacées par les dessins de
+l'éditeur SVG. Une espèce déclare `sprite: '<nom>'` et le jeu charge
+`Assets/<nom>.json`. Format consommé : `points` (ancres `center`, `nose`, `eye`,
+`mouth`, `tail`), `shapes[]` (`points`, `fill`, `smooth`, `pivot`, `amp`) et
+`tailBlend` (le x en deçà duquel les points appartiennent à la queue).
+
+Quatre règles :
+
+- **Le visage commun reste dessiné par-dessus.** C'est la règle du projet : la DA
+  peut changer entièrement, les émotions restent celles de tout l'aquarium. La
+  taille du visage est déduite de l'écart œil↔bouche voulu par l'auteur du
+  sprite (`drawFace` place l'œil en 0,55 et la bouche en 0,82 fois sa taille,
+  soit 0,404 entre les deux), puis **bornée** : un vrai requin a un œil
+  minuscule, mais ici c'est le visage qui raconte.
+- **Le dessin est mis à la largeur que la simulation lui suppose**
+  (`size * 2 * spanRatio`), pas à une constante. Mis à `size * 2`, le requin
+  sortait 22 % plus petit que la silhouette qu'il remplaçait (77 px mesurés
+  contre 99) et paraissait rabougri à côté des autres.
+- **Le chargement est asynchrone et ne bloque aucune frame** : tant que le
+  fichier n'est pas là (ou s'il est illisible), la silhouette procédurale
+  continue d'être dessinée.
+- **La queue ondule, les nageoires pivotent.** Les points en deçà de `tailBlend`
+  sont déviés en `u²` (le battement part du pédoncule caudal, pas du milieu du
+  corps), et une forme qui porte un `pivot` tourne autour au lieu d'onduler.
+  L'amplitude suit **l'effort** et pas seulement la fréquence : à l'amplitude
+  nue de l'éditeur, le bout de la queue ne parcourait que 5,5 px sur une
+  silhouette de 48.
+
+Contrôle non visuel : rendre la silhouette hors écran et mesurer l'emprise de
+l'encre (`FishBody.draw` sur un canvas détaché), avec et sans `sprite`.
+
 ### Les colosses entre eux
 
 Ils ignorent les collisions avec les petits poissons, **mais pas entre eux** :
@@ -313,6 +441,7 @@ le x où la colonne d'eau atteint enfin son tirant) et une **garde au sol**
 d'une demi-longueur. Mesuré : 0 franchissement sur 4402 relevés, collage au
 sable 12 % → 4,3 %.
 
+- `sprites.js` — chargement des dessins de l'éditeur SVG (`Assets/*.json`), consommés par `FishBody.drawSprite`. Une espèce qui déclare `sprite:` remplace sa silhouette procédurale, **jamais son visage**.
 - `background.js` — dégradé d'eau par profondeur, god rays, crêtes d'arrière-plan, rochers, végétation, cheminées volcaniques, plancton, jour/nuit.
 
 ### Décor posé au sol

@@ -91,6 +91,9 @@ const SPECIES = {
     prey: ['thon', 'perroquet'], missChance: 0.5,   // rate souvent (gag signature)
     colors: ['#8aa3b8'],
     bodyRatio: 0.42, tail: 'shark', fin: true,
+    // Premier sprite de l'éditeur SVG (Assets/SharkSVG.json). Le visage commun
+    // reste dessiné par-dessus : la DA change, pas les émotions.
+    sprite: 'SharkSVG',
     lifespan: [750, 1050],   // les grands prédateurs vivent longtemps : sinon ils
                              // meurent de vieillesse avant d'avoir pu se reproduire
   },
@@ -262,7 +265,11 @@ const SPECIES = {
     // (Avec [800,1600] elle ne croisait AUCUNE de ses proies et mourait de faim.)
     depthBand: [350, 1700], size: 30, speed: 0,
     schooling: false, groupSize: [1, 1], popCap: 6, territory: 340,   // un rocher = une murene (GDD 12)
-    prey: ['confetti', 'perroquet', 'meduse'], ambush: { range: 140, missChance: 0.35 },
+    // `missChance` abaissé depuis que la proie RÉAGIT au jaillissement (elle ne
+    // se faisait pas cueillir sans broncher) : sans ça deux modes d'échec se
+    // cumulaient et la murène mourait de faim. Le raté se raconte mieux ainsi —
+    // c'est la victime qui l'esquive, pas la murène qui vise mal.
+    prey: ['confetti', 'perroquet', 'meduse'], ambush: { range: 140, missChance: 0.22 },
     colors: ['#7a8a6a'],
     render: 'eel',
     lifespan: [700, 1000],
@@ -314,7 +321,7 @@ const SPECIES = {
     // `senseRange` porte bien plus loin que `ambush.range` : la première distance
     // sert à REPÉRER (et à ramper vers), la seconde à jaillir.
     prey: ['lanterne', 'crevette'], senseRange: 950,
-    ambush: { range: 175, missChance: 0.45 },
+    ambush: { range: 175, missChance: 0.3 },   // idem murène : la proie esquive désormais toute seule
     colors: ['#a0785a'],
     render: 'worm', sizeVar: 0.16,
     lifespan: [700, 1000],

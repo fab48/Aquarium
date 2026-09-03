@@ -2,7 +2,7 @@
 // gérer les versions). `async = false` conserve l'ordre d'exécution.
 (function () {
   const FILES = [
-    'config', 'utils', 'gags', 'species', 'world', 'camera', 'particles', 'food',
+    'config', 'utils', 'gags', 'species', 'sprites', 'world', 'camera', 'particles', 'food',
     'fishbody', 'entity', 'idcard', 'legend', 'ecosystem', 'background', 'input', 'main',
   ];
   const v = Date.now();

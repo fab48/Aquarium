@@ -6,6 +6,12 @@ const Background = {
   plankton: [],
 
   flora: [],
+  etoiles: [],
+  nuages: [],
+  filantes: [],
+
+  // Largeur de la bande de ciel qui se reboucle (étoiles, nuages)
+  CIEL_LARGEUR: 3200,
 
   init() {
     // Rochers ANGULEUX : un polygone irrégulier par rocher (rayon bruité autour
@@ -50,6 +56,30 @@ const Background = {
         layer: U.pick([0.94, 1]),
       });
     }
+    // Champ d'étoiles, réparti sur une bande de ciel qui se REBOUCLE (le monde
+    // fait 8000 px, le ciel est à l'infini : on ne va pas semer des étoiles sur
+    // 8000 px pour n'en voir qu'un écran).
+    for (let i = 0; i < 220; i++) {
+      this.etoiles.push({
+        u: Math.random() * this.CIEL_LARGEUR,
+        h: U.rand(40, 1000),                 // hauteur au-dessus de la ligne d'eau
+        r: U.rand(0.7, 2.1),
+        ph: Math.random() * 10,
+        vive: Math.random() < 0.12,          // quelques-unes franchement brillantes
+      });
+    }
+    for (let i = 0; i < 11; i++) {
+      this.nuages.push({
+        u: Math.random() * this.CIEL_LARGEUR,
+        h: U.rand(330, 820),                 // ils occupent le HAUT du ciel
+        w: U.rand(90, 230),
+        bulles: U.randInt(3, 5),
+        v: U.rand(2, 8),                     // dérive propre, px/s
+        ph: Math.random() * 10,
+        opacite: U.rand(0.3, 0.7),
+      });
+    }
+
     for (let i = 0; i < 160; i++) {
       this.plankton.push({
         x: U.rand(0, CONFIG.WORLD_WIDTH), y: U.rand(CONFIG.SURFACE_Y, CONFIG.SURFACE_Y + CONFIG.DEPTH_MAX),
@@ -82,6 +112,216 @@ const Background = {
     return '#' + m.slice(0, 3).map(v => (+v).toString(16).padStart(2, '0')).join('');
   },
 
+  // ===========================================================================
+  // LE CIEL : astres, étoiles, nuages, reflet sur l'eau.
+  // ===========================================================================
+  // Le ciel se résumait à un dégradé deux couleurs et à un disque de 24 px qui
+  // changeait de teinte à minuit — le même objet servait de soleil ET de lune.
+  // Ici ce sont deux astres distincts qui se relaient : le soleil parcourt la
+  // première moitié du cycle, la lune la seconde.
+  ciel(ctx, t, surfSy, cielH, W, H, night) {
+    const jour = Main.dayT();
+    const haut = surfSy - cielH;              // sommet du ciel à l'écran
+
+    // --- Étoiles (elles se lèvent au crépuscule) ---
+    if (night > 0.02) {
+      const L = this.CIEL_LARGEUR;
+      // Parallax très lent : le ciel est loin, mais pas peint sur la vitre.
+      const decal = ((Camera.x * 0.05) % L + L) % L;
+      for (const e of this.etoiles) {
+        let sx = e.u - decal;
+        if (sx < -60) sx += L;
+        if (sx > W + 60) continue;
+        const sy = surfSy - e.h * (cielH / 900);
+        if (sy < haut - 40 || sy > surfSy) continue;
+        // Scintillement : chacune a son rythme, sinon tout le ciel clignote ensemble
+        const scint = 0.55 + 0.45 * Math.sin(t * (1.4 + e.ph * 0.3) + e.ph * 6);
+        ctx.fillStyle = `rgba(255,252,235,${night * scint * (e.vive ? 0.95 : 0.6)})`;
+        ctx.beginPath(); ctx.arc(sx, sy, e.r * (e.vive ? 1.4 : 1), 0, Math.PI * 2); ctx.fill();
+        if (e.vive && scint > 0.9) {          // une croix de lumière sur les plus brillantes
+          ctx.strokeStyle = `rgba(255,252,235,${night * 0.5})`;
+          ctx.lineWidth = 0.8;
+          const b = e.r * 4;
+          ctx.beginPath();
+          ctx.moveTo(sx - b, sy); ctx.lineTo(sx + b, sy);
+          ctx.moveTo(sx, sy - b); ctx.lineTo(sx, sy + b);
+          ctx.stroke();
+        }
+      }
+      this.filante(ctx, t, surfSy, cielH, W, night);
+    }
+
+    // --- Les deux astres. `u` va de 0 (lever, à gauche) à 1 (coucher, à droite) ;
+    // hors de [0,1] l'astre est sous l'horizon et n'est pas dessiné.
+    const uSoleil = jour / 0.52;
+    const uLune = (jour - 0.5) / 0.5;
+    if (uSoleil >= -0.04 && uSoleil <= 1.04) this.astre(ctx, t, uSoleil, surfSy, cielH, W, true, night);
+    if (uLune >= -0.04 && uLune <= 1.04) this.astre(ctx, t, uLune, surfSy, cielH, W, false, night);
+
+    // --- Nuages, DEVANT les astres : c'est ce passage devant qui donne la
+    // profondeur. Teintés par la couleur du bas du ciel.
+    const teinte = this.skyColor();
+    const L = this.CIEL_LARGEUR;
+    for (const n of this.nuages) {
+      const decal = ((Camera.x * 0.13 + t * n.v) % L + L) % L;
+      let sx = n.u - decal;
+      if (sx < -n.w * 2) sx += L;
+      if (sx > W + n.w * 2 || sx < -n.w * 2) continue;
+      const sy = surfSy - n.h * (cielH / 900);
+      if (sy > surfSy + 20) continue;
+      // Blancs le jour, gris-bleu la nuit, et toujours un peu de la couleur du ciel
+      ctx.fillStyle = this.melange('#ffffff', teinte, 0.26 + night * 0.5);
+      ctx.globalAlpha = n.opacite * (0.8 - night * 0.5);
+      // UN SEUL TRACÉ pour tout le nuage. Rempli bulle par bulle, chaque
+      // recouvrement cumulait l'alpha et le nuage se lisait comme une grappe de
+      // ronds soudés — le défaut sautait aux yeux en plein ciel.
+      ctx.beginPath();
+      for (let i = 0; i < n.bulles; i++) {
+        const f = i / (n.bulles - 1) - 0.5;
+        const r = n.w * 0.3 * (1 - Math.abs(f) * 0.8) + n.w * 0.1;
+        const cy = sy + Math.sin(f * 3 + n.ph) * n.w * 0.05 + Math.abs(f) * n.w * 0.05;
+        ctx.moveTo(sx + f * n.w + r, cy);
+        ctx.ellipse(sx + f * n.w, cy, r, r * 0.6, 0, 0, Math.PI * 2);
+      }
+      // Base plate : un nuage repose sur une ligne, il ne flotte pas en grappe
+      ctx.moveTo(sx - n.w * 0.5, sy);
+      ctx.ellipse(sx, sy + n.w * 0.02, n.w * 0.52, n.w * 0.1, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  },
+
+  // Un astre : disque, halo, et sa traînée scintillante sur l'eau.
+  astre(ctx, t, u, surfSy, cielH, W, soleil, night) {
+    // Arc de course. Il RASE l'horizon au lever et au coucher : c'est ça qui
+    // rend le crépuscule lisible, plus encore que la couleur du ciel.
+    const sx = W * (0.08 + 0.84 * u);
+    const uc = U.clamp(u, 0, 1);
+    const sy = surfSy - 26 - Math.sin(uc * Math.PI) * (cielH * 0.74);
+    const bas = 1 - Math.sin(uc * Math.PI);      // 1 = à l'horizon
+    const r = soleil ? 26 : 21;
+
+    // Un soleil rasant vire à l'orange, une lune rasante au miel.
+    const coeur = soleil ? this.melange('#fff6c0', '#ff8a4a', bas * 0.85)
+                         : this.melange('#f4f2ff', '#ffd9a0', bas * 0.6);
+    const halo = soleil ? this.melange('#ffd75e', '#ff6a3a', bas * 0.8) : '#bcd0ff';
+    const eclat = soleil ? 1 : Math.max(0.35, night);
+
+    // Halo radial : un aplat pur fait autocollant, c'est le halo qui fait l'astre.
+    const rh = r * (soleil ? 6 : 4.2);
+    const g = ctx.createRadialGradient(sx, sy, r * 0.5, sx, sy, rh);
+    g.addColorStop(0, this.rgba(halo, 0.5 * eclat));
+    g.addColorStop(0.35, this.rgba(halo, 0.15 * eclat));
+    g.addColorStop(1, this.rgba(halo, 0));
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(sx, sy, rh, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = coeur;
+    ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.fill();
+
+    if (soleil) {
+      // Cœur plus clair, qui respire doucement
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.beginPath(); ctx.arc(sx, sy, r * (0.55 + Math.sin(t * 0.9) * 0.04), 0, Math.PI * 2); ctx.fill();
+    } else {
+      // Cratères (toujours les mêmes : la lune ne se remaquille pas)
+      ctx.fillStyle = 'rgba(150,158,190,0.45)';
+      for (const c of [[-0.32, -0.22, 0.24], [0.24, 0.14, 0.19], [-0.1, 0.38, 0.14], [0.38, -0.34, 0.11]]) {
+        ctx.beginPath(); ctx.arc(sx + c[0] * r, sy + c[1] * r, c[2] * r, 0, Math.PI * 2); ctx.fill();
+      }
+      // PHASES : une nouvelle chaque nuit, en huit temps. C'est le seul élément
+      // du décor qui change d'un jour à l'autre — les enfants le remarquent.
+      const phase = Math.floor(Main.time / CONFIG.DAY_LENGTH) % 8;
+      if (phase !== 4) {                       // 4 = pleine lune, rien à masquer
+        const k = (phase - 4) / 4;             // -1 → +1 (nouvelle lune aux extrêmes)
+        ctx.save();
+        ctx.beginPath(); ctx.arc(sx, sy, r + 0.5, 0, Math.PI * 2); ctx.clip();
+        ctx.fillStyle = this.rgba(this.skyColor(), 0.92);
+        ctx.beginPath();
+        ctx.arc(sx + k * r * 1.5, sy, r * 1.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // --- Reflet sur l'eau : une colonne scintillante sous l'astre. C'est elle
+    // qui raccroche le ciel à la mer ; sans elle l'astre flotte dans son coin.
+    if (surfSy > -40 && surfSy < 4000 && u > 0.02 && u < 0.98) {
+      const lueur = soleil ? '#fff0bc' : '#dfe9ff';
+      // Plus l'astre est BAS, plus sa traînée est longue et lumineuse : c'est la
+      // règle qui donne son heure au reflet. À intensité fixe il ne se voyait
+      // pas du tout sur l'eau sombre de la nuit.
+      const longueur = 80 + bas * 210;
+      const force = eclat * (0.55 + bas * 0.45);
+      for (let i = 0; i < 22; i++) {
+        const d = i / 21;
+        const y = surfSy + 2 + d * longueur;
+        // Traits irréguliers : une colonne régulière fait rampe de lancement.
+        const scint = 0.45 + 0.55 * Math.sin(t * 2.6 + i * 1.9) * Math.sin(t * 1.1 + i * 0.7);
+        const largeur = r * (0.35 + d * 2.6) * (0.45 + 0.75 * Math.abs(scint));
+        const a = (1 - d * 0.85) * 0.5 * force * (0.55 + 0.45 * Math.abs(scint));
+        ctx.fillStyle = this.rgba(lueur, U.clamp(a, 0, 1));
+        ctx.fillRect(sx - largeur / 2 + Math.sin(t * 1.5 + i * 2.3) * 9, y, largeur, longueur / 20);
+      }
+    }
+  },
+
+  // Étoile filante : rare, brève, jamais deux à la fois. Elle ne sert à rien —
+  // c'est exactement pour ça qu'on la regarde.
+  filante(ctx, t, surfSy, cielH, W, night) {
+    if (!this._filante && Math.random() < 0.0018 * night) {
+      this._filante = { x: U.rand(0.1, 0.9) * W, y: U.rand(0.15, 0.55), vie: 0,
+                        dx: U.rand(0.5, 1) * (Math.random() < 0.5 ? -1 : 1) };
+    }
+    const f = this._filante;
+    if (!f) return;
+    f.vie += 0.02;
+    if (f.vie > 1) { this._filante = null; return; }
+    const sy = surfSy - cielH * (0.95 - f.y) + f.vie * cielH * 0.42;
+    const sx = f.x + f.dx * f.vie * W * 0.3;
+    const a = Math.sin(f.vie * Math.PI);
+    ctx.strokeStyle = `rgba(255,255,240,${a * 0.9})`;
+    ctx.lineWidth = 2; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(sx - f.dx * 60, sy - 26);
+    ctx.stroke();
+  },
+
+  rgba(hex, a) {
+    const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},${a})`;
+  },
+
+  // Mélange deux couleurs hex et REND DU HEX (U.mixColor rend du `rgb(...)`,
+  // qu'on ne peut pas remélanger ensuite).
+  melange(a, b, k) { return this.rgbToHex(U.mixColor(a, b, U.clamp(k, 0, 1))); },
+
+  // --- Le ciel ---------------------------------------------------------------
+  // Une palette par MOMENT DE LA JOURNÉE, pas un simple fondu jour → nuit :
+  // `Main.nightAmount()` ne distingue pas l'aube du crépuscule, et les deux
+  // passaient donc par exactement le même bleu délavé. Ce sont pourtant les
+  // deux plus beaux moments du cycle.
+  CIEL: [
+    { t: 0.00, haut: '#3a3f78', bas: '#f3a463' },   // aube : violet profond → orange
+    { t: 0.10, haut: '#6ab6ea', bas: '#d8eefb' },   // matin clair
+    { t: 0.30, haut: '#4fa8e8', bas: '#c2e8fb' },   // plein jour
+    { t: 0.44, haut: '#4a90d4', bas: '#ffd9a3' },   // fin d'après-midi, lumière chaude
+    { t: 0.52, haut: '#38306e', bas: '#f0784f' },   // crépuscule : le grand orange
+    { t: 0.62, haut: '#0a1230', bas: '#1e2a4e' },   // nuit
+    { t: 0.90, haut: '#0a1230', bas: '#2b3563' },   // nuit finissante
+    { t: 1.00, haut: '#3a3f78', bas: '#f3a463' },   // boucle sur l'aube
+  ],
+
+  skyColor(top = false) {
+    const P = this.CIEL, tt = Main.dayT();
+    let i = 0;
+    while (i < P.length - 2 && tt > P[i + 1].t) i++;
+    const k = U.clamp((tt - P[i].t) / (P[i + 1].t - P[i].t), 0, 1);
+    const cle = top ? 'haut' : 'bas';
+    return this.melange(P[i][cle], P[i + 1][cle], k);
+  },
+
   draw(ctx, t) {
     const night = Main.nightAmount();
     const W = Camera.w, H = Camera.h;
@@ -92,7 +332,7 @@ const Background = {
     const grad = ctx.createLinearGradient(0, 0, 0, H);
     for (let i = 0; i <= 4; i++) {
       const d = U.lerp(dTop, dBot, i / 4);
-      grad.addColorStop(i / 4, d < 0 ? this.skyColor(night) : this.waterColor(d, night));
+      grad.addColorStop(i / 4, d < 0 ? this.skyColor() : this.waterColor(d, night));
     }
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
@@ -100,17 +340,17 @@ const Background = {
     // --- Ciel et ligne de surface ---
     const [, surfSy] = Camera.toScreen(0, CONFIG.SURFACE_Y);
     if (surfSy > 0) {
-      const sky = ctx.createLinearGradient(0, 0, 0, surfSy);
-      sky.addColorStop(0, this.skyColor(night, true));
-      sky.addColorStop(1, this.skyColor(night));
+      // Le ciel occupe TOUTE la hauteur visible au-dessus de l'eau, mais son
+      // dégradé est calé sur une hauteur de ciel de référence : sinon, dès
+      // qu'on remonte la caméra, le dégradé s'étire et le bas du ciel devient
+      // uniformément pâle.
+      const cielH = Math.max(240, Math.min(surfSy, H));
+      const sky = ctx.createLinearGradient(0, surfSy - cielH, 0, surfSy);
+      sky.addColorStop(0, this.skyColor(true));
+      sky.addColorStop(1, this.skyColor());
       ctx.fillStyle = sky;
       ctx.fillRect(0, 0, W, Math.min(surfSy, H));
-      // soleil / lune
-      const sunT = Main.dayT();
-      const sunX = W * (0.15 + 0.7 * sunT);
-      const sunY = surfSy - 60 - Math.sin(sunT * Math.PI) * 120;
-      ctx.fillStyle = night > 0.5 ? '#e8ecf5' : '#ffd75e';
-      ctx.beginPath(); ctx.arc(sunX, sunY, 24, 0, Math.PI * 2); ctx.fill();
+      this.ciel(ctx, t, surfSy, cielH, W, H, night);
       // vagues
       ctx.strokeStyle = `rgba(255,255,255,${0.5 - night * 0.3})`;
       ctx.lineWidth = 2.5;
@@ -375,9 +615,4 @@ const Background = {
     }
   },
 
-  skyColor(night, top = false) {
-    const day = top ? '#7ec8f0' : '#b8e4f7';
-    const nightC = top ? '#0a1230' : '#1a2545';
-    return U.mixColor(day, nightC, night);
-  },
 };

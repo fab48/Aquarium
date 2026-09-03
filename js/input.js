@@ -16,6 +16,10 @@ const Input = {
 
   EDGE: 60,                // largeur de la bande de défilement au bord
   EDGE_SPEED: 700,         // px monde / s au bord
+  // Rayon MINIMUM de survol, en pixels ÉCRAN (donc constant quel que soit le
+  // zoom). Une crevette fait 7 px de monde : à 18 px il fallait la viser au
+  // pixel près, et sa fiche clignotait dès qu'elle bougeait d'un souffle.
+  RAYON_SURVOL: 34,
 
   init(canvas) {
     canvas.addEventListener('wheel', e => {
@@ -94,13 +98,22 @@ const Input = {
     });
   },
 
-  // Créature sous le curseur (la plus proche dans son rayon)
-  pickAt(sx, sy) {
+  // Créature sous le curseur (la plus proche dans son rayon).
+  // `dejaVu` : celle qu'on survolait à la frame précédente. Elle est CONSERVÉE
+  // tant que le curseur reste dans un rayon élargi — sans cette hystérésis, un
+  // poisson qui nage sous le curseur perd sa fiche à la moindre oscillation, et
+  // c'est intenable sur un banc de crevettes.
+  pickAt(sx, sy, dejaVu = null) {
     const [wx, wy] = Camera.toWorld(sx, sy);
+    const rayon = e => Math.max(e.size * 1.7, this.RAYON_SURVOL / Camera.zoom);
+    if (dejaVu && !dejaVu.dead && dejaVu.stage !== 'egg') {
+      const r = rayon(dejaVu) * 1.7;
+      if (U.dist2(wx, wy, dejaVu.x, dejaVu.y) < r * r) return dejaVu;
+    }
     let best = null, bestD = Infinity;
     for (const e of Ecosystem.entities) {
       if (e.dead || e.stage === 'egg') continue;
-      const r = Math.max(e.size * 1.6, 18 / Camera.zoom);
+      const r = rayon(e);
       const d = U.dist2(wx, wy, e.x, e.y);
       if (d < r * r && d < bestD) { bestD = d; best = e; }
     }
@@ -138,8 +151,8 @@ const Input = {
       if (ex || ey) Camera.move(ex * S, ey * S);
     }
 
-    // Fiche d'identité au survol
-    this.hovered = this.hoverInfo ? this.pickAt(this.mx, this.my) : null;
+    // Fiche d'identité au survol (avec l'hystérésis de pickAt)
+    this.hovered = this.hoverInfo ? this.pickAt(this.mx, this.my, this.hovered) : null;
 
     if (this.holding) {
       this.holdTimer += dt;

@@ -324,6 +324,17 @@ class Entity {
 
     // Sommeil (nuit pour la plupart, cycles pour le Gros Dodo)
     if (this.state === 'sleep') {
+      // RÉVEIL EN SURSAUT. La branche `sleep` sort de `think` avant le test de
+      // fuite : un poisson endormi se faisait donc croquer sans un battement de
+      // nageoire — mesuré, c'était le trou le plus visible (requin et dauphin
+      // cueillaient des perroquets dans leur sommeil).
+      const cauchemar = Ecosystem.nearestPredatorOf(this);
+      if (cauchemar) {
+        this.release();
+        this.state = 'flee'; this.target = cauchemar; this.stateTimer = 2;
+        this.emote('scared', 2);
+        return;
+      }
       this.hold('sleeping');
       // ZzZzZ qui s'envolent au rythme du ronflement
       this._zzzCd = (this._zzzCd ?? 0) - dt;
@@ -346,9 +357,14 @@ class Entity {
       this.state = 'sleep'; this.stateTimer = U.rand(12, 30); return;
     }
 
-    // Fuite (prioritaire) — petits poissons fuient curseur rapide et prédateurs
+    // Fuite (prioritaire) — petits poissons fuient curseur rapide et prédateurs.
+    // Plus d'exemption pour les charognards : `nearestPredatorOf` ne renvoie une
+    // menace que si elle a VRAIMENT l'espèce à son menu, donc le crabe (que
+    // personne ne mange) n'a jamais rien à craindre — alors que le Poulpe
+    // Ninja, charognard mais proie du Cachalot ET du Calamar Géant, ne prenait
+    // jamais peur. Il n'y échappait que par son encre.
     const threat = Ecosystem.nearestPredatorOf(this);
-    if (threat && def.trophic !== 'scavenger') {
+    if (threat) {
       this.state = 'flee'; this.target = threat; this.stateTimer = 1.5;
       this.emote('scared', 1.6);
     } else if (this.state === 'flee') {

@@ -420,15 +420,29 @@ const Ecosystem = {
     return best;
   },
 
-  // Prédateur menaçant le plus proche (pour la fuite)
-  // Menace proche : on ne regarde que les cellules voisines (rayon 180 px),
-  // pas tout l'aquarium — c'était O(n²) à chaque frame.
+  // Distance à laquelle une proie repère un prédateur LANCÉ sur elle.
+  // Elle valait 180 px pour tout le monde : une orque de 70 px qui charge à
+  // 340 px/s avalait cet écart en une demi-seconde, et un Cachalot lancé sur un
+  // Calamar Géant entrait en contact (178 px, les deux corps réunis) AVANT même
+  // le seuil d'alerte — la proie ne pouvait littéralement pas avoir peur. Elle
+  // suit donc le gabarit ET l'allure du chasseur.
+  // Exception : un EMBUSQUÉ est une surprise par construction. Il ne s'annonce
+  // qu'une fois la gueule quasiment dessus — assez pour qu'on voie la victime
+  // sursauter et détaler, pas assez pour lui retirer son repas.
+  alerteDe(p) {
+    if (p.def.ambush) return 40 + p.size * 2.2;
+    const allure = p.def.sprintSpeed || p.def.speed * 1.8;
+    return Math.max(180, 100 + p.size * 1.6 + allure * 0.25);
+  },
+
+  // Prédateur menaçant le plus proche (pour la fuite). Balaie la liste des
+  // chasseurs en action, pas le voisinage : la grille plafonne à ~195 px.
   nearestPredatorOf(e) {
-    for (const p of this.neighbors(e.x, e.y)) {
-      if (p.dead || p.state !== 'hunt') continue;
-      if (!p.def.prey || !p.def.prey.includes(e.speciesId)) continue;
-      if (p.def.filterFeeder) continue;   // la baleine filtre sans jamais paraître menaçante (GDD §13)
-      if (U.dist2(e.x, e.y, p.x, p.y) < 180 * 180) return p;
+    for (const p of this.chasseurs) {
+      if (p === e || p.dead) continue;
+      if (!p.def.prey.includes(e.speciesId)) continue;
+      const r = this.alerteDe(p);
+      if (U.dist2(e.x, e.y, p.x, p.y) < r * r) return p;
     }
     return null;
   },
@@ -619,6 +633,11 @@ const Ecosystem = {
     // traversaient sans que l'anti-chevauchement ne se declenche. Ils sont une
     // dizaine : une liste plate suffit largement.
     this.colosses = [];
+    // Chasseurs EN ACTION, liste plate dédiée. Même raison que `colosses` : la
+    // grille ne porte qu'à ~195 px, très en deçà de la distance à laquelle une
+    // proie doit repérer un gros prédateur lancé sur elle. Ils sont une
+    // poignée, un balayage complet coûte moins qu'une recherche de voisinage.
+    this.chasseurs = [];
     const cs = this.GRID;
     for (const e of this.entities) {
       if (e.dead) continue;
@@ -628,6 +647,11 @@ const Ecosystem = {
       // balayer TOUTES les entités (c'était le gros du coût de simulation)
       (this.bySpecies[e.speciesId] || (this.bySpecies[e.speciesId] = [])).push(e);
       if (e.def.size >= 70 || e.def.filterFeeder) this.colosses.push(e);
+      // `strike` compte autant que `hunt` : le jaillissement d'un embusqué est
+      // une attaque, et personne ne réagissait à la murène qui lui saute dessus.
+      if (e.def.prey && !e.def.filterFeeder && (e.state === 'hunt' || e.state === 'strike')) {
+        this.chasseurs.push(e);
+      }
       if (e.groupId != null) (this.byGroup[e.groupId] || (this.byGroup[e.groupId] = [])).push(e);
       const k = ((e.x / cs) | 0) * 100000 + ((e.y / cs) | 0);
       const cell = this.grid.get(k);

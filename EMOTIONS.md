@@ -62,6 +62,8 @@ une ligne là-bas, puis une ligne ici et une dans `js/legend.js`.
 | **rate sa pêche à la lampe** | `blush` (le pêcheur) + `scared` (la proie qui se réveille) | `Entity.pecheALaLampe` |
 | **perd sa proie dans un nuage d'encre** | `surprise` | `Entity.encre` |
 | **le Calamar Géant se sait observé** | `blush`, bras repliés en fuseau, il n'ose plus bouger | `GAGS.calamar_geant` |
+| **réveil en sursaut** (un prédateur fonce sur un dormeur) | `scared` puis fuite | `entity.js` — branche `sleep` |
+| **la victime esquive un embusqué** | `scared` pendant le jaillissement | `Ecosystem.alerteDe` |
 | sent passer le pétomane | `disgust` | gag du Poisson-perroquet |
 | juste avant de lâcher son prout | `ashamed` | gag du Poisson-perroquet |
 | juste après | `blush` | gag du Poisson-perroquet |

@@ -296,6 +296,102 @@ const FishBody = {
     }
   },
 
+  // --- Sprites vectoriels (éditeur SVG) ---------------------------------------
+  // Une espèce qui déclare `sprite:` remplace sa silhouette procédurale par le
+  // dessin de l'éditeur — MAIS elle garde le système commun yeux / sourcils /
+  // bouche par-dessus. C'est la règle du projet : la direction artistique peut
+  // changer entièrement, les émotions restent celles de tout l'aquarium.
+  drawSprite(ctx, e, t) {
+    const sp = Sprites.get(e.def.sprite);
+    if (!sp) { this.drawFish(ctx, e, t); return; }   // pas encore chargé : on ne saute pas de frame
+
+    const s = e.size;
+    // Échelle : le dessin est mis à la LARGEUR QUE LA SIMULATION LUI SUPPOSE —
+    // `size * spanRatio` de demi-emprise, exactement ce que lisent
+    // l'anti-chevauchement et les distances de prise. Mis à `size * 2`, le
+    // requin sortait 22 % plus petit que la silhouette qu'il remplaçait
+    // (77 px mesurés contre 99), et il avait l'air rabougri à côté des autres.
+    // `spriteScale` reste là pour rattraper un dessin trop serré ou trop large.
+    const k = (s * 2 * (e.def.spanRatio || 1.05) * (e.def.spriteScale || 1)) / sp.w;
+
+    // Battement de queue : la fréquence suit l'allure RÉELLE, pas une constante.
+    // Un requin qui charge doit visiblement forcer.
+    const allure = U.clamp(e.speedNow / Math.max(1, e.def.speed), 0, 2.5);
+    const f = 2.2 + allure * 4.5;
+    // L'amplitude suit l'effort, pas seulement la fréquence : un requin lancé
+    // doit visiblement FORCER. Mesuré à l'amplitude nue de l'éditeur (`amp`), le
+    // bout de la queue ne parcourait que 5,5 px sur une silhouette de 48.
+    const onde = Math.sin(t * f + e.phase) * (0.7 + allure * 0.6);
+
+    ctx.save();
+    ctx.scale(k, k);
+    ctx.translate(-sp.cx, -sp.cy);          // l'ancre `center` devient l'origine
+
+    for (const forme of sp.shapes) {
+      ctx.save();
+      if (forme.pivot) {
+        // Nageoire : elle PIVOTE autour de son point d'attache au lieu d'onduler.
+        ctx.translate(forme.pivot[0], forme.pivot[1]);
+        ctx.rotate(Math.sin(t * f * 0.7 + e.phase + 1) * (forme.amp || 15) * 0.007);
+        ctx.translate(-forme.pivot[0], -forme.pivot[1]);
+      }
+      ctx.fillStyle = forme.fill || '#888';
+      this.tracerForme(ctx, forme, sp, onde);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+
+    // --- Visage commun, calé sur les ancres du dessin ---
+    const oe = sp.oeil;
+    if (oe) {
+      // `drawFace` place l'œil en (0.55, -0.18) et la bouche en (0.82, 0.12) fois
+      // sa taille, soit 0,404 fois cette taille entre les deux. On déduit donc la
+      // taille du visage de l'écart œil↔bouche voulu par l'auteur du sprite, en
+      // la bornant : un vrai requin a un œil minuscule, mais ici c'est le visage
+      // qui raconte l'émotion — il doit rester lisible.
+      let fs = s * 0.7;
+      if (sp.bouche) fs = Math.hypot(sp.bouche.x - oe.x, sp.bouche.y - oe.y) * k / 0.404;
+      fs = U.clamp(fs * (e.def.spriteFace || 1), s * 0.6, s * 1.1);
+      ctx.save();
+      ctx.translate((oe.x - sp.cx) * k - fs * 0.55, (oe.y - sp.cy) * k + fs * 0.18);
+      this.face(ctx, fs, e, t);
+      ctx.restore();
+    }
+  },
+
+  // Contour d'une forme, avec l'ondulation de queue appliquée aux points situés
+  // en deçà de `tailBlend` (u² : le battement part du pédoncule caudal, pas du
+  // milieu du corps — sinon le poisson entier se tortille comme une chenille).
+  tracerForme(ctx, forme, sp, onde) {
+    const pts = forme.points, n = pts.length;
+    const etendue = Math.max(1, sp.tailBlend - sp.minX);
+    const amp = forme.amp || 15;
+    const P = new Array(n);
+    for (let i = 0; i < n; i++) {
+      const p = pts[i];
+      const u = U.clamp((sp.tailBlend - p[0]) / etendue, 0, 1);
+      P[i] = [p[0], p[1] + u * u * onde * amp];
+    }
+    ctx.beginPath();
+    if (forme.smooth && n > 2) {
+      // Contour fermé lissé : on passe par les MILIEUX des segments, les sommets
+      // servant de points de contrôle. Relier les sommets en droites donnait des
+      // poissons taillés à la serpe.
+      const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      const d = mid(P[n - 1], P[0]);
+      ctx.moveTo(d[0], d[1]);
+      for (let i = 0; i < n; i++) {
+        const m = mid(P[i], P[(i + 1) % n]);
+        ctx.quadraticCurveTo(P[i][0], P[i][1], m[0], m[1]);
+      }
+    } else {
+      ctx.moveTo(P[0][0], P[0][1]);
+      for (let i = 1; i < n; i++) ctx.lineTo(P[i][0], P[i][1]);
+    }
+    ctx.closePath();
+  },
+
   // --- Silhouettes ------------------------------------------------------------
 
   // Corps de poisson générique (queue + corps + ventre + ailerons), SANS visage.
@@ -1314,6 +1410,9 @@ const FishBody = {
   },
 
   draw(ctx, e, t) {
+    // Un sprite déclaré prime sur la silhouette procédurale ; s'il n'est pas
+    // encore chargé, `drawSprite` retombe tout seul sur le rendu par défaut.
+    if (e.def.sprite) { this.drawSprite(ctx, e, t); if (e._chew > 0) this.drawMouthful(ctx, e, t); return; }
     switch (e.def.render) {
       case 'jelly': this.drawJelly(ctx, e, t); break;
       case 'crab': this.drawCrab(ctx, e, t); break;

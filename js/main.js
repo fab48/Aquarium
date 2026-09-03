@@ -23,6 +23,7 @@ const Main = {
     window.addEventListener('resize', () => this.resize());
 
     World.init();
+    Sprites.init();      // chargement asynchrone : ne bloque aucune frame
     // Vue de départ : sur le rivage, un peu de plage à gauche et l'eau devant
     Camera.x = Camera.tx = Math.max(0, World.shoreX - Camera.w * 0.25);
     Camera.y = Camera.ty = -Camera.h * 0.15;
@@ -87,7 +88,16 @@ const Main = {
 
     // Overlay HUD : en pixels écran (non zoomé)
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    if (Input.hovered) IdCard.draw(ctx, Input.hovered);
+    // La fiche de la créature SUIVIE (double-clic) reste affichée tant que la
+    // loupe est active : on l'a choisie pour la regarder vivre, la perdre dès
+    // que le curseur glisse ailleurs n'avait aucun sens. Le survol en ajoute
+    // une seconde, décalée pour ne pas la recouvrir.
+    if (Input.hoverInfo) {
+      let zone = null;
+      const suivie = Camera.follow;
+      if (suivie && !suivie.dead) zone = IdCard.draw(ctx, suivie, null, true);
+      if (Input.hovered && Input.hovered !== suivie) IdCard.draw(ctx, Input.hovered, zone);
+    }
 
     this.updateHUD();
     requestAnimationFrame(ts2 => this.frame(ts2));

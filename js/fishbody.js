@@ -365,9 +365,11 @@ const FishBody = {
       // Taille des traits du visage. Sur une silhouette procédurale elle vaut
       // `size` ; sur un dessin fait main la tête est plus fine, et à 1 l'œil
       // débordait du museau du requin. Défaut comparé à l'écran : 0,75.
-      // Priorité à la calibration exportée par l'éditeur (`faceK`), puis au
-      // réglage d'espèce, puis au défaut.
-      const fs = s * (sp.faceK || e.def.spriteFace || 0.75);
+      // Préséance : le rayon d'œil posé sur le dessin (`points.eye.r`, converti
+      // via le 0,22 de `drawFace`), puis la calibration en multiples de `size`
+      // (`faceK`), puis le réglage d'espèce, puis le défaut.
+      const fs = sp.faceR ? (sp.faceR * k) / 0.22
+                          : s * (sp.faceK || e.def.spriteFace || 0.75);
       const bo = sp.bouche;
       // `faceTx`/`faceTy` : le décalage fin du panneau de calibration, exprimé
       // en fractions de la taille du visage.

@@ -51,11 +51,20 @@ const Sprites = {
       tailBlend: d.tailBlend != null ? d.tailBlend : minX,
       oeil: d.points && d.points.eye,
       bouche: d.points && d.points.mouth,
-      // Calibration du visage commun, telle que l'éditeur l'exporte (panneau
-      // « Calibration visage »). Absente des premiers exports : on retombe alors
-      // sur `def.spriteFace`, puis sur le défaut mesuré.
+      // CALIBRATION DU VISAGE, par ordre de préséance.
+      // 1. `points.eye.r` — le rayon de l'œil DANS LES UNITÉS DU DESSIN. C'est
+      //    la forme à préférer : l'artiste le règle en tirant sur un cercle
+      //    posé sur son propre dessin, sans rien savoir du `size` interne de
+      //    l'espèce. `drawFace` dessine l'œil à 0,22 fois la taille du visage,
+      //    d'où la conversion.
+      // 2. `faceK`/`faceTx`/`faceTy` — la forme en multiples de `size`, plus
+      //    abstraite mais utile pour un rattrapage grossier.
+      faceR: d.points && d.points.eye && d.points.eye.r,
       faceK: d.faceK, faceTx: d.faceTx, faceTy: d.faceTy,
       shapes,
+      // Le JSON d'origine, gardé tel quel : le banc de calibrage
+      // (`calibrage.html`) le réexporte enrichi des réglages de visage.
+      source: d,
     };
   },
 };

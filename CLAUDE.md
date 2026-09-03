@@ -446,6 +446,7 @@ sable 12 % → 4,3 %.
 
 - `sprites.js` — chargement des dessins de l'éditeur SVG (`Assets/*.json`), consommés par `FishBody.drawSprite`. Une espèce qui déclare `sprite:` remplace sa silhouette procédurale, **jamais son visage**.
 - `svgexport.js` — l'autre sens du pont : rejoue une silhouette procédurale dans un faux contexte 2D qui enregistre au lieu de peindre, et la recrache en SVG prêt pour l'éditeur (`SVGExport.telecharger('requin')`, `SVGExport.tout()`). **[SPRITES.md](SPRITES.md) est le contrat complet des deux sens.**
+- `calibrage.html` — banc de réglage du visage sur un sprite (page à part, servie par le même serveur de dev). Il tourne sur le VRAI code de rendu du jeu, et sert d'implémentation de référence au panneau « Calibration visage » à ajouter dans l'éditeur SVG.
 - `background.js` — dégradé d'eau par profondeur, god rays, crêtes d'arrière-plan, rochers, végétation, cheminées volcaniques, plancton, jour/nuit.
 
 ### Décor posé au sol

@@ -78,6 +78,7 @@ frappe dans un nom de fichier.
 | `naturalW`, `naturalH` | dimensions du dessin | la boîte des points fait foi |
 | `points.center` | **origine de la créature** : le point posé à `(entity.x, entity.y)` | centre de la boîte |
 | `points.eye` | ancre de l'œil (et du sourcil, de la joue) | pas de visage |
+| `points.eye.r` | **taille de l'œil, en unités du dessin** — la calibration à préférer (§3) | on passe à `faceK` |
 | `points.mouth` | ancre de la bouche, **honorée séparément** | bouche à sa place par défaut |
 | `points.nose`, `points.tail` | repères de l'éditeur | ignorés par le jeu |
 | `shapes[].points` | contour, `[[x,y], …]` | — |
@@ -86,7 +87,7 @@ frappe dans un nom de fichier.
 | `shapes[].pivot` | la forme **pivote** autour (nageoire) au lieu d'onduler | elle ondule |
 | `shapes[].amp` | amplitude d'animation | 15 |
 | `tailBlend` | x en deçà duquel les points appartiennent à la queue | rien n'ondule |
-| `faceK`, `faceTx`, `faceTy` | calibration du visage commun | `def.spriteFace`, puis 0,75 |
+| `faceK`, `faceTx`, `faceTy` | calibration du visage en multiples de `size` (repli, §3) | `def.spriteFace`, puis 0,75 |
 
 ### Les quatre règles du rendu
 
@@ -114,7 +115,72 @@ frappe dans un nom de fichier.
 
 ---
 
-## 3. Contrôle non visuel
+## 3. Le panneau « Calibration visage » (à ajouter dans l'éditeur)
+
+Le jeu pose son visage commun sur le dessin : l'œil (avec son sourcil et sa
+joue) sur l'ancre `eye`, la bouche sur l'ancre `mouth`. Restait à dire **à
+quelle taille**. `calibrage.html` fait ce réglage en direct et sert
+d'implémentation de référence : ouvrir un JSON, tirer les curseurs, copier.
+
+### Un seul contrôle suffit : le rayon de l'œil
+
+**`points.eye.r`** — le rayon de l'œil **dans les unités du dessin**. C'est la
+forme à préférer, et de loin : dans l'éditeur, l'ancre `eye` devient un
+**cercle qu'on étire** au lieu d'un simple point. L'artiste règle la taille de
+l'œil sur son propre dessin, à vue, sans jamais rencontrer le `size` interne de
+l'espèce.
+
+| | |
+|---|---|
+| Unité | pixels du dessin (mêmes que `shapes[].points`) |
+| Plage utile | ~2 % à ~25 % de la largeur du dessin |
+| Conversion côté jeu | taille du visage = `r / 0.22` (`drawFace` dessine l'œil à 0,22 fois cette taille) |
+| Valeur de départ à proposer | voir « déduction » ci-dessous |
+
+**Déduction automatique**, à utiliser comme valeur initiale du cercle : mesurer
+la hauteur du corps à l'aplomb de l'ancre (points situés à moins de 12 % de la
+largeur du dessin, en x, de l'ancre `eye`) et prendre **le quart** de cette
+hauteur. Une tête fine donne un petit œil, une grosse tête un gros œil. Vérifié
+sur le requin : la déduction donne une taille de visage de **35,3**, contre
+**34,5** pour la valeur calée à la main. L'artiste n'a en général rien à
+toucher.
+
+### Le repli, si le cercle n'est pas implémenté
+
+**`faceK`**, **`faceTx`**, **`faceTy`** — la même chose exprimée en multiples du
+`size` de l'espèce. Plus abstrait (ce `size` n'apparaît nulle part dans
+l'éditeur), mais utile pour un rattrapage grossier.
+
+| Champ | Rôle | Plage | Défaut |
+|---|---|---|---|
+| `faceK` | taille du visage, en fraction de `size` | 0,25 → 1,6 | 0,75 |
+| `faceTx` | décalage horizontal de tout le visage, en fractions de sa taille | −0,6 → 0,6 | 0 |
+| `faceTy` | décalage vertical, idem | −0,6 → 0,6 | 0 |
+
+Préséance dans le jeu : `points.eye.r`, puis `faceK`, puis `def.spriteFace`
+(réglage d'espèce, côté code), puis **0,75** — la valeur comparée à l'écran
+entre 1, 0,75 et 0,58. À 1, la valeur des silhouettes procédurales, l'œil
+débordait du museau du requin.
+
+`faceTx`/`faceTy` deviennent inutiles dès que les deux ancres sont bien posées :
+elles ne servent qu'à rattraper un visage globalement décalé.
+
+### Prévisualiser dans l'éditeur
+
+Le panneau n'a d'intérêt que s'il **montre le résultat**. Le code à reprendre
+tient dans la fonction `dessiner()` de `calibrage.html` : charger `utils.js`,
+`species.js`, `sprites.js` et `fishbody.js`, boucher `Main`/`World`/`Camera`
+(quelques lignes en tête de la page), fabriquer un faux poisson, appeler
+`FishBody.draw`. Aucune duplication du système d'expressions : c'est le code du
+jeu qui dessine.
+
+Prévisualiser **plusieurs humeurs**, pas seulement le repos : la bouche du
+ronflement (`sleeping`) et le sourcil de la colère (`angry`) sont les deux qui
+débordent en premier d'une tête trop petite.
+
+---
+
+## 4. Contrôle non visuel
 
 Comparer l'emprise d'un sprite et de la silhouette qu'il remplace, sans se fier à
 l'œil ni à une capture d'écran (le compositeur du navigateur retarde souvent
@@ -138,7 +204,7 @@ plus fin que l'ellipse procédurale, ce qui est le but.
 
 ---
 
-## 4. Écarts avec la note initiale
+## 5. Écarts avec la note initiale
 
 La note de recherche qui occupait ce fichier proposait quatre choses ; deux ont
 été retenues, deux ont été tranchées autrement une fois le format réel de
@@ -157,12 +223,13 @@ sur ~380 individus, ce n'est pas le goulot (cf. CLAUDE.md, « Performance »).
 
 ---
 
-## 5. Ce qui manque encore
+## 6. Ce qui manque encore
 
 - **Un sprite par espèce.** Seul le requin en a un. Les 26 SVG de départ
   s'obtiennent avec `SVGExport.tout()`.
-- **`faceK` / `faceTx` / `faceTy` dans les exports de l'éditeur.** Le jeu les lit
-  déjà ; `SharkSVG.json` ne les contient pas encore et retombe sur 0,75.
+- **Le cercle de l'ancre `eye` dans l'éditeur** (§3). Le jeu lit déjà
+  `points.eye.r` et les trois `face*` ; `SharkSVG.json` n'en contient aucun et
+  retombe sur 0,75, ce qui lui va.
 - **Le miroir.** Un dessin est fait tourné vers la droite ; le jeu le retourne
   par `scale(-1, 1)` avec le demi-tour animé. Rien à faire côté éditeur, mais un
   dessin asymétrique (une tache sur un seul flanc) se retrouvera de l'autre côté

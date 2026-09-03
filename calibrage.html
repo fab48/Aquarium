@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Aquarium — banc de calibrage du visage</title>
+<!--
+  BANC DE CALIBRAGE DU VISAGE.
+
+  À quoi ça sert : un dessin fait à la main garde le visage commun du jeu
+  (yeux, sourcils, bouche) par-dessus lui. Reste à dire OÙ il se pose et
+  GROS COMMENT. Cette page le montre en direct, sur le vrai code de rendu du
+  jeu — pas sur une imitation.
+
+  Double emploi :
+   1. outil du quotidien : ouvrir un JSON de l'éditeur, tirer les curseurs,
+      copier le résultat ;
+   2. IMPLÉMENTATION DE RÉFÉRENCE pour le panneau « Calibration visage » à
+      ajouter dans l'éditeur SVG. Tout ce qu'il faut y reproduire tient dans
+      `dessiner()` en bas de ce fichier : charger `fishbody.js` + `sprites.js`,
+      fabriquer un faux poisson, appeler `FishBody.draw`.
+
+  Se lance comme le jeu : python dev_server.py 8642 → /calibrage.html
+-->
+<style>
+  :root { color-scheme: light; }
+  body { margin: 0; font: 14px/1.5 "Segoe UI", system-ui, sans-serif;
+         background: #eef3f7; color: #16232e; display: flex; height: 100vh; }
+  #scene { flex: 1; display: flex; flex-direction: column; align-items: center;
+           justify-content: center; gap: 14px; min-width: 0; }
+  canvas { background: #dce8f0; border-radius: 10px; box-shadow: 0 2px 14px rgba(0,0,0,.12); }
+  #panneau { width: 340px; padding: 18px; background: #fff; overflow-y: auto;
+             box-shadow: -2px 0 16px rgba(0,0,0,.08); }
+  h1 { font-size: 15px; margin: 0 0 4px; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em;
+       color: #6b8296; margin: 22px 0 8px; }
+  p.aide { font-size: 12px; color: #5b7186; margin: 4px 0 12px; }
+  label { display: block; margin: 12px 0 2px; font-weight: 600; font-size: 13px; }
+  label span { float: right; font-weight: 400; color: #4a90d4; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; }
+  select, button { width: 100%; padding: 7px; margin-top: 6px; font: inherit;
+                   border: 1px solid #c3d3df; border-radius: 6px; background: #fff; }
+  button { background: #2d7fd3; color: #fff; border: 0; cursor: pointer; font-weight: 600; }
+  button.secondaire { background: #eaf1f7; color: #2b4256; }
+  pre { background: #10202c; color: #b8e6ff; padding: 10px; border-radius: 6px;
+        font-size: 11.5px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+  .ligne { display: flex; gap: 8px; align-items: center; }
+  .ligne > * { flex: 1; }
+  .puce { font-size: 12px; color: #5b7186; }
+</style>
+</head>
+<body>
+
+<div id="scene">
+  <canvas id="grand" width="820" height="330"></canvas>
+  <canvas id="humeurs" width="820" height="200"></canvas>
+  <div class="puce" id="etat">chargement…</div>
+</div>
+
+<div id="panneau">
+  <h1>Calibration du visage</h1>
+  <p class="aide">Le jeu dessine ses yeux et sa bouche <b>par-dessus</b> le dessin.
+     Ces réglages disent où et à quelle taille.</p>
+
+  <h2>Sujet</h2>
+  <select id="choixSprite"></select>
+  <button class="secondaire" id="btnFichier">Ouvrir un JSON de l'éditeur…</button>
+  <input type="file" id="fichier" accept=".json" hidden>
+
+  <h2>Taille de l'œil</h2>
+  <p class="aide">À privilégier : le <b>rayon en unités du dessin</b>. Dans
+     l'éditeur, c'est le cercle qu'on étire autour de l'ancre <code>eye</code>.</p>
+  <label>points.eye.r <span id="vR">—</span></label>
+  <input type="range" id="sR" min="2" max="90" step="0.5">
+  <div class="ligne">
+    <button class="secondaire" id="btnAuto">Déduire du dessin</button>
+    <button class="secondaire" id="btnSansR">Ne pas l'utiliser</button>
+  </div>
+
+  <h2>Repli : multiples de <code>size</code></h2>
+  <p class="aide">Utilisé seulement si <code>points.eye.r</code> est absent.</p>
+  <label>faceK <span id="vK">—</span></label>
+  <input type="range" id="sK" min="0.25" max="1.6" step="0.01">
+  <label>faceTx <span id="vTx">—</span></label>
+  <input type="range" id="sTx" min="-0.6" max="0.6" step="0.01">
+  <label>faceTy <span id="vTy">—</span></label>
+  <input type="range" id="sTy" min="-0.6" max="0.6" step="0.01">
+
+  <h2>Affichage</h2>
+  <label class="puce"><input type="checkbox" id="ancres" checked> montrer les ancres</label>
+  <label class="puce"><input type="checkbox" id="anime"> animer (queue, nageoires)</label>
+
+  <h2>À recopier dans le JSON</h2>
+  <pre id="sortie"></pre>
+  <button id="btnCopier">Copier</button>
+  <button class="secondaire" id="btnJson" style="margin-top:8px">Télécharger le JSON complet</button>
+</div>
+
+<script>
+// Le banc n'a pas besoin de tout le jeu : seulement des fiches d'espèces, du
+// chargeur de sprites et du corps. Le reste est bouché.
+window.GAGS = {};
+window.Main = { time: 0, nightAmount: () => 0, dayT: () => 0.25 };
+window.World = { slopeAt: () => 0, floorY: () => 9999, planktonAt: () => 1 };
+window.Camera = { zoom: 1, x: 0, y: 0, w: 800, h: 600, isVisible: () => true,
+                  toScreen: (x, y) => [x, y], toWorld: (x, y) => [x, y] };
+window.Input = { inWindow: false, mx: 0, my: 0, mouseSpeed: 0 };
+window.Particles = new Proxy({}, { get: () => () => {} });
+</script>
+<script src="js/config.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/species.js"></script>
+<script src="js/sprites.js"></script>
+<script src="js/fishbody.js"></script>
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const grand = $('grand').getContext('2d');
+  const humeurs = $('humeurs').getContext('2d');
+
+  // Espèces qui déclarent déjà un sprite, plus tout fichier ouvert à la main.
+  const avecSprite = Object.keys(SPECIES).filter(id => SPECIES[id].sprite);
+  let sujet = null;          // { id, def, brut }  — `brut` = le JSON de l'éditeur
+
+  for (const id of avecSprite) {
+    const o = document.createElement('option');
+    o.value = id; o.textContent = `${SPECIES[id].name} (${id})`;
+    $('choixSprite').appendChild(o);
+  }
+
+  // --- Faux poisson : le strict nécessaire pour `FishBody.draw` ---------------
+  function poisson(def, expression) {
+    return {
+      def, size: def.size, phase: 0, speedNow: def.speed,
+      expression, stage: 'adult', growth: 1, _chew: 0, _facing: 1,
+      emoteK: () => 1, _eyeLook: null,
+      color: def.colors[0],
+      colorDark: U.mixColor(def.colors[0], '#102030', 0.35),
+      colorAlpha: a => `rgba(0,0,0,${a})`,
+      stealth: 0, strikeT: 0, _repli: 0, _sable: 0,
+    };
+  }
+
+  // --- Application des réglages sur l'objet préparé par `Sprites` -------------
+  function appliquer() {
+    const sp = Sprites.get(sujet.id);
+    if (!sp) return null;
+    sp.faceR = $('sR').disabled ? null : +$('sR').value;
+    sp.faceK = +$('sK').value;
+    sp.faceTx = +$('sTx').value;
+    sp.faceTy = +$('sTy').value;
+    $('vR').textContent = sp.faceR ? sp.faceR.toFixed(1) : 'non utilisé';
+    $('vK').textContent = sp.faceK.toFixed(2);
+    $('vTx').textContent = sp.faceTx.toFixed(2);
+    $('vTy').textContent = sp.faceTy.toFixed(2);
+    return sp;
+  }
+
+  // --- LE CŒUR : c'est exactement ce que l'éditeur doit reproduire ------------
+  // Un poisson factice, la mise à l'échelle du canvas, un appel à FishBody.draw.
+  function dessiner(t) {
+    const sp = appliquer();
+    if (!sp) return;
+    const def = sujet.def;
+
+    // Vue principale
+    const c = $('grand');
+    grand.clearRect(0, 0, c.width, c.height);
+    // Zoom d'affichage : on cadre l'emprise RÉELLE du dessin une fois mis à
+    // l'échelle du jeu, pas une estimation à partir de `size` — un poisson plat
+    // et un poisson haut ne se cadrent pas pareil.
+    const k = (def.size * 2.5 * (def.spriteScale || 1)) / sp.w;
+    let y0 = Infinity, y1 = -Infinity;
+    for (const sh of sp.shapes) for (const p of sh.points) {
+      if (p[1] < y0) y0 = p[1];
+      if (p[1] > y1) y1 = p[1];
+    }
+    const larg = sp.w * k, haut = Math.max(1, (y1 - y0) * k);
+    const S = Math.max(1, Math.min((c.width - 70) / larg, (c.height - 50) / haut));
+    // Recentrage sur le DESSIN, pas sur l'ancre `center` : chez le requin
+    // l'ancre est décalée vers l'avant, et cadrer dessus sortait le museau.
+    const ox = ((sp.minX + sp.w / 2) - sp.cx) * k;
+    const oy = ((y0 + y1) / 2 - sp.cy) * k;
+    grand.save();
+    grand.translate(c.width / 2 - ox * S, c.height / 2 - oy * S);
+    grand.scale(S, S);
+    FishBody.draw(grand, poisson(def, 'idle'), t);
+    grand.restore();
+
+    if ($('ancres').checked) {
+      const croix = (a, col, nom) => {
+        if (!a) return;
+        const x = c.width / 2 + ((a.x - sp.cx) * k - ox) * S;
+        const y = c.height / 2 + ((a.y - sp.cy) * k - oy) * S;
+        grand.strokeStyle = col; grand.lineWidth = 1.5;
+        grand.beginPath();
+        grand.moveTo(x - 9, y); grand.lineTo(x + 9, y);
+        grand.moveTo(x, y - 9); grand.lineTo(x, y + 9);
+        grand.stroke();
+        grand.fillStyle = col; grand.font = '11px sans-serif';
+        grand.fillText(nom, x + 11, y - 4);
+      };
+      croix(sp.oeil, '#e0322f', 'eye');
+      croix(sp.bouche, '#1560d8', 'mouth');
+      croix({ x: sp.cx, y: sp.cy }, '#0a8f3c', 'center');
+    }
+
+    // Bandeau d'humeurs : une calibration juste doit tenir sur TOUTES les
+    // expressions, pas seulement au repos — la bouche du ronflement et le
+    // sourcil de la colère sont les deux qui débordent en premier.
+    const h = $('humeurs');
+    humeurs.clearRect(0, 0, h.width, h.height);
+    const exprs = ['happy', 'angry', 'sleeping', 'scared', 'kiss'];
+    const pas = h.width / exprs.length;
+    const S2 = Math.min((pas - 14) / larg, (h.height - 40) / haut);
+    exprs.forEach((ex, i) => {
+      humeurs.save();
+      humeurs.translate(pas * (i + 0.5) - ox * S2, h.height / 2 + 8 - oy * S2);
+      humeurs.scale(S2, S2);
+      FishBody.draw(humeurs, poisson(def, ex), t);
+      humeurs.restore();
+      humeurs.fillStyle = '#5b7186'; humeurs.font = '11px sans-serif';
+      humeurs.textAlign = 'center';
+      humeurs.fillText(ex, pas * (i + 0.5), 18);
+    });
+
+    // Sortie à recopier
+    const bloc = {};
+    if (sp.faceR) bloc['points.eye.r'] = +sp.faceR.toFixed(1);
+    else { bloc.faceK = +sp.faceK.toFixed(2); }
+    if (sp.faceTx) bloc.faceTx = +sp.faceTx.toFixed(2);
+    if (sp.faceTy) bloc.faceTy = +sp.faceTy.toFixed(2);
+    $('sortie').textContent = JSON.stringify(bloc, null, 2);
+  }
+
+  // --- Boucle (figée par défaut : on calibre mieux sur une image fixe) --------
+  let t0 = performance.now();
+  function boucle() {
+    const t = $('anime').checked ? (performance.now() - t0) / 1000 : 1.2;
+    Main.time = t;
+    dessiner(t);
+    requestAnimationFrame(boucle);
+  }
+
+  // --- Chargement d'un sujet --------------------------------------------------
+  function charger(id, brut) {
+    sujet = { id, def: SPECIES[id] || { ...SPECIES[avecSprite[0]], sprite: id } };
+    if (brut) Sprites.cache[id] = Sprites.preparer(brut);
+    else Sprites.charger(SPECIES[id].sprite), sujet.id = SPECIES[id].sprite;
+    const attendre = () => {
+      const sp = Sprites.get(sujet.id);
+      if (!sp) return setTimeout(attendre, 60);
+      // Valeurs de départ : celles déjà présentes dans le fichier, sinon le
+      // rayon déduit du dessin (voir `deduire`).
+      $('sR').disabled = false;
+      $('sR').value = sp.faceR || deduire(sp);
+      $('sK').value = sp.faceK || sujet.def.spriteFace || 0.75;
+      $('sTx').value = sp.faceTx || 0;
+      $('sTy').value = sp.faceTy || 0;
+      $('etat').textContent =
+        `${sujet.def.name} · dessin ${Math.round(sp.w)} unités · size ${sujet.def.size}`;
+    };
+    attendre();
+  }
+
+  // Rayon d'œil DÉDUIT du dessin : un quart de la hauteur du corps à l'aplomb
+  // de l'ancre. Une tête fine donne un petit œil, une grosse tête un gros œil —
+  // ça évite d'avoir à régler quoi que ce soit sur la plupart des poissons.
+  function deduire(sp) {
+    if (!sp.oeil) return 12;
+    let y0 = Infinity, y1 = -Infinity;
+    for (const sh of sp.shapes) {
+      for (let i = 0; i < sh.points.length; i++) {
+        const p = sh.points[i];
+        if (Math.abs(p[0] - sp.oeil.x) > sp.w * 0.12) continue;
+        y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]);
+      }
+    }
+    if (!isFinite(y0) || y1 - y0 < 1) return sp.w * 0.05;
+    return Math.round((y1 - y0) * 0.25 * 10) / 10;
+  }
+
+  // --- Câblage ----------------------------------------------------------------
+  $('choixSprite').addEventListener('change', e => charger(e.target.value));
+  $('btnFichier').addEventListener('click', () => $('fichier').click());
+  $('fichier').addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const fr = new FileReader();
+    fr.onload = () => {
+      try {
+        const brut = JSON.parse(fr.result);
+        const id = f.name.replace(/\.json$/i, '');
+        // On lui prête la fiche de l'espèce choisie : `size` et `spriteScale`
+        // viennent du jeu, pas du dessin.
+        const ref = $('choixSprite').value || avecSprite[0];
+        SPECIES[id] = { ...SPECIES[ref], sprite: id, name: id };
+        const o = document.createElement('option');
+        o.value = id; o.textContent = id + ' (fichier)';
+        $('choixSprite').appendChild(o); $('choixSprite').value = id;
+        charger(id, brut);
+      } catch (err) { alert('JSON illisible : ' + err); }
+    };
+    fr.readAsText(f);
+  });
+  $('btnAuto').addEventListener('click', () => {
+    const sp = Sprites.get(sujet.id);
+    if (sp) { $('sR').disabled = false; $('sR').value = deduire(sp); }
+  });
+  $('btnSansR').addEventListener('click', () => { $('sR').disabled = !$('sR').disabled; });
+  $('btnCopier').addEventListener('click', () => {
+    navigator.clipboard.writeText($('sortie').textContent);
+    $('btnCopier').textContent = 'copié ✓';
+    setTimeout(() => ($('btnCopier').textContent = 'Copier'), 1200);
+  });
+  $('btnJson').addEventListener('click', () => {
+    const sp = Sprites.get(sujet.id);
+    if (!sp || !sp.source) return alert('Ouvre d\'abord un JSON de l\'éditeur.');
+    const d = JSON.parse(JSON.stringify(sp.source));
+    if (sp.faceR && d.points && d.points.eye) d.points.eye.r = +(+$('sR').value).toFixed(1);
+    else d.faceK = +(+$('sK').value).toFixed(2);
+    if (+$('sTx').value) d.faceTx = +(+$('sTx').value).toFixed(2);
+    if (+$('sTy').value) d.faceTy = +(+$('sTy').value).toFixed(2);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(d)], { type: 'application/json' }));
+    a.download = sujet.id + '.json';
+    a.click();
+  });
+
+  if (avecSprite.length) charger(avecSprite[0]);
+  else $('etat').textContent = 'aucune espèce ne déclare de sprite — ouvre un JSON';
+  boucle();
+})();
+</script>
+</body>
+</html>

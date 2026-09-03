@@ -51,6 +51,10 @@ const Sprites = {
       tailBlend: d.tailBlend != null ? d.tailBlend : minX,
       oeil: d.points && d.points.eye,
       bouche: d.points && d.points.mouth,
+      // Calibration du visage commun, telle que l'éditeur l'exporte (panneau
+      // « Calibration visage »). Absente des premiers exports : on retombe alors
+      // sur `def.spriteFace`, puis sur le défaut mesuré.
+      faceK: d.faceK, faceTx: d.faceTx, faceTy: d.faceTy,
       shapes,
     };
   },

@@ -94,7 +94,123 @@ const FishBody = {
     ctx.restore();
   },
 
-  drawFace(ctx, size, expression, t, k = 1, eyeLook = null) {
+  // BOUCHE ISOLÉE — même rôle que `oeil()` pour l'œil.
+  // Elle était clouée à (0,82 · 0,12) fois la taille du visage. Un dessin fait
+  // à la main place SA bouche où il veut (ancre `mouth` de l'éditeur) : chez le
+  // requin elle est presque à la VERTICALE de l'œil, alors que le visage commun
+  // la met en avant et à peine plus bas — elle atterrissait sur le museau.
+  // `mx`/`my` sont donc passés par l'appelant.
+  bouche(ctx, mx, my, size, mouth, t) {
+    const INK = '#1c2733';
+    const lw = Math.max(1.4, size * 0.055);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = INK; ctx.lineWidth = lw;
+    ctx.beginPath();
+  if (mouth === 'gloutonne') {
+    const o = (Math.sin(t * 16) * 0.5 + 0.5) * size * 0.3 + size * 0.08;
+    ctx.fillStyle = '#5a2d3d';
+    ctx.ellipse(mx, my, size * 0.15, o, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ff8fa3';   // petite langue
+    ctx.beginPath(); ctx.ellipse(mx, my + o * 0.45, size * 0.08, o * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+  } else if (mouth === 'sourire') {
+    ctx.lineWidth = lw * 1.2;
+    ctx.arc(mx - size * 0.1, my - size * 0.06, size * 0.2, 0.1 * Math.PI, 0.9 * Math.PI);
+    ctx.stroke();
+  } else if (mouth === 'timide') {
+    ctx.arc(mx - size * 0.06, my - size * 0.02, size * 0.1, 0.15 * Math.PI, 0.85 * Math.PI);
+    ctx.stroke();
+  } else if (mouth === 'cri') {
+    ctx.fillStyle = '#5a2d3d';
+    ctx.ellipse(mx, my + size * 0.04, size * 0.11, size * 0.17, 0, 0, Math.PI * 2); ctx.fill();
+  } else if (mouth === 'grogne') {
+    ctx.lineWidth = lw * 1.2;
+    ctx.moveTo(mx - size * 0.16, my + size * 0.08);
+    ctx.quadraticCurveTo(mx - size * 0.02, my - size * 0.06, mx + size * 0.12, my + size * 0.06);
+    ctx.stroke();
+    ctx.fillStyle = '#fff';    // canine
+    ctx.beginPath();
+    ctx.moveTo(mx - size * 0.02, my + size * 0.02);
+    ctx.lineTo(mx + size * 0.07, my + size * 0.02);
+    ctx.lineTo(mx + size * 0.025, my + size * 0.16);
+    ctx.closePath(); ctx.fill();
+  } else if (mouth === 'ondulee') {
+    ctx.moveTo(mx - size * 0.16, my);
+    for (let i = 1; i <= 4; i++) {
+      ctx.quadraticCurveTo(mx - size * 0.16 + size * 0.04 * (i - 0.5), my + (i % 2 ? -1 : 1) * size * 0.07,
+                           mx - size * 0.16 + size * 0.08 * i, my);
+    }
+    ctx.stroke();
+  } else if (mouth === 'rire') {
+    // grande bouche ouverte de rire, avec la langue, qui pulse au rythme des « ha »
+    const o = size * (0.26 + 0.09 * Math.sin(t * 15));
+    ctx.fillStyle = '#5a2d3d';
+    ctx.beginPath(); ctx.ellipse(mx - size * 0.04, my + size * 0.05, size * 0.19, o, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ff8fa3';
+    ctx.beginPath(); ctx.ellipse(mx - size * 0.04, my + o * 0.55, size * 0.1, o * 0.34, 0, 0, Math.PI * 2); ctx.fill();
+  } else if (mouth === 'bisou') {
+    // lèvres pincées projetées en avant
+    ctx.fillStyle = '#e8607f';
+    ctx.beginPath();
+    ctx.ellipse(mx + size * 0.14, my, size * 0.13, size * 0.1, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#a83a55';
+    ctx.beginPath();
+    ctx.ellipse(mx + size * 0.2, my, size * 0.05, size * 0.045, 0, 0, Math.PI * 2); ctx.fill();
+  } else if (mouth === 'berk') {
+    // GRAND sourire inversé (arc franc vers le bas), et la langue qui pend
+    ctx.lineWidth = lw * 1.5;
+    ctx.arc(mx - size * 0.06, my + size * 0.26, size * 0.24, 1.12 * Math.PI, 1.88 * Math.PI);
+    ctx.stroke();
+    ctx.fillStyle = '#e8879b';
+    ctx.beginPath();
+    ctx.ellipse(mx - size * 0.06, my + size * 0.14, size * 0.08, size * 0.14, 0.15, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (mouth === 'o') {
+    ctx.fillStyle = '#5a2d3d';
+    ctx.beginPath(); ctx.arc(mx, my + size * 0.03, size * 0.13, 0, Math.PI * 2); ctx.fill();
+  } else if (mouth === 'triste') {
+    ctx.lineWidth = lw * 1.1;
+    ctx.arc(mx - size * 0.06, my + size * 0.2, size * 0.16, 1.15 * Math.PI, 1.85 * Math.PI);
+    ctx.stroke();
+  } else if (mouth === 'malin') {
+    // sourire en coin, relevé d'un seul côté
+    ctx.lineWidth = lw * 1.2;
+    ctx.moveTo(mx - size * 0.16, my + size * 0.04);
+    ctx.quadraticCurveTo(mx, my + size * 0.1, mx + size * 0.14, my - size * 0.08);
+    ctx.stroke();
+  } else if (mouth === 'ronfle') {
+    // Ronflement cartoon : cycle lent inspire/expire. La bouche s'ouvre en
+    // grand puis se pince, et une bulle de morve gonfle sur le temps faible.
+    const cycle = (Math.sin(t * 1.7) + 1) / 2;          // 0 = expire, 1 = inspire
+    const o = size * (0.035 + cycle * 0.15);
+    ctx.fillStyle = '#5a2d3d';
+    ctx.beginPath();
+    ctx.ellipse(mx - size * 0.09, my + size * 0.03, size * (0.08 + cycle * 0.035), o, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // lèvre du bas qui vibre
+    ctx.strokeStyle = INK; ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.arc(mx - size * 0.09, my + size * 0.03 + o * 0.8,
+            size * 0.1, 0.05 * Math.PI, 0.95 * Math.PI);
+    ctx.stroke();
+    // bulle de morve, gonflée sur l'expiration
+    const morve = Math.max(0, -Math.sin(t * 1.7));
+    if (morve > 0.15) {
+      ctx.fillStyle = `rgba(200,232,255,${0.45 + morve * 0.3})`;
+      ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = Math.max(1, size * 0.03);
+      ctx.beginPath();
+      ctx.arc(mx + size * 0.1, my - size * 0.1, size * 0.085 * morve, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
+    }
+    ctx.beginPath();   // ne pas laisser de tracé en cours
+  } else { // neutre
+    ctx.moveTo(mx - size * 0.1, my);
+    ctx.quadraticCurveTo(mx, my + size * 0.06, mx + size * 0.06, my);
+    ctx.stroke();
+  }
+
+  },
+
+  drawFace(ctx, size, expression, t, k = 1, eyeLook = null, sansBouche = false) {
     size = Math.max(1, size || 0);   // garde : un rayon négatif ferait planter arc()
     k = U.clamp(k == null ? 1 : k, 0, 1);
     const base = this.EMOTIONS.idle;
@@ -182,112 +298,8 @@ const FishBody = {
     ctx.stroke();
     ctx.restore();
 
-    // --- Bouche ---
-    const mx = size * 0.82, my = size * 0.12;
-    ctx.strokeStyle = INK; ctx.lineWidth = lw;
-    ctx.beginPath();
-    if (mouth === 'gloutonne') {
-      const o = (Math.sin(t * 16) * 0.5 + 0.5) * size * 0.3 + size * 0.08;
-      ctx.fillStyle = '#5a2d3d';
-      ctx.ellipse(mx, my, size * 0.15, o, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#ff8fa3';   // petite langue
-      ctx.beginPath(); ctx.ellipse(mx, my + o * 0.45, size * 0.08, o * 0.3, 0, 0, Math.PI * 2); ctx.fill();
-    } else if (mouth === 'sourire') {
-      ctx.lineWidth = lw * 1.2;
-      ctx.arc(mx - size * 0.1, my - size * 0.06, size * 0.2, 0.1 * Math.PI, 0.9 * Math.PI);
-      ctx.stroke();
-    } else if (mouth === 'timide') {
-      ctx.arc(mx - size * 0.06, my - size * 0.02, size * 0.1, 0.15 * Math.PI, 0.85 * Math.PI);
-      ctx.stroke();
-    } else if (mouth === 'cri') {
-      ctx.fillStyle = '#5a2d3d';
-      ctx.ellipse(mx, my + size * 0.04, size * 0.11, size * 0.17, 0, 0, Math.PI * 2); ctx.fill();
-    } else if (mouth === 'grogne') {
-      ctx.lineWidth = lw * 1.2;
-      ctx.moveTo(mx - size * 0.16, my + size * 0.08);
-      ctx.quadraticCurveTo(mx - size * 0.02, my - size * 0.06, mx + size * 0.12, my + size * 0.06);
-      ctx.stroke();
-      ctx.fillStyle = '#fff';    // canine
-      ctx.beginPath();
-      ctx.moveTo(mx - size * 0.02, my + size * 0.02);
-      ctx.lineTo(mx + size * 0.07, my + size * 0.02);
-      ctx.lineTo(mx + size * 0.025, my + size * 0.16);
-      ctx.closePath(); ctx.fill();
-    } else if (mouth === 'ondulee') {
-      ctx.moveTo(mx - size * 0.16, my);
-      for (let i = 1; i <= 4; i++) {
-        ctx.quadraticCurveTo(mx - size * 0.16 + size * 0.04 * (i - 0.5), my + (i % 2 ? -1 : 1) * size * 0.07,
-                             mx - size * 0.16 + size * 0.08 * i, my);
-      }
-      ctx.stroke();
-    } else if (mouth === 'rire') {
-      // grande bouche ouverte de rire, avec la langue, qui pulse au rythme des « ha »
-      const o = size * (0.26 + 0.09 * Math.sin(t * 15));
-      ctx.fillStyle = '#5a2d3d';
-      ctx.beginPath(); ctx.ellipse(mx - size * 0.04, my + size * 0.05, size * 0.19, o, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#ff8fa3';
-      ctx.beginPath(); ctx.ellipse(mx - size * 0.04, my + o * 0.55, size * 0.1, o * 0.34, 0, 0, Math.PI * 2); ctx.fill();
-    } else if (mouth === 'bisou') {
-      // lèvres pincées projetées en avant
-      ctx.fillStyle = '#e8607f';
-      ctx.beginPath();
-      ctx.ellipse(mx + size * 0.14, my, size * 0.13, size * 0.1, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#a83a55';
-      ctx.beginPath();
-      ctx.ellipse(mx + size * 0.2, my, size * 0.05, size * 0.045, 0, 0, Math.PI * 2); ctx.fill();
-    } else if (mouth === 'berk') {
-      // GRAND sourire inversé (arc franc vers le bas), et la langue qui pend
-      ctx.lineWidth = lw * 1.5;
-      ctx.arc(mx - size * 0.06, my + size * 0.26, size * 0.24, 1.12 * Math.PI, 1.88 * Math.PI);
-      ctx.stroke();
-      ctx.fillStyle = '#e8879b';
-      ctx.beginPath();
-      ctx.ellipse(mx - size * 0.06, my + size * 0.14, size * 0.08, size * 0.14, 0.15, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (mouth === 'o') {
-      ctx.fillStyle = '#5a2d3d';
-      ctx.beginPath(); ctx.arc(mx, my + size * 0.03, size * 0.13, 0, Math.PI * 2); ctx.fill();
-    } else if (mouth === 'triste') {
-      ctx.lineWidth = lw * 1.1;
-      ctx.arc(mx - size * 0.06, my + size * 0.2, size * 0.16, 1.15 * Math.PI, 1.85 * Math.PI);
-      ctx.stroke();
-    } else if (mouth === 'malin') {
-      // sourire en coin, relevé d'un seul côté
-      ctx.lineWidth = lw * 1.2;
-      ctx.moveTo(mx - size * 0.16, my + size * 0.04);
-      ctx.quadraticCurveTo(mx, my + size * 0.1, mx + size * 0.14, my - size * 0.08);
-      ctx.stroke();
-    } else if (mouth === 'ronfle') {
-      // Ronflement cartoon : cycle lent inspire/expire. La bouche s'ouvre en
-      // grand puis se pince, et une bulle de morve gonfle sur le temps faible.
-      const cycle = (Math.sin(t * 1.7) + 1) / 2;          // 0 = expire, 1 = inspire
-      const o = size * (0.035 + cycle * 0.15);
-      ctx.fillStyle = '#5a2d3d';
-      ctx.beginPath();
-      ctx.ellipse(mx - size * 0.09, my + size * 0.03, size * (0.08 + cycle * 0.035), o, 0, 0, Math.PI * 2);
-      ctx.fill();
-      // lèvre du bas qui vibre
-      ctx.strokeStyle = INK; ctx.lineWidth = lw;
-      ctx.beginPath();
-      ctx.arc(mx - size * 0.09, my + size * 0.03 + o * 0.8,
-              size * 0.1, 0.05 * Math.PI, 0.95 * Math.PI);
-      ctx.stroke();
-      // bulle de morve, gonflée sur l'expiration
-      const morve = Math.max(0, -Math.sin(t * 1.7));
-      if (morve > 0.15) {
-        ctx.fillStyle = `rgba(200,232,255,${0.45 + morve * 0.3})`;
-        ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = Math.max(1, size * 0.03);
-        ctx.beginPath();
-        ctx.arc(mx + size * 0.1, my - size * 0.1, size * 0.085 * morve, 0, Math.PI * 2);
-        ctx.fill(); ctx.stroke();
-      }
-      ctx.beginPath();   // ne pas laisser de tracé en cours
-    } else { // neutre
-      ctx.moveTo(mx - size * 0.1, my);
-      ctx.quadraticCurveTo(mx, my + size * 0.06, mx + size * 0.06, my);
-      ctx.stroke();
-    }
-
+    // --- Bouche (extraite : un sprite la pose sur SON ancre, cf. `bouche()`) ---
+    if (!sansBouche) this.bouche(ctx, size * 0.82, size * 0.12, size, mouth, t);
     // --- Joues (rougeur, ou teint verdâtre quand il est écœuré) ---
     if (P.blush > 0.05) {
       const teinte = em.cheek || '255,110,135';
@@ -306,13 +318,13 @@ const FishBody = {
     if (!sp) { this.drawFish(ctx, e, t); return; }   // pas encore chargé : on ne saute pas de frame
 
     const s = e.size;
-    // Échelle : le dessin est mis à la LARGEUR QUE LA SIMULATION LUI SUPPOSE —
-    // `size * spanRatio` de demi-emprise, exactement ce que lisent
-    // l'anti-chevauchement et les distances de prise. Mis à `size * 2`, le
-    // requin sortait 22 % plus petit que la silhouette qu'il remplaçait
-    // (77 px mesurés contre 99), et il avait l'air rabougri à côté des autres.
-    // `spriteScale` reste là pour rattraper un dessin trop serré ou trop large.
-    const k = (s * 2 * (e.def.spanRatio || 1.05) * (e.def.spriteScale || 1)) / sp.w;
+    // ÉCHELLE. Référence mesurée : une silhouette procédurale occupe environ
+    // 2,5 fois `size` en longueur (99 px relevés sur un requin de 40). Un sprite
+    // doit remplir la même place, sinon il paraît rabougri au milieu des autres —
+    // c'était le cas à `size * 2` (77 px) comme à `size * 2 * spanRatio` (84 px).
+    // `spriteScale` rattrape ensuite un dessin plus serré ou plus large que la
+    // moyenne, sans toucher à l'emprise physique (`spanRatio`, cf. les colosses).
+    const k = (s * 2.5 * (e.def.spriteScale || 1)) / sp.w;
 
     // Battement de queue : la fréquence suit l'allure RÉELLE, pas une constante.
     // Un requin qui charge doit visiblement forcer.
@@ -342,21 +354,38 @@ const FishBody = {
     }
     ctx.restore();
 
-    // --- Visage commun, calé sur les ancres du dessin ---
+    // --- Visage commun, calé sur les ANCRES du dessin ---
+    // L'œil et la bouche sont posés SÉPARÉMENT, chacun sur son ancre. Caler le
+    // seul œil et laisser la bouche à sa place par défaut ne marche pas : le
+    // visage commun met la bouche en avant et à peine plus bas que l'œil, alors
+    // que le requin de l'éditeur l'a presque à la verticale — elle atterrissait
+    // 4 px trop en avant, sur le museau. Deux ancres, deux placements.
     const oe = sp.oeil;
     if (oe) {
-      // `drawFace` place l'œil en (0.55, -0.18) et la bouche en (0.82, 0.12) fois
-      // sa taille, soit 0,404 fois cette taille entre les deux. On déduit donc la
-      // taille du visage de l'écart œil↔bouche voulu par l'auteur du sprite, en
-      // la bornant : un vrai requin a un œil minuscule, mais ici c'est le visage
-      // qui raconte l'émotion — il doit rester lisible.
-      let fs = s * 0.7;
-      if (sp.bouche) fs = Math.hypot(sp.bouche.x - oe.x, sp.bouche.y - oe.y) * k / 0.404;
-      fs = U.clamp(fs * (e.def.spriteFace || 1), s * 0.6, s * 1.1);
+      // Taille des traits du visage. Sur une silhouette procédurale elle vaut
+      // `size` ; sur un dessin fait main la tête est plus fine, et à 1 l'œil
+      // débordait du museau du requin. Défaut comparé à l'écran : 0,75.
+      // Priorité à la calibration exportée par l'éditeur (`faceK`), puis au
+      // réglage d'espèce, puis au défaut.
+      const fs = s * (sp.faceK || e.def.spriteFace || 0.75);
+      const bo = sp.bouche;
+      // `faceTx`/`faceTy` : le décalage fin du panneau de calibration, exprimé
+      // en fractions de la taille du visage.
+      const dx = (sp.faceTx || 0) * fs, dy = (sp.faceTy || 0) * fs;
       ctx.save();
-      ctx.translate((oe.x - sp.cx) * k - fs * 0.55, (oe.y - sp.cy) * k + fs * 0.18);
-      this.face(ctx, fs, e, t);
+      ctx.translate((oe.x - sp.cx) * k - fs * 0.55 + dx, (oe.y - sp.cy) * k + fs * 0.18 + dy);
+      // `sansBouche` : elle est dessinée juste après, sur sa propre ancre.
+      this.drawFace(ctx, fs, e.expression, t + (e.phase || 0),
+                    e.emoteK ? e.emoteK() : 1, e._eyeLook, !!bo);
       ctx.restore();
+      if (bo) {
+        const expr = e.expression, k2 = e.emoteK ? e.emoteK() : 1;
+        const em = this.EMOTIONS[expr] || this.EMOTIONS.idle;
+        ctx.save();
+        this.bouche(ctx, (bo.x - sp.cx) * k + dx, (bo.y - sp.cy) * k + dy, fs,
+                    k2 > 0.35 ? em.mouth : this.EMOTIONS.idle.mouth, t + (e.phase || 0));
+        ctx.restore();
+      }
     }
   },
 

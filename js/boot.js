@@ -3,7 +3,8 @@
 (function () {
   const FILES = [
     'config', 'utils', 'gags', 'species', 'sprites', 'world', 'camera', 'particles', 'food',
-    'fishbody', 'entity', 'idcard', 'legend', 'ecosystem', 'background', 'input', 'main',
+    'fishbody', 'entity', 'idcard', 'legend', 'ecosystem', 'background', 'input',
+    'svgexport', 'main',
   ];
   const v = Date.now();
   for (const name of FILES) {

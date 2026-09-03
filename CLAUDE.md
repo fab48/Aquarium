@@ -51,7 +51,10 @@ qu'elle bougeait.
 
 **Toute silhouette doit passer par le système commun.** `FishBody.face()` pour
 un visage groupé, `FishBody.oeil(ctx, x, y, r, e, t)` pour un œil isolé (crabe
-sur tiges, coquillage entre ses valves). Le crabe et le coquillage dessinaient
+sur tiges, coquillage entre ses valves), `FishBody.bouche(ctx, mx, my, …)` pour
+une bouche posée ailleurs qu'à sa place par défaut — c'est ce dont un sprite
+dessiné à la main a besoin, son ancre de bouche n'étant pas là où le visage
+commun l'attend. Le crabe et le coquillage dessinaient
 les leurs à la main : ils restaient **grands ouverts en toutes circonstances**,
 y compris endormis en pleine nuit — et ce sont les créatures les plus nombreuses
 du fond, donc l'anomalie sautait aux yeux. Contrôle non visuel : rendre la
@@ -442,6 +445,7 @@ d'une demi-longueur. Mesuré : 0 franchissement sur 4402 relevés, collage au
 sable 12 % → 4,3 %.
 
 - `sprites.js` — chargement des dessins de l'éditeur SVG (`Assets/*.json`), consommés par `FishBody.drawSprite`. Une espèce qui déclare `sprite:` remplace sa silhouette procédurale, **jamais son visage**.
+- `svgexport.js` — l'autre sens du pont : rejoue une silhouette procédurale dans un faux contexte 2D qui enregistre au lieu de peindre, et la recrache en SVG prêt pour l'éditeur (`SVGExport.telecharger('requin')`, `SVGExport.tout()`). **[SPRITES.md](SPRITES.md) est le contrat complet des deux sens.**
 - `background.js` — dégradé d'eau par profondeur, god rays, crêtes d'arrière-plan, rochers, végétation, cheminées volcaniques, plancton, jour/nuit.
 
 ### Décor posé au sol

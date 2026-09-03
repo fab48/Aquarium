@@ -84,7 +84,8 @@ frappe dans un nom de fichier.
 | `shapes[].points` | contour, `[[x,y], …]` | — |
 | `shapes[].fill` | couleur pleine | gris |
 | `shapes[].smooth` | contour lissé plutôt qu'en ligne brisée | lignes droites |
-| `shapes[].pivot` | la forme **pivote** autour (nageoire) au lieu d'onduler | elle ondule |
+| `shapes[].pivot` | rotation en bloc de la forme — **repli** quand aucun `fins[]` ne la vise | elle ondule |
+| `fins[]` | `{x, y, r, layerIndex}` : ancrage de nageoire et son **rayon d'influence** | pas de nageoire animée |
 | `shapes[].amp` | amplitude d'animation | 15 |
 | `tailBlend` | x en deçà duquel les points appartiennent à la queue | rien n'ondule |
 | `faceK`, `faceTx`, `faceTy` | calibration du visage en multiples de `size` (repli, §3) | `def.spriteFace`, puis 0,75 |
@@ -107,11 +108,19 @@ frappe dans un nom de fichier.
    silhouettes procédurales — l'œil débordait du museau du requin, dont la tête
    est plus fine. Comparé à l'écran entre 1, 0,75 et 0,58. `faceK` (exporté par
    le panneau « Calibration visage » de l'éditeur) prime, puis `def.spriteFace`.
-4. **La queue ondule, les nageoires pivotent.** Les points en deçà de `tailBlend`
-   sont déviés en `u²` — le battement part du pédoncule caudal, pas du milieu du
-   corps, sinon le poisson se tortille comme une chenille. L'amplitude suit
-   **l'effort** et pas seulement la fréquence : à l'amplitude nue de l'éditeur, le
-   bout de la queue ne parcourait que 5,5 px sur une silhouette de 48.
+4. **La queue ondule, les nageoires se déforment.** Les points en deçà de
+   `tailBlend` sont déviés en `u²` — le battement part du pédoncule caudal, pas du
+   milieu du corps, sinon le poisson se tortille comme une chenille. L'amplitude
+   suit **l'effort** et pas seulement la fréquence : à l'amplitude nue de
+   l'éditeur, le bout de la queue ne parcourait que 5,5 px sur une silhouette
+   de 48.
+5. **Une nageoire n'est pas un calque qu'on fait tourner en bloc.** L'éditeur
+   fait pivoter **chaque point** autour de l'ancre `fins[i]`, pondéré par sa
+   distance : plein effet sur l'ancre, nul au-delà du rayon `r`, avec un lissage
+   en S (`smoothstep`) entre les deux — c'est ce qui évite la couture visible au
+   raccord avec le corps. La rotation rigide que faisait le jeu montrait donc
+   autre chose que ce que l'artiste voyait dans l'outil. `shapes[].amp` est lu en
+   **degrés**, l'unité du curseur de l'éditeur.
 
 ---
 

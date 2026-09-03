@@ -339,19 +339,23 @@ const FishBody = {
     ctx.scale(k, k);
     ctx.translate(-sp.cx, -sp.cy);          // l'ancre `center` devient l'origine
 
-    for (const forme of sp.shapes) {
+    // Battement de nageoire : plus lent que celui de la queue, et déphasé.
+    const battement = Math.sin(t * f * 0.7 + e.phase + 1);
+    sp.shapes.forEach((forme, i) => {
+      const fins = sp.finsPar && sp.finsPar[i];
       ctx.save();
-      if (forme.pivot) {
-        // Nageoire : elle PIVOTE autour de son point d'attache au lieu d'onduler.
+      // Repli : un calque qui porte un `pivot` mais qu'aucun ancrage de nageoire
+      // ne vise tourne en bloc, comme avant.
+      if (forme.pivot && !fins) {
         ctx.translate(forme.pivot[0], forme.pivot[1]);
-        ctx.rotate(Math.sin(t * f * 0.7 + e.phase + 1) * (forme.amp || 15) * 0.007);
+        ctx.rotate(battement * (forme.amp || 15) * 0.007);
         ctx.translate(-forme.pivot[0], -forme.pivot[1]);
       }
       ctx.fillStyle = forme.fill || '#888';
-      this.tracerForme(ctx, forme, sp, onde);
+      this.tracerForme(ctx, forme, sp, onde, fins, battement);
       ctx.fill();
       ctx.restore();
-    }
+    });
     ctx.restore();
 
     // --- Visage commun, calé sur les ANCRES du dessin ---
@@ -394,15 +398,36 @@ const FishBody = {
   // Contour d'une forme, avec l'ondulation de queue appliquée aux points situés
   // en deçà de `tailBlend` (u² : le battement part du pédoncule caudal, pas du
   // milieu du corps — sinon le poisson entier se tortille comme une chenille).
-  tracerForme(ctx, forme, sp, onde) {
+  // `fins` : les ancrages de nageoire qui visent ce calque. Ce n'est PAS une
+  // rotation rigide — l'éditeur fait tourner CHAQUE POINT autour de l'ancre,
+  // pondéré par sa distance : plein effet sur l'ancre, nul au-delà du rayon
+  // `r`, avec un lissage en S entre les deux. C'est ce qui évite la couture
+  // visible au raccord avec le corps, et c'est surtout ce que l'artiste voit
+  // dans l'outil : faire tourner le calque en bloc montrait autre chose.
+  tracerForme(ctx, forme, sp, onde, fins, battement) {
     const pts = forme.points, n = pts.length;
     const etendue = Math.max(1, sp.tailBlend - sp.minX);
     const amp = forme.amp || 15;
+    const lissage = (v) => { const c = U.clamp(v, 0, 1); return c * c * (3 - 2 * c); };
     const P = new Array(n);
     for (let i = 0; i < n; i++) {
       const p = pts[i];
       const u = U.clamp((sp.tailBlend - p[0]) / etendue, 0, 1);
-      P[i] = [p[0], p[1] + u * u * onde * amp];
+      let x = p[0], y = p[1] + u * u * onde * amp;
+      if (fins) {
+        for (const f of fins) {
+          const r = f.r || 1;
+          const poids = lissage(1 - Math.hypot(x - f.x, y - f.y) / r);
+          if (poids <= 0) continue;
+          // `amp` est lu en degrés — c'est l'unité du curseur de l'outil.
+          const a = battement * poids * amp * Math.PI / 360;
+          const cos = Math.cos(a), sin = Math.sin(a);
+          const dx = x - f.x, dy = y - f.y;
+          x = f.x + dx * cos - dy * sin;
+          y = f.y + dx * sin + dy * cos;
+        }
+      }
+      P[i] = [x, y];
     }
     ctx.beginPath();
     if (forme.smooth && n > 2) {

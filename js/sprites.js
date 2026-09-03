@@ -65,6 +65,15 @@ const Sprites = {
       // Le JSON d'origine, gardé tel quel : le banc de calibrage
       // (`calibrage.html`) le réexporte enrichi des réglages de visage.
       source: d,
+      // Ancrages de nageoire, RANGÉS PAR CALQUE : chacun porte un rayon
+      // d'influence `r` qui pondère la rotation des points alentour
+      // (cf. `tracerForme`). L'éditeur en autorise plusieurs sur un même calque.
+      finsPar: (d.fins || []).reduce((acc, f) => {
+        const i = f.layerIndex;
+        if (i == null || !shapes[i]) return acc;
+        (acc[i] || (acc[i] = [])).push(f);
+        return acc;
+      }, {}),
     };
   },
 };

@@ -508,6 +508,10 @@ Le rendu procédural n'est donc **pas** le goulot — passer à des sprites opti
 
 ## Reste à faire (extension du GDD)
 
+**[IDEES.md](IDEES.md)** rassemble les idées des enfants pas encore implémentées
+(poisson ballon piquant, barracuda, poisson police, crabe magicien, poisson
+dentiste, rot d'encre du poulpe, canne à pêche).
+
 - Migration verticale au crépuscule, événements aléatoires (§11 : bloom, mutant, hoquet, poisson malade)
 - DA : l'utilisateur générera des sprites ; garder le système yeux/bouche commun (`FishBody.drawFace`) par-dessus
 - Audio, mobile/touch à peaufiner, perf (spatial hashing — ~260 entités actuellement, boucles O(n²) dans les gags/boids)

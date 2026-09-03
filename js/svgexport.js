@@ -180,7 +180,11 @@ const SVGExport = {
     // valves). Sans le second, le crabe s'exportait avec ses yeux dessinés —
     // l'artiste les aurait redessinés, et le jeu en aurait remis par-dessus.
     const ancres = {};
-    const vraiFace = FishBody.drawFace, vraiOeil = FishBody.oeil;
+    // TROIS points d'entrée du visage à couvrir, pas deux : `drawFace` (visage
+    // groupé), `oeil` (yeux isolés du crabe et du coquillage) et `bouche`
+    // (bouche posée sur sa propre ancre par un sprite). Sans le troisième, la
+    // ligne de bouche se retrouvait dessinée dans le SVG réexporté.
+    const vraiFace = FishBody.drawFace, vraiOeil = FishBody.oeil, vraieBouche = FishBody.bouche;
     FishBody.drawFace = function (ctx, size) {
       if (ctx === rec) {
         ancres.eye = rec.pt(size * 0.55, -size * 0.18);
@@ -189,6 +193,10 @@ const SVGExport = {
         return;
       }
       return vraiFace.apply(FishBody, arguments);
+    };
+    FishBody.bouche = function (ctx, mx, my, size) {
+      if (ctx === rec) { ancres.mouth = rec.pt(mx, my); return; }
+      return vraieBouche.apply(FishBody, arguments);
     };
     FishBody.oeil = function (ctx, x, y, r) {
       if (ctx === rec) {
@@ -204,6 +212,7 @@ const SVGExport = {
     } finally {
       FishBody.drawFace = vraiFace;
       FishBody.oeil = vraiOeil;
+      FishBody.bouche = vraieBouche;
       if (spriteSauve) def.sprite = spriteSauve;
     }
 

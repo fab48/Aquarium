@@ -500,8 +500,9 @@ Baleine, cachalot, orque demandent des règles à part, apprises en corrigeant l
 
 ## Performance (mesurée, pas supposée)
 
-**[PERFORMANCE.md](PERFORMANCE.md) est l'audit complet** (méthode, chiffres par
-poste, cible mobile, optimisations classées). À ~490 créatures : **simulation
+**[PERFORMANCE.md](PERFORMANCE.md) est l'audit complet** : méthode et ses
+limites, chiffres par poste, cible mobile, et un **chantier d'optimisation
+classé par gain mesuré** (§5). À ~490 créatures : **simulation
 4,8 ms** (dont 61 % dans `Entity.move`, en recherches de voisinage), **décor
 18,6 ms** et **créatures 2,5 ms** en rastérisation logicielle à 2560×1440.
 
@@ -516,9 +517,13 @@ Le rendu procédural n'est donc **pas** le goulot — passer à des sprites opti
 
 ## Reste à faire (extension du GDD)
 
-**[IDEES.md](IDEES.md)** rassemble les idées des enfants pas encore implémentées
-(poisson ballon piquant, barracuda, poisson police, crabe magicien, poisson
-dentiste, rot d'encre du poulpe, canne à pêche).
+**[IDEES.md](IDEES.md)** rassemble ce qui n'est pas encore implémenté : les
+idées des enfants (poisson ballon piquant, barracuda, poisson police, crabe
+magicien, poisson dentiste, rot d'encre du poulpe, canne à pêche), une série de
+gags dans l'esprit **parc à thème** (spectacle de dauphins, poisson-balayeur,
+maître nageur, photo souvenir), et la conception de la couche **économique** —
+acheter des poissons, être payé aux naissances, sanctionné aux extinctions et
+aux espèces envahissantes.
 
 - Migration verticale au crépuscule, événements aléatoires (§11 : bloom, mutant, hoquet, poisson malade)
 - DA : l'utilisateur générera des sprites ; garder le système yeux/bouche commun (`FishBody.drawFace`) par-dessus

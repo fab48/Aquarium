@@ -114,71 +114,89 @@ Toutes réutilisent des mécaniques déjà en place (phases de gag, `_freeze`,
 
 ---
 
-# Mode « Directeur du parc » — peupler l'aquarium à la souris
+# Économie de l'aquarium — acheter des poissons, être payé pour l'équilibre
 
-Idée : un menu d'espèces, on en pose à la souris, et on **gagne si l'écosystème
-tient**, on perd sinon.
+L'envie de départ est simple, et il faut la garder simple : **on achète des
+poissons, on est récompensé quand l'aquarium se porte bien, on est sanctionné
+quand il se déséquilibre.** Pas de mode de jeu séparé, pas d'écran de victoire :
+une couche d'argent posée sur l'aquarium contemplatif, qu'on peut regarder ou
+ignorer.
 
-## Le conflit à trancher d'abord
+## La boucle
 
-Le jeu actuel est **conçu pour qu'on ne puisse pas perdre** (GDD §9). Quatre
-mécanismes y veillent, tous documentés dans `CLAUDE.md` :
+1. **Acheter** — un menu d'espèces, chacune avec son prix. Clic sur une vignette,
+   puis clic dans l'eau : le couple apparaît. Le prix monte avec le niveau
+   trophique (une crevette coûte trois fois rien, un cachalot coûte une fortune).
+2. **Encaisser les naissances** — chaque éclosion rapporte. C'est la récompense
+   principale, et elle tombe toute seule quand l'écosystème tourne : le joueur
+   est payé pour avoir créé les conditions, pas pour avoir cliqué.
+3. **Payer les dégâts** — une espèce qui s'éteint coûte cher ; une espèce qui
+   devient envahissante coûte aussi, un peu moins, et en continu tant que ça dure.
 
-| Mécanisme | Ce qu'il empêche | Effet sur un mode « perdre » |
+Rien de tout ça ne touche à la simulation : ce sont des **écouteurs** branchés
+sur des événements qui existent déjà (`layEgg`, `die`, `counts`, `popCap`).
+
+## Barème (à régler, mais l'esprit y est)
+
+### Ce qui rapporte
+
+| Événement | Gain | Pourquoi |
 |---|---|---|
-| Plancton ambiant (`World.planktonAt`) | la mort de faim | un herbivore ne meurt jamais, même sans rien |
-| Report de prédation (`Ecosystem.refugeFloor`) | l'extinction en cascade | sous 22 % du plafond, l'espèce est intouchable |
-| Immigration (`Ecosystem.immigration`) | l'extinction définitive | une espèce éteinte revient toute seule en 25 s |
-| Plafonds (`popCap`) + `boom` | la surpopulation | nourrir ne peut pas casser l'équilibre |
+| Éclosion d'un œuf | petit, par tête | le revenu de base, régulier |
+| Éclosion d'une espèce **rare** dans l'aquarium (< 25 % de son plafond) | ×3 | on est payé pour repeupler ce qui manque |
+| Première naissance d'une espèce qu'on vient d'acheter | prime fixe | ça valide l'installation |
+| Une espèce tenue **dans sa fourchette saine** pendant une journée de jeu | rente quotidienne | le vrai revenu du joueur avisé |
+| **Tous** les niveaux trophiques occupés en même temps | grosse rente | l'objectif implicite du jeu |
 
-Un mode compétitif ne se **superpose** donc pas au jeu : c'est un **mode à
-part**, avec ces filets de sécurité coupés ou affaiblis. À décider explicitement,
-et à garder séparé du mode contemplatif, qui reste le cœur du projet.
+### Ce qui coûte
 
-Proposition : un flag global `CONFIG.MODE` (`'libre'` par défaut, `'defi'`).
-En mode `defi` : pas d'immigration, `refugeFloor` ramené à ~5 %, plancton
-divisé par deux. Tout le reste du moteur est inchangé.
+| Événement | Perte | Pourquoi |
+|---|---|---|
+| Espèce descendue sous son plancher (`refugeFloor`) | amende, une fois | l'alerte : on est encore à temps |
+| Espèce **éteinte** | grosse amende | la faute grave |
+| Espèce **envahissante** (> ~85 % de `popCap` durablement) | ponction continue | l'excès coûte tant qu'il dure |
+| Fond couvert de cacas | ponction continue, faible | rend visible le trop-plein |
+| Faire venir des poissons du large (l'immigration, devenue payante) | coût fixe | le filet de sécurité devient une décision |
 
-## Ce que le mode ajoute
+Les **paliers** viennent naturellement de là : le joueur qui laisse filer perd
+lentement, celui qui tient une chaîne complète gagne bien, celui qui tient toute
+la chaîne trophique gagne beaucoup. Trois régimes, sans mode ni menu.
 
-1. **Un menu d'espèces** — vignettes, chacune avec un **coût** et sa fiche
-   (régime, proies, prédateurs : `IdCard` sait déjà tout dire). Clic sur une
-   vignette, puis clic dans l'eau = on pose un couple. Le curseur montre en
-   fantôme la silhouette et refuse les zones invalides (mauvaise bande de
-   profondeur, hors barrière `offshore`, colonne d'eau trop basse) — toutes ces
-   règles existent déjà dans le spawn, il n'y a qu'à les exposer avant le clic.
-2. **Un budget** — on ne peut pas tout poser. C'est ce qui fait le jeu : on
-   choisit une chaîne, pas un catalogue.
-3. **Une jauge de santé du récif**, lisible en un coup d'œil : nombre de niveaux
-   trophiques occupés, nombre d'espèces au-dessus de leur `refugeFloor`,
-   biomasse totale, cacas au sol. Un seul indicateur affiché, les détails au
-   survol.
-4. **Une condition de victoire par la durée** : tenir N jours de jeu sans
-   qu'aucune espèce posée ne s'éteigne. La défaite, c'est une extinction — et
-   comme le joueur *voit* venir la chute d'une population, il peut corriger.
-5. **Un droit à l'erreur** : le filet d'immigration devient un **objet payant**
-   (« faire venir des poissons du large »), ce qui transforme le garde-fou
-   automatique d'aujourd'hui en décision de joueur.
+## Trois décisions à prendre avant de coder
 
-## Pourquoi ça devrait bien marcher ici
+- **Peut-on tomber à zéro ?** Le GDD (§9) dit qu'on ne perd jamais. Proposition :
+  on peut passer dans le rouge, mais **rien ne s'arrête** — on ne peut simplement
+  plus acheter tant qu'on n'est pas remonté. La sanction est de ne plus pouvoir
+  jouer avec son jouet, pas de perdre la partie.
+- **L'immigration reste-t-elle automatique ?** Aujourd'hui elle ressuscite toute
+  seule une espèce éteinte en 25 s — ce qui annulerait l'amende d'extinction.
+  Proposition : elle reste, mais **facturée** au joueur, avec une notification
+  (« un banc de sardines est arrivé du large — 40 pièces »).
+- **Le boom de nourrissage.** Nourrir monte le plafond jusqu'au double : le
+  joueur pourrait déclencher artificiellement des naissances pour se payer. Deux
+  garde-fous possibles — un rendement décroissant sur les naissances issues d'un
+  boom, ou tout simplement laisser faire (nourrir en continu demande de rester
+  là, et c'est déjà le jeu). **Ne jamais punir le joueur qui nourrit** (GDD §9).
 
-Le moteur fait déjà tout le travail dur : chaîne alimentaire déclarative
-(`prey`), plafonds, frayères, report de prédation. Le mode n'est presque que de
-l'**interface** — un menu, un budget, une jauge, une condition d'arrêt — plus le
-débranchement des filets de sécurité.
+## Ce qu'il faut afficher, et pas plus
+
+Une cagnotte, et la **dernière variation** qui remonte en fondu à l'endroit où
+elle s'est produite : `+3` au-dessus de l'œuf qui éclôt, `−80` sur la dernière
+murène qui meurt. C'est ça qui apprend le jeu — pas un tableau de bord.
+
+La fiche d'identité (`idcard.js`) sait déjà tout dire d'une espèce ; il suffit
+d'y ajouter **une ligne** : où en est sa population par rapport à sa fourchette
+saine, en une barre à trois zones (rouge bas / vert / rouge haut).
 
 ## Pièges prévisibles
 
-- **Poser un prédateur sans sa proie** doit se voir *avant* le clic, pas trois
-  minutes plus tard quand il meurt de faim. La fiche du menu doit dire « mange :
-  X, Y — dont aucun dans votre aquarium ».
-- **Le joueur va tout poser au même endroit.** Le spawn actuel répartit les
-  groupes ; à la souris, il faut au minimum un rayon d'éparpillement.
+- **Poser un prédateur sans sa proie** doit se voir *avant* le clic : la vignette
+  du menu doit dire « mange : X, Y — aucun dans votre aquarium ».
 - **Les espèces lentes ne migrent pas** (`speed < 45`) : posées loin de leur
-  frayère, elles ne se reproduiront jamais. Le fantôme de placement doit le dire.
-- **Une partie doit durer quelques minutes, pas 16.** Les constantes actuelles
-  (longévités, taux de ponte) sont réglées pour la contemplation. Un mode défi
-  demande une **accélération globale du temps**, pas un reréglage espèce par
-  espèce.
-- **Ne jamais punir le joueur qui nourrit** (GDD §9) : le `boom` doit rester une
-  aide, même en mode défi.
+  frayère, elles ne se reproduiront jamais, donc ne rapporteront jamais. Le
+  fantôme de placement doit refuser les emplacements sans issue.
+- **Le joueur va tout poser au même endroit.** Prévoir un rayon d'éparpillement,
+  comme le fait `spawnGroups`.
+- **Les revenus doivent être lisibles à l'échelle d'une session**, pas d'une
+  simulation de 16 minutes. Si une éclosion rapporte trop peu pour se voir, la
+  boucle ne s'apprend pas.

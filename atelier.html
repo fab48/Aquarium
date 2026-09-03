@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Aquarium — atelier des créatures</title>
+<!--
+  ATELIER DES CRÉATURES — l'outil unique.
+
+  Il remplace le banc de calibrage et les allers-retours de fichiers à la main.
+  Tout s'y fait au même endroit :
+
+    partir de la silhouette du jeu ─┐
+    importer un SVG ───────────────┼─▶ ancres · nageoires · queue · formes
+    importer un JSON ──────────────┘        │
+                                            ▼
+                        aperçu avec le VRAI rendu du jeu
+                                            │
+                                            ▼
+                    Assets/<nom>.json  +  Assets/sprites.json
+                          (écrits par le serveur de dev)
+
+  Le point important : ce qu'on voit ici est dessiné par `FishBody.draw`, le
+  code du jeu, pas par une imitation. Toute divergence serait un bug du jeu, pas
+  une surprise à la première mise en eau.
+
+  Se lance avec le serveur de dev : python dev_server.py 8642 → /atelier.html
+-->
+<style>
+  :root {
+    color-scheme: light;
+    --bord: #c9d8e3; --texte: #16232e; --doux: #5b7186;
+    --fond: #eef3f7; --panneau: #fff; --accent: #2d7fd3;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; display: flex; overflow: hidden;
+         font: 13.5px/1.5 "Segoe UI", system-ui, sans-serif;
+         background: var(--fond); color: var(--texte); }
+
+  /* --- Rail des espèces --- */
+  #rail { width: 216px; background: var(--panneau); border-right: 1px solid var(--bord);
+          display: flex; flex-direction: column; }
+  #rail header { padding: 12px 14px 8px; border-bottom: 1px solid var(--bord); }
+  #rail h1 { margin: 0; font-size: 14px; }
+  #rail .sous { font-size: 11.5px; color: var(--doux); }
+  #liste { flex: 1; overflow-y: auto; padding: 6px; }
+  .esp { display: flex; align-items: center; gap: 7px; padding: 6px 8px; border-radius: 6px;
+         cursor: pointer; font-size: 12.5px; }
+  .esp:hover { background: #eef5fb; }
+  .esp.actif { background: var(--accent); color: #fff; }
+  .pastille { width: 8px; height: 8px; border-radius: 50%; background: #cbd8e2; flex: none; }
+  .pastille.sprite { background: #35b06a; }
+  .pastille.brouillon { background: #f0a92e; }
+  .esp .nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* --- Scène --- */
+  #scene { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #barre { display: flex; gap: 6px; align-items: center; padding: 8px 12px;
+           background: var(--panneau); border-bottom: 1px solid var(--bord); flex-wrap: wrap; }
+  #plan { flex: 1; position: relative; min-height: 0; }
+  #vue { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #humeurs { height: 132px; border-top: 1px solid var(--bord); background: var(--panneau); }
+  #humeurs canvas { width: 100%; height: 100%; display: block; }
+
+  /* --- Panneau --- */
+  #panneau { width: 322px; background: var(--panneau); border-left: 1px solid var(--bord);
+             overflow-y: auto; padding: 14px; }
+  h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .07em;
+       color: var(--doux); margin: 20px 0 8px; }
+  h2:first-child { margin-top: 0; }
+  label { display: block; margin: 10px 0 2px; font-weight: 600; font-size: 12.5px; }
+  label .val { float: right; font-weight: 400; color: var(--accent); font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; }
+  input[type=text], input[type=color], select {
+    width: 100%; padding: 5px 7px; border: 1px solid var(--bord); border-radius: 5px; font: inherit; }
+  input[type=color] { padding: 2px; height: 30px; }
+  button { padding: 6px 10px; font: inherit; border: 1px solid var(--bord); border-radius: 6px;
+           background: #fff; cursor: pointer; }
+  button:hover { background: #f2f7fb; }
+  button.plein { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+  button.plein:hover { filter: brightness(1.08); }
+  button.on { background: #dcecfa; border-color: var(--accent); color: #14507f; font-weight: 600; }
+  button:disabled { opacity: .45; cursor: default; }
+  .rangee { display: flex; gap: 6px; margin-top: 8px; }
+  .rangee > * { flex: 1; }
+  .aide { font-size: 11.5px; color: var(--doux); margin: 6px 0 0; }
+  .formes { border: 1px solid var(--bord); border-radius: 6px; overflow: hidden; }
+  .forme { display: flex; align-items: center; gap: 7px; padding: 5px 7px; cursor: pointer;
+           border-bottom: 1px solid #edf2f6; font-size: 12px; }
+  .forme:last-child { border-bottom: 0; }
+  .forme.sel { background: #dcecfa; }
+  .pastel { width: 15px; height: 15px; border-radius: 3px; border: 1px solid rgba(0,0,0,.18); flex: none; }
+  .forme .info { flex: 1; color: var(--doux); }
+  #etat { padding: 6px 12px; font-size: 12px; color: var(--doux); background: var(--panneau);
+          border-top: 1px solid var(--bord); min-height: 28px; }
+  #etat.ok { color: #1c7a45; } #etat.ko { color: #b3261e; }
+  kbd { background: #eef2f6; border: 1px solid var(--bord); border-bottom-width: 2px;
+        border-radius: 4px; padding: 0 4px; font: 11px monospace; }
+</style>
+</head>
+<body>
+
+<div id="rail">
+  <header>
+    <h1>Atelier des créatures</h1>
+    <div class="sous"><span id="compte">—</span></div>
+  </header>
+  <div id="liste"></div>
+</div>
+
+<div id="scene">
+  <div id="barre">
+    <button id="tOutils" class="on" data-outil="ancres">Ancres</button>
+    <button data-outil="nageoires">Nageoires</button>
+    <button data-outil="queue">Queue</button>
+    <button data-outil="points">Points</button>
+    <span style="flex:1"></span>
+    <button id="btnSilhouette">Partir de la silhouette du jeu</button>
+    <button id="btnSVG">Importer un SVG…</button>
+    <button id="btnJSON">Importer un JSON…</button>
+    <input type="file" id="fichier" hidden>
+  </div>
+  <div id="plan"><canvas id="vue"></canvas></div>
+  <div id="humeurs"><canvas id="cHumeurs"></canvas></div>
+  <div id="etat">Choisis une espèce à gauche.</div>
+</div>
+
+<div id="panneau"></div>
+
+<script>
+// Le jeu n'est pas lancé ici : on ne charge que ce qui dessine, et on bouche
+// le reste. Les silhouettes lisent l'heure, la pente du fond et la souris.
+window.GAGS = {};
+window.Main = { time: 0, nightAmount: () => 0, dayT: () => 0.25, dpr: 1 };
+window.World = { slopeAt: () => 0, floorY: () => 99999, planktonAt: () => 1,
+                 isUnderwater: () => true, shoreX: 0, depthAt: () => 1000 };
+window.Camera = { zoom: 1, x: 0, y: 0, w: 1200, h: 800, vw: 1200, vh: 800,
+                  isVisible: () => true, toScreen: (x, y) => [x, y], toWorld: (x, y) => [x, y] };
+window.Input = { inWindow: false, mx: 0, my: 0, mouseSpeed: 0 };
+window.Particles = new Proxy({}, { get: () => () => {} });
+window.Ecosystem = { entities: [], neighbors: () => [], bySpecies: {}, counts: {},
+                     colosses: [], chasseurs: [], refugeFloor: () => 0, isNearRefuge: () => false };
+window.Food = new Proxy({}, { get: () => () => null });
+</script>
+<script src="js/config.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/species.js"></script>
+<script src="js/sprites.js"></script>
+<script src="js/fishbody.js"></script>
+<script src="js/entity.js"></script>
+<script src="js/svgexport.js"></script>
+<script src="js/svgimport.js"></script>
+<script>
+(function () {
+'use strict';
+const $ = s => document.querySelector(s);
+const vue = $('#vue'), ctx = vue.getContext('2d');
+const cHum = $('#cHumeurs'), gHum = cHum.getContext('2d');
+
+// ---------------------------------------------------------------------------
+// État
+// ---------------------------------------------------------------------------
+let espece = null;      // id d'espèce sélectionné
+let doc = null;         // document en cours d'édition (format sprites.js)
+let outil = 'ancres';
+let formeSel = 0;
+let finSel = 0;
+let manifeste = {};     // espèce -> nom de fichier sprite
+const brouillons = {};  // espèce -> doc pas encore enregistré
+let vueT = { x: 0, y: 0, k: 1 };
+let anime = false;
+let attrape = null;     // ce que la souris tient en ce moment
+
+const CLE_ANCRES = ['center', 'nose', 'eye', 'mouth', 'tail'];
+const COUL = { center: '#0a8f3c', nose: '#8a5ea8', eye: '#e0322f', mouth: '#1560d8', tail: '#c98a1b' };
+
+// ---------------------------------------------------------------------------
+// Rail des espèces
+// ---------------------------------------------------------------------------
+function rail() {
+  const l = $('#liste');
+  l.innerHTML = '';
+  let nSprite = 0;
+  for (const id of Object.keys(SPECIES)) {
+    const d = document.createElement('div');
+    d.className = 'esp' + (id === espece ? ' actif' : '');
+    const aSprite = !!manifeste[id];
+    if (aSprite) nSprite++;
+    d.innerHTML = `<span class="pastille ${brouillons[id] ? 'brouillon' : (aSprite ? 'sprite' : '')}"></span>`
+                + `<span class="nom">${SPECIES[id].name}</span>`;
+    d.title = aSprite ? `dessin : ${manifeste[id]}` : 'silhouette procédurale';
+    d.onclick = () => choisir(id);
+    l.appendChild(d);
+  }
+  $('#compte').textContent = `${nSprite} dessin${nSprite > 1 ? 's' : ''} sur ${Object.keys(SPECIES).length} espèces`;
+}
+
+function choisir(id) {
+  espece = id;
+  const nom = manifeste[id];
+  if (brouillons[id]) { doc = brouillons[id]; apres(); }
+  else if (nom) {
+    dire('chargement de ' + nom + '…');
+    fetch(`Assets/${nom}.json`).then(r => r.json())
+      .then(d => { doc = SVGImport.finaliser(Object.assign({}, d, { espece: id, nom })); apres(); })
+      .catch(e => { doc = null; apres(); dire('illisible : ' + e, 'ko'); });
+  } else { doc = null; apres(); }
+  rail();
+}
+
+function apres() { cadrer(); panneau(); rail(); dire(doc ? '' : 'Aucun dessin : importe-en un, ou pars de la silhouette du jeu.'); }
+
+// ---------------------------------------------------------------------------
+// Vue : le dessin est rendu par le VRAI code du jeu
+// ---------------------------------------------------------------------------
+function defEspece() { return SPECIES[espece] || SPECIES.requin; }
+
+function poser(expr, t) {
+  const def = defEspece();
+  const e = new Entity(espece || 'requin', 0, 0);
+  e.stage = 'adult'; e.growth = 1; e.gabarit = 1; e.age = e.maxAge * 0.5;
+  e.expression = expr || 'idle'; e._held = true; e.exprTimer = 9; e.emoteDur = 9;
+  e._facing = 1; e._flipX = 1; e._tilt = 0; e._chew = 0; e._sable = 0;
+  e.speedNow = def.speed; e.phase = 0; e._color = def.colors[0];
+  e.stealth = 0; e.strikeT = 0; e._repli = 0;
+  return e;
+}
+
+// Le document en cours est injecté dans le cache de `Sprites` sous une clé
+// dédiée : le rendu passe alors exactement par le même chemin qu'en jeu,
+// préparation comprise.
+function brancher() {
+  if (!doc) return null;
+  const cle = '__atelier__';
+  Sprites.cache[cle] = Sprites.preparer(doc);
+  defEspece().sprite = cle;
+  return Sprites.cache[cle];
+}
+function debrancher() { const d = defEspece(); if (d.sprite === '__atelier__') delete d.sprite; }
+
+function bornes(sp) {
+  let y0 = Infinity, y1 = -Infinity;
+  for (const sh of sp.shapes) for (const p of sh.points) {
+    if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1];
+  }
+  return { x0: sp.minX, x1: sp.minX + sp.w, y0, y1 };
+}
+
+function cadrer() {
+  const sp = brancher();
+  if (!sp) { debrancher(); dessiner(); return; }
+  const b = bornes(sp);
+  const W = vue.clientWidth, H = vue.clientHeight;
+  const k = Math.min(W / (sp.w * 1.25), H / Math.max(1, (b.y1 - b.y0) * 1.35));
+  vueT.k = k;
+  vueT.x = W / 2 - (b.x0 + sp.w / 2) * k;
+  vueT.y = H / 2 - (b.y0 + (b.y1 - b.y0) / 2) * k;
+  debrancher();
+  dessiner();
+}
+
+const versEcran = p => [p[0] * vueT.k + vueT.x, p[1] * vueT.k + vueT.y];
+const versDoc = (sx, sy) => [(sx - vueT.x) / vueT.k, (sy - vueT.y) / vueT.k];
+
+function dessiner() {
+  const W = vue.clientWidth, H = vue.clientHeight, dpr = Math.min(devicePixelRatio || 1, 2);
+  if (vue.width !== W * dpr || vue.height !== H * dpr) { vue.width = W * dpr; vue.height = H * dpr; }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#dfeaf2'; ctx.fillRect(0, 0, W, H);
+
+  if (!doc) {
+    ctx.fillStyle = '#8ba2b4'; ctx.font = '15px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(espece ? 'Pas encore de dessin pour cette espèce.' : 'Choisis une espèce à gauche.', W / 2, H / 2);
+    ctx.textAlign = 'left';
+    return;
+  }
+
+  const sp = brancher();
+  const def = defEspece();
+  // Échelle : `FishBody.draw` travaille en unités de jeu autour de l'origine,
+  // il faut donc défaire sa mise à l'échelle pour retrouver les coordonnées du
+  // dessin, sur lesquelles portent les poignées.
+  const kJeu = (def.size * 2.5 * (def.spriteScale || 1)) / sp.w;
+  const t = anime ? performance.now() / 1000 : 1.2;
+  Main.time = t;
+  ctx.save();
+  ctx.translate(sp.cx * vueT.k + vueT.x, sp.cy * vueT.k + vueT.y);
+  ctx.scale(vueT.k / kJeu, vueT.k / kJeu);
+  try { FishBody.draw(ctx, poser('idle', t), t); } catch (err) { /* dessin incomplet */ }
+  ctx.restore();
+  debrancher();
+
+  poignees(sp);
+}
+
+function poignees(sp) {
+  const R = 6;
+  // Ligne de queue
+  if (doc.tailBlend != null) {
+    const [x] = versEcran([doc.tailBlend, 0]);
+    ctx.strokeStyle = outil === 'queue' ? '#c98a1b' : 'rgba(201,138,27,.45)';
+    ctx.lineWidth = outil === 'queue' ? 2 : 1;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, vue.clientHeight); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#c98a1b'; ctx.font = '11px system-ui';
+    ctx.fillText('queue ←', x - 52, 14);
+  }
+
+  // Nageoires : le disque montre le RAYON D'INFLUENCE, pas une décoration —
+  // c'est jusque-là que la rotation se propage dans le corps.
+  (doc.fins || []).forEach((f, i) => {
+    const [x, y] = versEcran([f.x, f.y]);
+    const r = (f.r || 60) * vueT.k;
+    const vif = outil === 'nageoires' && i === finSel;
+    ctx.strokeStyle = vif ? 'rgba(45,127,211,.9)' : 'rgba(45,127,211,.35)';
+    ctx.fillStyle = 'rgba(45,127,211,.07)';
+    ctx.lineWidth = vif ? 2 : 1;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = vif ? '#1560d8' : '#7ea6cc';
+    ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+  });
+
+  // Points de la forme sélectionnée
+  if (outil === 'points' && doc.shapes[formeSel]) {
+    const pts = doc.shapes[formeSel].points;
+    ctx.strokeStyle = 'rgba(20,80,127,.5)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    pts.forEach((p, i) => { const [x, y] = versEcran(p); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.closePath(); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#14507f';
+    for (const p of pts) {
+      const [x, y] = versEcran(p);
+      ctx.beginPath(); ctx.rect(x - 3, y - 3, 6, 6); ctx.fill(); ctx.stroke();
+    }
+  }
+
+  // Ancres
+  for (const cle of CLE_ANCRES) {
+    const a = doc.points[cle]; if (!a) continue;
+    const [x, y] = versEcran([a.x, a.y]);
+    const vif = outil === 'ancres';
+    if (cle === 'eye' && a.r) {   // cercle de taille de l'œil
+      ctx.strokeStyle = vif ? 'rgba(224,50,47,.85)' : 'rgba(224,50,47,.3)';
+      ctx.lineWidth = vif ? 2 : 1;
+      ctx.beginPath(); ctx.arc(x, y, a.r * vueT.k, 0, Math.PI * 2); ctx.stroke();
+      if (vif) {   // poignée de rayon, à droite du cercle
+        ctx.fillStyle = '#e0322f';
+        ctx.beginPath(); ctx.arc(x + a.r * vueT.k, y, 4.5, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.strokeStyle = COUL[cle]; ctx.lineWidth = vif ? 2 : 1.2;
+    ctx.beginPath();
+    ctx.moveTo(x - R, y); ctx.lineTo(x + R, y);
+    ctx.moveTo(x, y - R); ctx.lineTo(x, y + R);
+    ctx.stroke();
+    if (vif) { ctx.fillStyle = COUL[cle]; ctx.font = '11px system-ui'; ctx.fillText(cle, x + 9, y - 5); }
+  }
+}
+
+// --- Bandeau d'humeurs : une calibration juste doit tenir sur TOUTES les
+// expressions. `sleeping` (bouche du ronflement) et `angry` (sourcil lourd)
+// sont les deux qui débordent en premier d'une tête trop petite.
+const HUMEURS = ['idle', 'happy', 'angry', 'sleeping', 'scared', 'kiss', 'disgust'];
+function bandeau() {
+  const W = cHum.clientWidth, H = cHum.clientHeight, dpr = Math.min(devicePixelRatio || 1, 2);
+  if (cHum.width !== W * dpr || cHum.height !== H * dpr) { cHum.width = W * dpr; cHum.height = H * dpr; }
+  gHum.setTransform(dpr, 0, 0, dpr, 0, 0);
+  gHum.clearRect(0, 0, W, H);
+  if (!doc) return;
+  const sp = brancher(); const def = defEspece();
+  const b = bornes(sp);
+  const kJeu = (def.size * 2.5 * (def.spriteScale || 1)) / sp.w;
+  const pas = W / HUMEURS.length;
+  const k = Math.min((pas - 16) / (sp.w * kJeu), (H - 34) / Math.max(1, (b.y1 - b.y0) * kJeu));
+  const t = anime ? performance.now() / 1000 : 1.2;
+  HUMEURS.forEach((ex, i) => {
+    gHum.save();
+    gHum.translate(pas * (i + 0.5), H / 2 + 8);
+    gHum.scale(k, k);
+    try { FishBody.draw(gHum, poser(ex, t), t); } catch (err) { /* ignore */ }
+    gHum.restore();
+    gHum.fillStyle = '#5b7186'; gHum.font = '11px system-ui'; gHum.textAlign = 'center';
+    gHum.fillText(ex, pas * (i + 0.5), 15);
+  });
+  gHum.textAlign = 'left';
+  debrancher();
+}
+
+// ---------------------------------------------------------------------------
+// Panneau contextuel
+// ---------------------------------------------------------------------------
+function panneau() {
+  const p = $('#panneau');
+  if (!espece) { p.innerHTML = '<p class="aide">Choisis une espèce dans la liste.</p>'; return; }
+  const def = SPECIES[espece];
+  const nom = manifeste[espece] || (doc && doc.nom) || espece;
+
+  let h = `<h2>${def.name}</h2><p class="aide">${def.realName || ''}<br>
+    taille de jeu <b>${def.size}</b> · ${doc ? doc.shapes.length + ' forme(s)' : 'silhouette procédurale'}</p>`;
+
+  if (doc) {
+    if (outil === 'ancres') {
+      h += `<h2>Ancres</h2><p class="aide">Tire les croix sur le dessin.
+        <b>center</b> est le point que le jeu place à la position de la créature ;
+        <b>eye</b> et <b>mouth</b> portent le visage commun.</p>
+        <label>Taille de l'œil <span class="val" id="vR">${(doc.points.eye.r || 0).toFixed(1)}</span></label>
+        <input type="range" id="sR" min="1" max="${Math.round(doc.naturalW * 0.3)}" step="0.5" value="${doc.points.eye.r || 10}">
+        <p class="aide">Le cercle rouge sur le dessin. Tire sa poignée droite, ou ce curseur.</p>
+        <div class="rangee"><button id="bAutoOeil">Déduire du dessin</button></div>`;
+    } else if (outil === 'nageoires') {
+      h += `<h2>Nageoires</h2><p class="aide">Le disque est le <b>rayon d'influence</b> :
+        la rotation s'y propage à plein au centre et s'éteint au bord.
+        <kbd>clic</kbd> sur le dessin pour en poser une.</p>`;
+      if (!doc.fins.length) h += '<p class="aide"><i>aucune nageoire</i></p>';
+      else {
+        h += `<label>Nageoire <span class="val">${finSel + 1} / ${doc.fins.length}</span></label>
+          <select id="selFin">${doc.fins.map((f, i) => `<option value="${i}" ${i === finSel ? 'selected' : ''}>nageoire ${i + 1} → forme ${f.layerIndex + 1}</option>`).join('')}</select>
+          <label>Rayon <span class="val" id="vFR">${Math.round(doc.fins[finSel].r)}</span></label>
+          <input type="range" id="sFR" min="10" max="${Math.round(doc.naturalW * 0.6)}" value="${doc.fins[finSel].r}">
+          <label>Forme entraînée</label>
+          <select id="selFinCalque">${doc.shapes.map((sh, i) => `<option value="${i}" ${i === doc.fins[finSel].layerIndex ? 'selected' : ''}>forme ${i + 1}</option>`).join('')}</select>
+          <div class="rangee"><button id="bSupFin">Supprimer cette nageoire</button></div>`;
+      }
+    } else if (outil === 'queue') {
+      h += `<h2>Queue</h2><p class="aide">Tout ce qui est <b>à gauche</b> de la ligne ondule,
+        d'autant plus qu'on approche du bout. Tire la ligne sur le dessin.</p>
+        <label>tailBlend <span class="val" id="vTB">${Math.round(doc.tailBlend)}</span></label>
+        <input type="range" id="sTB" min="0" max="${Math.round(doc.naturalW)}" value="${Math.round(doc.tailBlend)}">
+        <label>Amplitude de la forme ${formeSel + 1} <span class="val" id="vAmp">${doc.shapes[formeSel].amp}</span></label>
+        <input type="range" id="sAmp" min="0" max="60" value="${doc.shapes[formeSel].amp}">`;
+    } else if (outil === 'points') {
+      h += `<h2>Points</h2><p class="aide">Tire les carrés pour retoucher le contour de la
+        forme sélectionnée. <kbd>clic</kbd> sur le trait pour insérer un point,
+        <kbd>alt</kbd>+clic sur un point pour le supprimer.<br>
+        <kbd>Ctrl</kbd>+<kbd>Z</kbd> annule, partout dans l'atelier.</p>`;
+    }
+
+    h += `<h2>Formes</h2><div class="formes">` + doc.shapes.map((sh, i) =>
+      `<div class="forme ${i === formeSel ? 'sel' : ''}" data-i="${i}">
+         <span class="pastel" style="background:${sh.fill}"></span>
+         <span class="info">forme ${i + 1} · ${sh.points.length} pts</span>
+       </div>`).join('') + `</div>
+      <div class="rangee">
+        <input type="color" id="cFill" value="${doc.shapes[formeSel] ? doc.shapes[formeSel].fill : '#888888'}">
+        <button id="bMonte">▲</button><button id="bDesc">▼</button><button id="bSup">✕</button>
+      </div>
+      <p class="aide">L'ordre est l'ordre de dessin : la première forme est au fond.</p>`;
+
+    h += `<h2>Enregistrer</h2>
+      <label>Nom du fichier</label>
+      <input type="text" id="nomFichier" value="${nom}">
+      <p class="aide">Écrit dans <code>Assets/&lt;nom&gt;.json</code> par le serveur de dev.</p>
+      <div class="rangee"><button class="plein" id="bEnreg">Enregistrer</button></div>
+      <div class="rangee">
+        <button id="bActiver">${manifeste[espece] ? 'Réactiver' : 'Activer dans le jeu'}</button>
+        <button id="bDesactiver" ${manifeste[espece] ? '' : 'disabled'}>Revenir au procédural</button>
+      </div>
+      <p class="aide">« Revenir au procédural » garde le fichier : c'est ce qu'on fait pour
+      les espèces dont la silhouette actuelle convient déjà, comme la murène.</p>`;
+  }
+
+  h += `<h2>Aperçu</h2>
+    <div class="rangee"><button id="bAnime" class="${anime ? 'on' : ''}">${anime ? 'Animation en cours' : 'Animer'}</button>
+    <button id="bRecadrer">Recadrer</button></div>`;
+
+  p.innerHTML = h;
+  cabler();
+}
+
+function cabler() {
+  const on = (sel, ev, fn) => { const e = $(sel); if (e) e.addEventListener(ev, fn); };
+  ['#sR', '#sFR', '#sTB', '#sAmp'].forEach(sel => on(sel, 'pointerdown', instantane));
+  on('#cFill', 'pointerdown', instantane);
+  on('#sR', 'input', e => { doc.points.eye.r = +e.target.value; $('#vR').textContent = (+e.target.value).toFixed(1); marquer(); });
+  on('#bAutoOeil', 'click', () => {
+    instantane();
+    doc.points.eye.r = SVGImport.rayonOeil(doc.shapes, doc.points.eye, doc.naturalW);
+    marquer(); panneau();
+  });
+  on('#selFin', 'change', e => { finSel = +e.target.value; panneau(); dessiner(); });
+  on('#sFR', 'input', e => { doc.fins[finSel].r = +e.target.value; $('#vFR').textContent = e.target.value; marquer(); });
+  on('#selFinCalque', 'change', e => { doc.fins[finSel].layerIndex = +e.target.value; marquer(); });
+  on('#bSupFin', 'click', () => { instantane(); doc.fins.splice(finSel, 1); finSel = 0; marquer(); panneau(); });
+  on('#sTB', 'input', e => { doc.tailBlend = +e.target.value; $('#vTB').textContent = e.target.value; marquer(); });
+  on('#sAmp', 'input', e => { doc.shapes[formeSel].amp = +e.target.value; $('#vAmp').textContent = e.target.value; marquer(); });
+  on('#cFill', 'input', e => { if (doc.shapes[formeSel]) { doc.shapes[formeSel].fill = e.target.value; marquer(); panneau(); } });
+  on('#bMonte', 'click', () => bouger(-1));
+  on('#bDesc', 'click', () => bouger(1));
+  on('#bSup', 'click', () => {
+    if (doc.shapes.length < 2) return dire('il faut au moins une forme', 'ko');
+    instantane();
+    doc.shapes.splice(formeSel, 1);
+    doc.fins = doc.fins.filter(f => f.layerIndex !== formeSel)
+                       .map(f => (f.layerIndex > formeSel ? Object.assign(f, { layerIndex: f.layerIndex - 1 }) : f));
+    formeSel = Math.max(0, formeSel - 1); marquer(); panneau();
+  });
+  document.querySelectorAll('.forme').forEach(el =>
+    el.addEventListener('click', () => { formeSel = +el.dataset.i; panneau(); dessiner(); }));
+  on('#bEnreg', 'click', enregistrer);
+  on('#bActiver', 'click', () => activer($('#nomFichier').value.trim()));
+  on('#bDesactiver', 'click', () => activer(null));
+  on('#bAnime', 'click', () => { anime = !anime; panneau(); });
+  on('#bRecadrer', 'click', cadrer);
+}
+
+function bouger(d) {
+  const j = formeSel + d;
+  if (j < 0 || j >= doc.shapes.length) return;
+  instantane();
+  const t = doc.shapes[formeSel]; doc.shapes[formeSel] = doc.shapes[j]; doc.shapes[j] = t;
+  for (const f of doc.fins) {
+    if (f.layerIndex === formeSel) f.layerIndex = j;
+    else if (f.layerIndex === j) f.layerIndex = formeSel;
+  }
+  formeSel = j; marquer(); panneau();
+}
+
+function marquer() { if (espece && doc) brouillons[espece] = doc; dessiner(); rail(); }
+
+// --- Annulation -------------------------------------------------------------
+// Instantanés du document entier. C'est brutal mais un document fait quelques
+// dizaines de kilo-octets, et un éditeur sans Ctrl+Z n'est pas un éditeur : on
+// n'ose plus rien essayer.
+// `instantane()` s'appelle AVANT la modification, et une seule fois par geste —
+// pas à chaque `pointermove`, sinon un simple glissé remplit la pile.
+const histoire = [], futur = [];
+function instantane() {
+  if (!doc) return;
+  histoire.push(JSON.stringify(doc));
+  if (histoire.length > 40) histoire.shift();
+  futur.length = 0;
+}
+function annuler(pile, autre) {
+  if (!doc || !pile.length) return dire('rien à ' + (pile === histoire ? 'annuler' : 'rétablir'));
+  autre.push(JSON.stringify(doc));
+  doc = JSON.parse(pile.pop());
+  formeSel = Math.min(formeSel, doc.shapes.length - 1);
+  finSel = Math.min(finSel, Math.max(0, doc.fins.length - 1));
+  marquer(); panneau();
+  dire(pile === histoire ? 'annulé' : 'rétabli');
+}
+addEventListener('keydown', ev => {
+  if (!(ev.ctrlKey || ev.metaKey)) return;
+  const k = ev.key.toLowerCase();
+  if (k === 'z' && !ev.shiftKey) { ev.preventDefault(); annuler(histoire, futur); }
+  else if (k === 'y' || (k === 'z' && ev.shiftKey)) { ev.preventDefault(); annuler(futur, histoire); }
+});
+
+// ---------------------------------------------------------------------------
+// Souris
+// ---------------------------------------------------------------------------
+function pres(sx, sy) {
+  if (!doc) return null;
+  const seuil = 11;
+  if (outil === 'ancres') {
+    const a = doc.points.eye;
+    if (a && a.r) {
+      const [x, y] = versEcran([a.x, a.y]);
+      if (Math.hypot(sx - (x + a.r * vueT.k), sy - y) < seuil) return { type: 'rayonOeil' };
+    }
+    for (const cle of CLE_ANCRES) {
+      const p = doc.points[cle]; if (!p) continue;
+      const [x, y] = versEcran([p.x, p.y]);
+      if (Math.hypot(sx - x, sy - y) < seuil) return { type: 'ancre', cle };
+    }
+  }
+  if (outil === 'nageoires') {
+    for (let i = 0; i < doc.fins.length; i++) {
+      const [x, y] = versEcran([doc.fins[i].x, doc.fins[i].y]);
+      if (Math.hypot(sx - x, sy - y) < seuil) return { type: 'fin', i };
+    }
+  }
+  if (outil === 'queue') {
+    const [x] = versEcran([doc.tailBlend, 0]);
+    if (Math.abs(sx - x) < seuil) return { type: 'queue' };
+  }
+  if (outil === 'points' && doc.shapes[formeSel]) {
+    const pts = doc.shapes[formeSel].points;
+    for (let i = 0; i < pts.length; i++) {
+      const [x, y] = versEcran(pts[i]);
+      if (Math.hypot(sx - x, sy - y) < seuil) return { type: 'point', i };
+    }
+  }
+  return null;
+}
+
+// Point du contour le plus proche du curseur, s'il est à portée : renvoie
+// l'indice du segment et la projection, pour y insérer un point.
+function segmentPres(sx, sy) {
+  const pts = doc.shapes[formeSel].points, n = pts.length;
+  let best = null, bestD = 10;                 // 10 px écran
+  for (let i = 0; i < n; i++) {
+    const [ax, ay] = versEcran(pts[i]), [bx, by] = versEcran(pts[(i + 1) % n]);
+    const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+    if (!l2) continue;
+    const t = U.clamp(((sx - ax) * dx + (sy - ay) * dy) / l2, 0, 1);
+    const px = ax + dx * t, py = ay + dy * t;
+    const d = Math.hypot(sx - px, sy - py);
+    if (d < bestD) { bestD = d; best = { i, p: versDoc(px, py) }; }
+  }
+  return best;
+}
+
+vue.addEventListener('pointerdown', ev => {
+  if (!doc) return;
+  const r = vue.getBoundingClientRect();
+  const sx = ev.clientX - r.left, sy = ev.clientY - r.top;
+  const cible = pres(sx, sy);
+
+  if (cible && cible.type === 'point' && ev.altKey) {
+    const pts = doc.shapes[formeSel].points;
+    if (pts.length > 3) { instantane(); pts.splice(cible.i, 1); marquer(); }
+    return;
+  }
+  if (cible) {
+    instantane();
+    attrape = cible; vue.setPointerCapture(ev.pointerId);
+    if (cible.type === 'fin') { finSel = cible.i; panneau(); }
+    return;
+  }
+
+  // Rien sous le curseur : en mode nageoires, on en pose une.
+  if (outil === 'nageoires') {
+    instantane();
+    const [x, y] = versDoc(sx, sy);
+    doc.fins.push({ x, y, r: Math.round(doc.naturalW * 0.35), layerIndex: formeSel });
+    finSel = doc.fins.length - 1;
+    marquer(); panneau();
+    return;
+  }
+
+  // En mode points, un clic SUR LE CONTOUR insère un point. Sans ça on ne peut
+  // que déplacer ou supprimer, et un contour importé trop pauvre à un endroit
+  // reste irrécupérable.
+  if (outil === 'points' && doc.shapes[formeSel]) {
+    const seg = segmentPres(sx, sy);
+    if (seg) {
+      instantane();
+      doc.shapes[formeSel].points.splice(seg.i + 1, 0, seg.p);
+      attrape = { type: 'point', i: seg.i + 1 };
+      vue.setPointerCapture(ev.pointerId);
+      marquer(); panneau();
+      return;
+    }
+  }
+  attrape = { type: 'vue', sx, sy, ox: vueT.x, oy: vueT.y };
+  vue.setPointerCapture(ev.pointerId);
+});
+
+vue.addEventListener('pointermove', ev => {
+  if (!attrape) return;
+  const r = vue.getBoundingClientRect();
+  const sx = ev.clientX - r.left, sy = ev.clientY - r.top;
+  const [x, y] = versDoc(sx, sy);
+  const a = attrape;
+  if (a.type === 'ancre') { doc.points[a.cle].x = x; doc.points[a.cle].y = y; }
+  else if (a.type === 'rayonOeil') doc.points.eye.r = Math.max(1, x - doc.points.eye.x);
+  else if (a.type === 'fin') { doc.fins[a.i].x = x; doc.fins[a.i].y = y; }
+  else if (a.type === 'queue') doc.tailBlend = x;
+  else if (a.type === 'point') doc.shapes[formeSel].points[a.i] = [x, y];
+  else if (a.type === 'vue') { vueT.x = a.ox + (sx - a.sx); vueT.y = a.oy + (sy - a.sy); dessiner(); return; }
+  marquer();
+});
+
+vue.addEventListener('pointerup', () => {
+  if (attrape && attrape.type !== 'vue') panneau();
+  attrape = null;
+});
+
+vue.addEventListener('wheel', ev => {
+  ev.preventDefault();
+  const r = vue.getBoundingClientRect();
+  const sx = ev.clientX - r.left, sy = ev.clientY - r.top;
+  const [wx, wy] = versDoc(sx, sy);
+  vueT.k *= ev.deltaY > 0 ? 0.9 : 1.11;
+  vueT.x = sx - wx * vueT.k; vueT.y = sy - wy * vueT.k;
+  dessiner();
+}, { passive: false });
+
+// ---------------------------------------------------------------------------
+// Import
+// ---------------------------------------------------------------------------
+$('#btnSilhouette').onclick = () => {
+  if (!espece) return dire('choisis d\'abord une espèce', 'ko');
+  try {
+    debrancher();
+    doc = SVGImport.depuisEspece(espece);
+    doc.nom = espece;
+    formeSel = 0; finSel = 0;
+    marquer(); cadrer(); panneau();
+    dire(`silhouette reprise : ${doc.shapes.length} formes, ${doc.shapes.reduce((n, s) => n + s.points.length, 0)} points`, 'ok');
+  } catch (err) { dire('échec : ' + err.message, 'ko'); }
+};
+
+let attenteFichier = null;
+$('#btnSVG').onclick = () => { attenteFichier = 'svg'; $('#fichier').accept = '.svg'; $('#fichier').click(); };
+$('#btnJSON').onclick = () => { attenteFichier = 'json'; $('#fichier').accept = '.json'; $('#fichier').click(); };
+$('#fichier').onchange = ev => {
+  const f = ev.target.files[0]; if (!f) return;
+  const fr = new FileReader();
+  fr.onload = () => {
+    ouvrir(fr.result, f.name.replace(/\.(svg|json)$/i, ''), attenteFichier);
+    ev.target.value = '';
+  };
+  fr.readAsText(f);
+};
+
+// Chargement d'un contenu, quelle que soit sa provenance. Exposé sur `window`
+// pour que la page soit pilotable depuis la console — c'est ce qui permet de la
+// vérifier sans passer par un sélecteur de fichier natif, qu'aucun script ne
+// peut ouvrir.
+function ouvrir(contenu, nom, type) {
+  try {
+    debrancher();
+    doc = type === 'svg'
+      ? SVGImport.depuisSVG(contenu, nom)
+      : SVGImport.finaliser(Object.assign(
+          typeof contenu === 'string' ? JSON.parse(contenu) : contenu, { nom }));
+    doc.espece = espece; doc.nom = nom;
+    formeSel = 0; finSel = 0;
+    marquer(); cadrer(); panneau();
+    dire(`${nom} importé : ${doc.shapes.length} formes, `
+       + `${doc.shapes.reduce((n, s) => n + s.points.length, 0)} points`, 'ok');
+  } catch (err) { dire('import impossible : ' + err.message, 'ko'); }
+}
+window.Atelier = { ouvrir, choisir, get doc() { return doc; } };
+
+// ---------------------------------------------------------------------------
+// Enregistrement
+// ---------------------------------------------------------------------------
+function aEnvoyer() {
+  const d = JSON.parse(JSON.stringify(doc));
+  delete d.espece; delete d.nom;
+  // Arrondi : un dessin n'a pas besoin de quinze décimales, et le fichier
+  // triple de taille pour rien.
+  const a = v => Math.round(v * 100) / 100;
+  for (const sh of d.shapes) sh.points = sh.points.map(p => [a(p[0]), a(p[1])]);
+  for (const c in d.points) { d.points[c].x = a(d.points[c].x); d.points[c].y = a(d.points[c].y); }
+  if (d.points.eye) d.points.eye.r = a(d.points.eye.r);
+  for (const f of d.fins) { f.x = a(f.x); f.y = a(f.y); f.r = Math.round(f.r); }
+  d.tailBlend = a(d.tailBlend);
+  return d;
+}
+
+function enregistrer() {
+  const nom = ($('#nomFichier').value || '').trim();
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(nom)) return dire('nom invalide (lettres, chiffres, - et _)', 'ko');
+  dire('enregistrement…');
+  fetch('api/sprite/' + encodeURIComponent(nom), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(aEnvoyer()),
+  }).then(r => r.json()).then(rep => {
+    if (rep.erreur) return dire('refusé : ' + rep.erreur, 'ko');
+    doc.nom = nom;
+    delete brouillons[espece];
+    dire(`écrit dans ${rep.fichier} (${rep.octets} octets)`, 'ok');
+    rail();
+  }).catch(e => dire('serveur injoignable — lancer dev_server.py : ' + e, 'ko'));
+}
+
+function activer(nom) {
+  if (nom !== null && !/^[A-Za-z0-9_-]{1,64}$/.test(nom)) return dire('nom invalide', 'ko');
+  const m = Object.assign({}, manifeste);
+  if (nom === null) delete m[espece]; else m[espece] = nom;
+  fetch('api/manifeste', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(m),
+  }).then(r => r.json()).then(rep => {
+    if (rep.erreur) return dire('refusé : ' + rep.erreur, 'ko');
+    manifeste = m;
+    dire(nom === null
+      ? `${SPECIES[espece].name} revient à sa silhouette procédurale`
+      : `${SPECIES[espece].name} utilise maintenant ${nom}.json — recharge le jeu`, 'ok');
+    rail(); panneau();
+  }).catch(e => dire('serveur injoignable : ' + e, 'ko'));
+}
+
+function dire(m, cls) { const e = $('#etat'); e.textContent = m || ''; e.className = cls || ''; }
+
+// ---------------------------------------------------------------------------
+// Outils, boucle, démarrage
+// ---------------------------------------------------------------------------
+document.querySelectorAll('#barre button[data-outil]').forEach(b =>
+  b.addEventListener('click', () => {
+    outil = b.dataset.outil;
+    document.querySelectorAll('#barre button[data-outil]').forEach(x => x.classList.toggle('on', x === b));
+    panneau(); dessiner();
+  }));
+
+addEventListener('resize', () => { cadrer(); });
+
+function boucle() { if (anime) { dessiner(); } bandeau(); requestAnimationFrame(boucle); }
+
+fetch('Assets/sprites.json').then(r => (r.ok ? r.json() : {})).catch(() => ({}))
+  .then(m => {
+    manifeste = m || {};
+    // Les sprites déclarés en dur dans species.js comptent aussi.
+    for (const id in SPECIES) if (SPECIES[id].sprite && !(id in manifeste)) manifeste[id] = SPECIES[id].sprite;
+    rail(); panneau();
+    const premier = Object.keys(manifeste)[0] || Object.keys(SPECIES)[0];
+    choisir(premier);
+    boucle();
+  });
+})();
+</script>
+</body>
+</html>

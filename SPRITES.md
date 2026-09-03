@@ -1,199 +1,216 @@
-# Le pont avec l'éditeur SVG
+# Les dessins des créatures
 
-Comment un animal dessiné à la main entre dans le jeu, et comment un animal du
-jeu en ressort pour être redessiné. **Ce document décrit ce qui est implémenté**
-— il remplace la note de recherche qui le précédait, dont les décisions §3 et §4
-ont été tranchées autrement à l'usage (voir « Écarts avec la note initiale »).
+Comment un animal dessiné à la main entre dans le jeu, comment un animal du jeu
+en ressort pour être redessiné, et où se règle tout ça. **Ce document décrit ce
+qui est implémenté.**
 
-Le trajet complet :
+Un seul outil : **[atelier.html](atelier.html)**, servi par le serveur de dev.
 
 ```
-silhouette procédurale ──SVGExport.telecharger()──▶ .svg ──▶ éditeur
-                                                                │
-      jeu ◀──sprites.js──── Assets/<Nom>.json ◀──enregistrer────┘
+        ┌─────────────────── ATELIER ───────────────────┐
+        │                                               │
+  silhouette du jeu ──┐                                 │
+  fichier .svg ───────┼──▶ ancres · nageoires · queue · points · visage
+  fichier .json ──────┘                    │            │
+                                           ▼            │
+                       aperçu par le VRAI rendu du jeu  │
+                                           │            │
+        └───────────────────────────────────┼───────────┘
+                                            ▼
+                    Assets/<nom>.json  +  Assets/sprites.json
+                                            │
+                                            ▼
+                                          le jeu
 ```
+
+Ce qu'on voit dans l'atelier est dessiné par `FishBody.draw`, le code du jeu, pas
+par une imitation. Une divergence serait un bug du jeu, pas une surprise à la
+première mise en eau.
 
 ---
 
-## 1. Sortir un animal du jeu (`js/svgexport.js`)
+## 1. L'atelier
 
-26 des 27 espèces n'existaient que sous forme de code. Pour les redessiner il
-faut d'abord les extraire. Depuis la console du jeu :
-
-```js
-SVGExport.telecharger('requin')   // un fichier requin.svg
-SVGExport.tout()                  // les 27, à ~350 ms d'intervalle
-SVGExport.svg('meduse')           // la chaîne, pour inspection
+```bash
+python dev_server.py 8642      # puis http://localhost:8642/atelier.html
 ```
 
-Le module rejoue la silhouette dans un **faux contexte 2D qui enregistre au lieu
-de peindre** : il implémente le sous-ensemble de Canvas2D qu'utilisent les
-silhouettes (`moveTo`, `quadraticCurveTo`, `arc`, `ellipse`, `fill`, `stroke`,
-la pile de transformations…) et applique la matrice courante **aux points au
-moment où ils sont enregistrés**. Le SVG produit n'a donc aucune transformation
-imbriquée à recomposer : un `<path>` par coup de pinceau, en coordonnées
-absolues. Les arcs sont convertis en **cubiques** (découpe à 90°, formule exacte
-des tangentes) — un échantillonnage en polyligne donnerait des contours facettés,
-inexploitables dans un éditeur vectoriel.
+**Le rail de gauche** liste les 27 espèces. Pastille verte = un dessin est actif,
+orange = brouillon non enregistré, grise = silhouette procédurale.
 
-**Le visage n'est pas exporté**, volontairement : le jeu le redessine par-dessus
-le sprite (règle du projet, cf. CLAUDE.md). Ses ancres sont relevées au vol et
-écrites dans `<metadata>`. Deux points d'entrée à intercepter — `drawFace` pour
-un visage groupé et `oeil` pour les yeux isolés (crabe sur tiges, coquillage
-entre ses valves) : sans le second, le crabe s'exportait avec ses yeux, l'artiste
-les aurait redessinés, et le jeu en aurait remis par-dessus.
+**Trois entrées** :
 
-Non exportés non plus, faute d'équivalent direct : les lueurs (`shadowBlur`) et
-les découpes (`clip`). La silhouette sortie est le trait nu.
+| Bouton | Ce qu'il fait |
+|---|---|
+| Partir de la silhouette du jeu | rejoue la silhouette procédurale et la convertit en formes éditables — utilisable sur les 27 espèces, sans aucun outil externe |
+| Importer un SVG… | n'importe quel dessin vectoriel (Illustrator, Inkscape, l'éditeur d'ancrages…) |
+| Importer un JSON… | un document d'atelier déjà commencé |
 
-Les ancres sont en **métadonnée seulement**, jamais en formes dessinées : un
-éditeur les importerait comme des calques et il faudrait effacer des ronds
-parasites sur chaque poisson.
+**Quatre outils**, dans la barre :
 
-```xml
-<metadata>{"aquarium":1,"species":"requin","name":"Requin Dents-Molles",
- "points":{"center":{...},"nose":{...},"eye":{...},"mouth":{...},"tail":{...}},
- "tailBlend":123,"faceK":0.75}</metadata>
-```
+- **Ancres** — `center` (le point que le jeu place à la position de la créature),
+  `nose`, `tail`, et surtout `eye` / `mouth` qui portent le visage commun.
+  L'ancre `eye` est un **cercle** dont on tire la poignée : son rayon donne la
+  taille de l'œil.
+- **Nageoires** — clic pour en poser une. Le disque affiché est le **rayon
+  d'influence** : la rotation s'y propage à plein au centre et s'éteint au bord.
+- **Queue** — la ligne verticale `tailBlend`. Tout ce qui est à sa gauche ondule.
+- **Points** — tirer les carrés retouche le contour ; clic sur le trait insère un
+  point, <kbd>alt</kbd>+clic en supprime un.
+
+<kbd>Ctrl</kbd>+<kbd>Z</kbd> annule, partout. Molette pour zoomer, glissé du fond
+pour déplacer la vue.
+
+**Le bandeau du bas** montre le dessin sous sept humeurs. Une calibration juste
+doit tenir sur toutes : `sleeping` (bouche du ronflement) et `angry` (sourcil
+lourd) sont les deux qui débordent en premier d'une tête trop petite.
+
+**Enregistrer** écrit `Assets/<nom>.json`. **Activer dans le jeu** ajoute
+l'entrée au manifeste. **Revenir au procédural** retire l'entrée **sans effacer
+le fichier** : c'est ce qu'on fait pour les espèces dont la silhouette actuelle
+convient déjà, comme la murène.
 
 ---
 
-## 2. Faire entrer un dessin (`js/sprites.js`)
+## 2. Comment l'écriture sur le disque fonctionne
 
-Déposer le JSON dans `Assets/`, puis ajouter un champ à la fiche d'espèce :
+Une page web ne peut pas écrire dans le dépôt. Sans ça, chaque essai de réglage
+demanderait de télécharger un fichier puis de le déplacer à la main — autant dire
+qu'on ne règle rien.
 
-```js
-requin: { …, sprite: 'SharkSVG' },      // -> Assets/SharkSVG.json
+`dev_server.py` expose donc deux routes, volontairement minuscules :
+
+```
+POST /api/sprite/<nom>   corps = JSON   ->  Assets/<nom>.json
+POST /api/manifeste      corps = JSON   ->  Assets/sprites.json
 ```
 
-Le chargement est **asynchrone et tolérant** : tant que le fichier n'est pas là
-(ou s'il est illisible), la silhouette procédurale continue d'être dessinée.
-Aucune frame n'attend un sprite, aucune espèce ne disparaît sur une faute de
-frappe dans un nom de fichier.
+Garde-fous : serveur lié à **127.0.0.1** uniquement, écriture cantonnée à
+`Assets/`, noms restreints à `[A-Za-z0-9_-]`, corps refusé s'il n'est pas du JSON
+valide ou dépasse 4 Mo, **écriture atomique** (fichier temporaire puis
+remplacement — le jeu relit ces fichiers en continu et ne doit jamais tomber sur
+un JSON tronqué). C'est un outil de développement local : ne pas l'exposer.
 
-### Ce que le jeu lit dans le JSON
+Le serveur est aussi passé en **multi-thread**. En mono-thread, le navigateur
+gardait des connexions ouvertes sur la page et mettait tout le reste en file : un
+simple `curl` depuis un terminal attendait plusieurs minutes.
+
+### Le manifeste
+
+`Assets/sprites.json` associe une espèce à son dessin :
+
+```json
+{ "requin": "SharkSVG" }
+```
+
+C'est lui qui permet d'**activer** un dessin depuis l'atelier sans toucher au
+code — une page web ne peut pas modifier `species.js`, et lui faire réécrire du
+source serait de toute façon une mauvaise idée. Le champ `sprite:` d'une fiche
+d'espèce reste lu : le manifeste ne fait que le compléter ou l'annuler.
+
+---
+
+## 3. Ce que le jeu lit dans un document
 
 | Champ | Rôle | Si absent |
 |---|---|---|
 | `naturalW`, `naturalH` | dimensions du dessin | la boîte des points fait foi |
 | `points.center` | **origine de la créature** : le point posé à `(entity.x, entity.y)` | centre de la boîte |
 | `points.eye` | ancre de l'œil (et du sourcil, de la joue) | pas de visage |
-| `points.eye.r` | **taille de l'œil, en unités du dessin** — la calibration à préférer (§3) | on passe à `faceK` |
+| `points.eye.r` | **taille de l'œil, en unités du dessin** — la calibration à préférer | on passe à `faceK` |
 | `points.mouth` | ancre de la bouche, **honorée séparément** | bouche à sa place par défaut |
-| `points.nose`, `points.tail` | repères de l'éditeur | ignorés par le jeu |
+| `points.nose`, `points.tail` | repères de l'atelier | ignorés par le jeu |
 | `shapes[].points` | contour, `[[x,y], …]` | — |
 | `shapes[].fill` | couleur pleine | gris |
 | `shapes[].smooth` | contour lissé plutôt qu'en ligne brisée | lignes droites |
-| `shapes[].pivot` | rotation en bloc de la forme — **repli** quand aucun `fins[]` ne la vise | elle ondule |
-| `fins[]` | `{x, y, r, layerIndex}` : ancrage de nageoire et son **rayon d'influence** | pas de nageoire animée |
-| `shapes[].amp` | amplitude d'animation | 15 |
+| `shapes[].pivot` | rotation en bloc — **repli** quand aucun `fins[]` ne vise la forme | elle ondule |
+| `shapes[].amp` | amplitude d'animation, en degrés pour une nageoire | 15 |
+| `fins[]` | `{x, y, r, layerIndex}` : ancrage de nageoire et son rayon d'influence | pas de nageoire animée |
 | `tailBlend` | x en deçà duquel les points appartiennent à la queue | rien n'ondule |
-| `faceK`, `faceTx`, `faceTy` | calibration du visage en multiples de `size` (repli, §3) | `def.spriteFace`, puis 0,75 |
+| `faceK`, `faceTx`, `faceTy` | calibration en multiples de `size` (repli) | `def.spriteFace`, puis 0,75 |
 
-### Les quatre règles du rendu
+### Les cinq règles du rendu
 
-1. **Les deux ancres sont honorées séparément.** Caler le seul œil et laisser la
-   bouche à sa place par défaut ne marche pas : le visage commun met la bouche en
-   avant et à peine plus bas que l'œil, alors que le requin de l'éditeur l'a
-   presque à la verticale. Elle atterrissait 4 px trop en avant, **sur le
-   museau**. D'où `FishBody.bouche()`, extraite de `drawFace` — même rôle que
-   `FishBody.oeil()` pour l'œil isolé.
+1. **Les deux ancres du visage sont honorées séparément.** Caler le seul œil et
+   laisser la bouche à sa place par défaut ne marche pas : le visage commun met
+   la bouche en avant et à peine plus bas que l'œil, alors que le requin de
+   l'éditeur l'a presque à la verticale. Elle atterrissait 4 px trop en avant,
+   **sur le museau**. D'où `FishBody.bouche()`, extraite de `drawFace` — même
+   rôle que `FishBody.oeil()` pour l'œil isolé du crabe.
 2. **Le dessin est mis à la largeur d'une silhouette procédurale**, mesurée à
-   ~2,5 fois `size` (99 px relevés sur un requin de 40). À `size * 2` (77 px) puis
-   à `size * 2 * spanRatio` (84 px) le requin paraissait rabougri au milieu des
-   autres. `spriteScale` rattrape un dessin plus serré ou plus large, **sans
+   ~2,5 fois `size` (99 px relevés sur un requin de 40). À `size * 2` (77 px)
+   puis à `size * 2 * spanRatio` (84 px) le requin paraissait rabougri au milieu
+   des autres. `spriteScale` rattrape un dessin plus serré ou plus large, **sans
    toucher à l'emprise physique** (`spanRatio`, que lisent l'anti-chevauchement
    des colosses et les distances de prise).
-3. **La taille du visage vaut 0,75 × `size` par défaut.** À 1 — la valeur des
-   silhouettes procédurales — l'œil débordait du museau du requin, dont la tête
-   est plus fine. Comparé à l'écran entre 1, 0,75 et 0,58. `faceK` (exporté par
-   le panneau « Calibration visage » de l'éditeur) prime, puis `def.spriteFace`.
-4. **La queue ondule, les nageoires se déforment.** Les points en deçà de
-   `tailBlend` sont déviés en `u²` — le battement part du pédoncule caudal, pas du
-   milieu du corps, sinon le poisson se tortille comme une chenille. L'amplitude
-   suit **l'effort** et pas seulement la fréquence : à l'amplitude nue de
-   l'éditeur, le bout de la queue ne parcourait que 5,5 px sur une silhouette
-   de 48.
-5. **Une nageoire n'est pas un calque qu'on fait tourner en bloc.** L'éditeur
-   fait pivoter **chaque point** autour de l'ancre `fins[i]`, pondéré par sa
-   distance : plein effet sur l'ancre, nul au-delà du rayon `r`, avec un lissage
-   en S (`smoothstep`) entre les deux — c'est ce qui évite la couture visible au
-   raccord avec le corps. La rotation rigide que faisait le jeu montrait donc
-   autre chose que ce que l'artiste voyait dans l'outil. `shapes[].amp` est lu en
-   **degrés**, l'unité du curseur de l'éditeur.
+3. **La taille du visage** vient de `points.eye.r` (converti par le 0,22 de
+   `drawFace`), sinon de `faceK`, sinon de `def.spriteFace`, sinon de **0,75 ×
+   `size`**. À 1 — la valeur des silhouettes procédurales — l'œil débordait du
+   museau du requin, dont la tête est plus fine.
+4. **La queue ondule** : les points en deçà de `tailBlend` sont déviés en `u²` —
+   le battement part du pédoncule caudal, pas du milieu du corps, sinon le
+   poisson se tortille comme une chenille. L'amplitude suit **l'effort** et pas
+   seulement la fréquence : à l'amplitude nue, le bout de la queue ne parcourait
+   que 5,5 px sur une silhouette de 48.
+5. **Une nageoire n'est pas un calque qu'on fait tourner en bloc.** Chaque point
+   pivote autour de l'ancre, pondéré par sa distance : plein effet au centre, nul
+   au-delà du rayon `r`, lissage en S entre les deux — c'est ce qui évite la
+   couture au raccord avec le corps.
 
 ---
 
-## 3. Le panneau « Calibration visage » (à ajouter dans l'éditeur)
+## 4. Sortir un animal du jeu (`js/svgexport.js`)
 
-Le jeu pose son visage commun sur le dessin : l'œil (avec son sourcil et sa
-joue) sur l'ancre `eye`, la bouche sur l'ancre `mouth`. Restait à dire **à
-quelle taille**. `calibrage.html` fait ce réglage en direct et sert
-d'implémentation de référence : ouvrir un JSON, tirer les curseurs, copier.
+L'atelier s'en sert pour le bouton « partir de la silhouette », mais il reste
+utilisable seul, depuis la console du jeu :
 
-### Un seul contrôle suffit : le rayon de l'œil
+```js
+SVGExport.telecharger('requin')   // un fichier requin.svg
+SVGExport.tout()                  // les 27, à ~350 ms d'intervalle
+```
 
-**`points.eye.r`** — le rayon de l'œil **dans les unités du dessin**. C'est la
-forme à préférer, et de loin : dans l'éditeur, l'ancre `eye` devient un
-**cercle qu'on étire** au lieu d'un simple point. L'artiste règle la taille de
-l'œil sur son propre dessin, à vue, sans jamais rencontrer le `size` interne de
-l'espèce.
+Le module rejoue la silhouette dans un **faux contexte 2D qui enregistre au lieu
+de peindre** : il implémente le sous-ensemble de Canvas2D qu'utilisent les
+silhouettes et applique la matrice courante **aux points au moment où ils sont
+enregistrés**. Le SVG produit n'a donc aucune transformation imbriquée : un
+`<path>` par coup de pinceau, en coordonnées absolues. Les arcs sont convertis en
+**cubiques** (découpe à 90°, formule exacte des tangentes) — un échantillonnage
+en polyligne donnerait des contours facettés, inexploitables dans un éditeur.
 
-| | |
-|---|---|
-| Unité | pixels du dessin (mêmes que `shapes[].points`) |
-| Plage utile | ~2 % à ~25 % de la largeur du dessin |
-| Conversion côté jeu | taille du visage = `r / 0.22` (`drawFace` dessine l'œil à 0,22 fois cette taille) |
-| Valeur de départ à proposer | voir « déduction » ci-dessous |
+**Le visage n'est pas exporté**, volontairement : le jeu le redessine par-dessus.
+Ses ancres sont relevées au vol et écrites dans `<metadata>`. **Trois** points
+d'entrée à intercepter, pas un : `drawFace` (visage groupé), `oeil` (yeux isolés
+du crabe et du coquillage) et `bouche` (bouche sur sa propre ancre). Il en
+manquait un à chaque fois qu'on croyait avoir fini.
 
-**Déduction automatique**, à utiliser comme valeur initiale du cercle : mesurer
-la hauteur du corps à l'aplomb de l'ancre (points situés à moins de 12 % de la
-largeur du dessin, en x, de l'ancre `eye`) et prendre **le quart** de cette
-hauteur. Une tête fine donne un petit œil, une grosse tête un gros œil. Vérifié
-sur le requin : la déduction donne une taille de visage de **35,3**, contre
-**34,5** pour la valeur calée à la main. L'artiste n'a en général rien à
-toucher.
+Non exportés non plus, faute d'équivalent : les lueurs (`shadowBlur`) et les
+découpes (`clip`).
 
-### Le repli, si le cercle n'est pas implémenté
+## 5. Faire entrer un dessin (`js/svgimport.js`)
 
-**`faceK`**, **`faceTx`**, **`faceTy`** — la même chose exprimée en multiples du
-`size` de l'espèce. Plus abstrait (ce `size` n'apparaît nulle part dans
-l'éditeur), mais utile pour un rattrapage grossier.
+L'échantillonnage passe par le **navigateur** (`getPointAtLength`) plutôt que par
+un analyseur de chemin maison : arcs elliptiques, courbes lisses, coordonnées
+relatives, `<circle>`, `<rect>`, `<g transform>`… tout est déjà géré, et il n'y a
+rien à maintenir. Les points sont ensuite réduits (**Douglas-Peucker**) : sans ça
+on obtient 200 points par contour, illisibles à éditer et inutilement chers à
+dessiner soixante fois par seconde.
 
-| Champ | Rôle | Plage | Défaut |
-|---|---|---|---|
-| `faceK` | taille du visage, en fraction de `size` | 0,25 → 1,6 | 0,75 |
-| `faceTx` | décalage horizontal de tout le visage, en fractions de sa taille | −0,6 → 0,6 | 0 |
-| `faceTy` | décalage vertical, idem | −0,6 → 0,6 | 0 |
+Mesuré sur un vrai dessin fait main (`Assets/clownfish.svg`, 17 ko) : **10
+formes, 430 points, 255 ms**, couleurs conservées.
 
-Préséance dans le jeu : `points.eye.r`, puis `faceK`, puis `def.spriteFace`
-(réglage d'espèce, côté code), puis **0,75** — la valeur comparée à l'écran
-entre 1, 0,75 et 0,58. À 1, la valeur des silhouettes procédurales, l'œil
-débordait du museau du requin.
-
-`faceTx`/`faceTy` deviennent inutiles dès que les deux ancres sont bien posées :
-elles ne servent qu'à rattraper un visage globalement décalé.
-
-### Prévisualiser dans l'éditeur
-
-Le panneau n'a d'intérêt que s'il **montre le résultat**. Le code à reprendre
-tient dans la fonction `dessiner()` de `calibrage.html` : charger `utils.js`,
-`species.js`, `sprites.js` et `fishbody.js`, boucher `Main`/`World`/`Camera`
-(quelques lignes en tête de la page), fabriquer un faux poisson, appeler
-`FishBody.draw`. Aucune duplication du système d'expressions : c'est le code du
-jeu qui dessine.
-
-Prévisualiser **plusieurs humeurs**, pas seulement le repos : la bouche du
-ronflement (`sleeping`) et le sourcil de la colère (`angry`) sont les deux qui
-débordent en premier d'une tête trop petite.
+Les ancres manquantes reçoivent des valeurs de départ (le dessin regarde vers la
+**droite**, comme toutes les silhouettes du jeu), et le rayon de l'œil est
+**déduit** : le quart de la hauteur du corps à l'aplomb de l'ancre. Tête fine →
+petit œil, grosse tête → gros œil. Sur le requin, la déduction tombe à 2 % de la
+valeur calée à la main : l'artiste n'a en général rien à toucher.
 
 ---
 
-## 4. Contrôle non visuel
+## 6. Contrôle non visuel
 
-Comparer l'emprise d'un sprite et de la silhouette qu'il remplace, sans se fier à
-l'œil ni à une capture d'écran (le compositeur du navigateur retarde souvent
-d'une frame) : rendre les deux hors écran et mesurer l'encre.
+Comparer l'emprise d'un sprite et de la silhouette qu'il remplace sans se fier à
+l'œil ni à une capture (le compositeur du navigateur retarde souvent d'une
+frame) : rendre les deux hors écran et mesurer l'encre.
 
 ```js
 function mesure(e, avecSprite) {
@@ -213,36 +230,35 @@ plus fin que l'ellipse procédurale, ce qui est le but.
 
 ---
 
-## 5. Écarts avec la note initiale
+## 7. Écarts avec la note de recherche initiale
 
-La note de recherche qui occupait ce fichier proposait quatre choses ; deux ont
-été retenues, deux ont été tranchées autrement une fois le format réel de
-l'éditeur sous les yeux (`Assets/SharkSVG.json`).
+Une note antérieure proposait une architecture ; deux de ses quatre décisions ont
+été tranchées autrement une fois le format réel sous les yeux.
 
 | Note initiale | Retenu | Pourquoi |
 |---|---|---|
-| Pas d'image, du vectoriel | **oui** | un sprite reste de la donnée, comme une fiche `SPECIES` |
-| Un fichier = une espèce | **oui** | mais la clé est `sprite: '<NomDeFichier>'`, pas `render: 'sprite'` + `spriteId` : `render` continue de désigner la silhouette de repli |
-| Coordonnées en fractions de `size` | **non** | l'éditeur exporte des **pixels natifs** ; la mise à l'échelle se fait au rendu, à partir de `naturalW` et de la boîte réelle des points |
-| Préchargement bloquant avant `Main.init()` | **non** | `fetch` en tâche de fond : le jeu démarre immédiatement et une espèce sans sprite garde sa silhouette. Un préchargement bloquant fait dépendre le démarrage d'un fichier manquant |
+| Pas d'image, du vectoriel | **oui** | un dessin reste de la donnée, comme une fiche `SPECIES` |
+| Un fichier = une espèce | **oui**, mais par un manifeste | `sprite: '<NomDeFichier>'` plutôt que `render: 'sprite'` + `spriteId` : `render` continue de désigner la silhouette de repli |
+| Coordonnées en fractions de `size` | **non** | les dessins arrivent en **pixels natifs** ; la mise à l'échelle se fait au rendu |
+| Préchargement bloquant avant `Main.init()` | **non** | `fetch` en tâche de fond : le jeu démarre immédiatement et une espèce sans dessin garde sa silhouette |
 
-`Path2D` avec cache reste une optimisation valable si le nombre de sprites
-devient important — non faite : le rendu des créatures coûte 0,7–1 ms par frame
-sur ~380 individus, ce n'est pas le goulot (cf. CLAUDE.md, « Performance »).
+`faceK` / `faceTx` / `faceTy` venaient aussi de cette note, qui les disait
+exportés par un panneau de l'éditeur. Ils n'existaient nulle part. Ils sont
+maintenant implémentés **en repli** de `points.eye.r`, plus direct à régler.
 
 ---
 
-## 6. Ce qui manque encore
+## 8. Ce qui manque encore
 
-- **Un sprite par espèce.** Seul le requin en a un. Les 26 SVG de départ
-  s'obtiennent avec `SVGExport.tout()`.
-- **Le cercle de l'ancre `eye` dans l'éditeur** (§3). Le jeu lit déjà
-  `points.eye.r` et les trois `face*` ; `SharkSVG.json` n'en contient aucun et
-  retombe sur 0,75, ce qui lui va.
+- **Un dessin par espèce.** Seul le requin en a un. Les 26 autres s'ouvrent dans
+  l'atelier en un clic (« partir de la silhouette du jeu »), et certaines n'en
+  ont sans doute pas besoin.
 - **Le miroir.** Un dessin est fait tourné vers la droite ; le jeu le retourne
-  par `scale(-1, 1)` avec le demi-tour animé. Rien à faire côté éditeur, mais un
-  dessin asymétrique (une tache sur un seul flanc) se retrouvera de l'autre côté
-  la moitié du temps.
+  par `scale(-1, 1)` avec le demi-tour animé. Un dessin asymétrique (une tache
+  sur un seul flanc) se retrouvera donc de l'autre côté la moitié du temps.
 - **Les créatures posées au sol** (crabe, étoile, coquillage, ver, anémone,
-  murène) pivotent avec la pente du fond. Leur dessin doit donc être fait
+  murène) pivotent avec la pente du fond : leur dessin doit être fait
   **horizontal**, pas incliné.
+- **Le dessin à main levée.** L'atelier retouche un contour point par point mais
+  ne remplace pas un outil de tracé : pour créer une forme de zéro, dessiner
+  ailleurs et importer le SVG.

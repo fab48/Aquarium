@@ -10,13 +10,36 @@
 //   tailBlend   — x en deçà duquel les points appartiennent à la QUEUE et ondulent
 //   fins[]      — marqueurs de nageoires (x, y, r, layerIndex) posés par l'éditeur
 //
+// Le fichier est écrit par `atelier.html`. `Assets/sprites.json` dit quelle
+// espèce utilise quel dessin (voir `init`).
+//
 // Chargement asynchrone : tant que le fichier n'est pas là, la silhouette
 // procédurale continue d'être dessinée. Aucune frame n'attend un sprite.
 const Sprites = {
   cache: {},              // nom -> objet préparé | null (en cours) | false (échec)
 
+  // Le manifeste `Assets/sprites.json` associe une espèce à son dessin :
+  //     { "requin": "SharkSVG", "murene": null }
+  // C'est lui qui permet d'ACTIVER un sprite depuis l'atelier sans toucher au
+  // code : une page web ne peut pas modifier `species.js`, et lui faire réécrire
+  // du source serait de toute façon une très mauvaise idée. `null` désactive
+  // explicitement une espèce, ce qui la ramène à sa silhouette procédurale même
+  // si sa fiche déclare un `sprite:` — c'est ainsi qu'on garde celles qui
+  // marchent bien telles quelles.
   init() {
     for (const id in SPECIES) if (SPECIES[id].sprite) this.charger(SPECIES[id].sprite);
+    fetch('Assets/sprites.json')
+      .then(r => (r.ok ? r.json() : null))
+      .then(m => {
+        if (!m) return;
+        this.manifeste = m;
+        for (const id in m) {
+          if (!SPECIES[id]) continue;
+          if (m[id]) { SPECIES[id].sprite = m[id]; this.charger(m[id]); }
+          else delete SPECIES[id].sprite;
+        }
+      })
+      .catch(() => {});     // pas de manifeste = rien à faire, cas normal
   },
 
   charger(nom) {
@@ -62,8 +85,8 @@ const Sprites = {
       faceR: d.points && d.points.eye && d.points.eye.r,
       faceK: d.faceK, faceTx: d.faceTx, faceTy: d.faceTy,
       shapes,
-      // Le JSON d'origine, gardé tel quel : le banc de calibrage
-      // (`calibrage.html`) le réexporte enrichi des réglages de visage.
+      // Le JSON d'origine, gardé tel quel : l'atelier le réenregistre enrichi
+      // des ancres et des réglages de visage.
       source: d,
       // Ancrages de nageoire, RANGÉS PAR CALQUE : chacun porte un rayon
       // d'influence `r` qui pondère la rotation des points alentour

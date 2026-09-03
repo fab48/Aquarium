@@ -13,7 +13,9 @@ modules ES). `js/boot.js` charge tous les fichiers avec `?v=<timestamp>` :
 la liste de `boot.js`, pas à `index.html`.
 
 Lancer avec `python dev_server.py 8642` (config `.claude/launch.json`) — un
-`http.server` qui envoie `Cache-Control: no-store`.
+`http.server` multi-thread qui envoie `Cache-Control: no-store`, et qui expose en
+plus deux routes d'écriture dans `Assets/` pour l'atelier des créatures
+(cf. [SPRITES.md](SPRITES.md) §2).
 
 ## Contrôles
 
@@ -445,8 +447,8 @@ d'une demi-longueur. Mesuré : 0 franchissement sur 4402 relevés, collage au
 sable 12 % → 4,3 %.
 
 - `sprites.js` — chargement des dessins de l'éditeur SVG (`Assets/*.json`), consommés par `FishBody.drawSprite`. Une espèce qui déclare `sprite:` remplace sa silhouette procédurale, **jamais son visage**.
-- `svgexport.js` — l'autre sens du pont : rejoue une silhouette procédurale dans un faux contexte 2D qui enregistre au lieu de peindre, et la recrache en SVG prêt pour l'éditeur (`SVGExport.telecharger('requin')`, `SVGExport.tout()`). **[SPRITES.md](SPRITES.md) est le contrat complet des deux sens.**
-- `calibrage.html` — banc de réglage du visage sur un sprite (page à part, servie par le même serveur de dev). Il tourne sur le VRAI code de rendu du jeu, et sert d'implémentation de référence au panneau « Calibration visage » à ajouter dans l'éditeur SVG.
+- `svgexport.js` / `svgimport.js` — les deux sens du pont : rejouer une silhouette procédurale dans un faux contexte 2D qui enregistre au lieu de peindre pour la sortir en SVG, et échantillonner un dessin vectoriel pour le faire entrer.
+- `atelier.html` — **l'outil unique** (page à part, servie par le même serveur de dev) : importer, poser les ancres et les nageoires, calibrer le visage, prévisualiser avec le VRAI rendu du jeu, et **enregistrer directement dans `Assets/`**. Une espèce s'active par le manifeste `Assets/sprites.json`, sans toucher au code. **[SPRITES.md](SPRITES.md) est le contrat complet.**
 - `background.js` — dégradé d'eau par profondeur, god rays, crêtes d'arrière-plan, rochers, végétation, cheminées volcaniques, plancton, jour/nuit.
 
 ### Décor posé au sol

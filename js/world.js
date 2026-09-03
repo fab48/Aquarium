@@ -23,7 +23,7 @@ const World = {
       depth += Math.sin(i * 1.7) * 45 * U.clamp(depth / 400, 0, 1);
       this.columns.push(depth);
     }
-    // Replats sableux : le Ver-Tapis (et la Raie) sont des créatures À PLAT ;
+    // Replats sableux : le Poisson-Tapis (et la Raie) sont des créatures À PLAT ;
     // sur une pente continue ils paraissent penchés dans le vide. On aplanit
     // donc quelques terrasses en lissant des groupes de colonnes voisines.
     for (let i = 3; i < this.columns.length - 3; i += 9) {

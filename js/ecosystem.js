@@ -27,12 +27,17 @@ const Ecosystem = {
     this.spawnGroups('hippocampe', 3);
     this.spawnGroups('perroquet', 5);
     this.spawnGroups('poisson_lune', 3);
-    this.spawnGroups('lanterne', 4);
+    this.spawnGroups('lanterne', 6);
     this.spawnGroups('thon', 6);
     this.spawnGroups('raie', 3);
     this.spawnGroups('poulpe', 4);
     this.spawnGroups('murene', 3);   // groupes de 1, tres espacees : chacune son rocher
-    this.spawnGroups('ver_tapis', 3);
+    this.spawnGroups('poisson_tapis', 3);
+    // Les grands fonds : sans eux la zone abyssale n'est qu'un decor noir.
+    // La crevette d'abord (base de la chaine), puis ce qui la mange.
+    this.spawnGroups('crevette', 7);
+    this.spawnGroups('calamar', 4);
+    this.spawnGroups('calamar_geant', 2);
     this.spawnGroups('moustachu', 3);
     this.spawnGroups('dauphin', 2);
     this.spawnGroups('requin', 3);
@@ -332,7 +337,10 @@ const Ecosystem = {
   // errent sans jamais croiser de proie et meurent de faim.
   nearestPreyFor(pred) {
     const def = pred.def;
-    const r = def.ambush ? def.ambush.range : (def.senseRange ?? 1600);
+    // `ambush.range` est la distance de JAILLISSEMENT, pas celle de détection.
+    // Un embusqué mobile (Poisson-Tapis) doit repérer bien plus loin que son
+    // coup de mâchoire, sinon il ne sait pas vers quoi ramper.
+    const r = def.senseRange ?? (def.ambush ? def.ambush.range : 1600);
     // Ne viser que des proies ATTEIGNABLES : sinon le prédateur poursuit une
     // proie hors de sa bande de profondeur, se fait rappeler par sa contrainte
     // verticale, et meurt de faim sans avoir jamais rien attrapé.
@@ -366,6 +374,26 @@ const Ecosystem = {
       }
     }
     return best;
+  },
+
+  // Toutes les proies d'un prédateur dans un rayon donné (pas seulement la plus
+  // proche) : le leurre du Poisson-lanterne hypnotise TOUT ce qui traîne autour
+  // de sa lampe. Balaie les listes par espèce, jamais toutes les entités — mais
+  // reste assez cher pour n'être appelé que quelques fois par seconde
+  // (cf. `_lureCd` dans Entity.pecheALaLampe).
+  preyWithin(pred, range) {
+    const out = [];
+    if (!pred.def.prey) return out;
+    const r2 = range * range;
+    for (const p of pred.def.prey) {
+      // Espèce devenue rare : on la laisse tranquille (report de prédation).
+      if ((this.counts[p] || 0) <= this.refugeFloor(p)) continue;
+      for (const e of this.bySpecies[p] || []) {
+        if (e.dead || e.stage === 'egg') continue;
+        if (U.dist2(pred.x, pred.y, e.x, e.y) < r2) out.push(e);
+      }
+    }
+    return out;
   },
 
   // Partenaire le plus proche : même espèce, adulte, lui aussi prêt (GDD §7).

@@ -58,6 +58,10 @@ une ligne là-bas, puis une ligne ici et une dans `js/legend.js`.
 | **couple qui s'embrasse avant de pondre** | `kiss` (les deux) | `Entity.tryMate` |
 | se fait chatouiller | `laughing` | gag du Poisson-clown |
 | chatouille quelqu'un | `kiss` | gag du Poisson-clown |
+| **hypnotisé par la lampe d'un poisson-lanterne** | `happy` (une proie sur six, à l'entrée dans le halo seulement) | `Entity.pecheALaLampe` |
+| **rate sa pêche à la lampe** | `blush` (le pêcheur) + `scared` (la proie qui se réveille) | `Entity.pecheALaLampe` |
+| **perd sa proie dans un nuage d'encre** | `surprise` | `Entity.encre` |
+| **le Calamar Géant se sait observé** | `blush`, bras repliés en fuseau, il n'ose plus bouger | `GAGS.calamar_geant` |
 | sent passer le pétomane | `disgust` | gag du Poisson-perroquet |
 | juste avant de lâcher son prout | `ashamed` | gag du Poisson-perroquet |
 | juste après | `blush` | gag du Poisson-perroquet |

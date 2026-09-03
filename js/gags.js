@@ -249,18 +249,64 @@ const GAGS = {
   },
 
   // émet un sonar (cercles) quand il chasse dans le noir.
+  // LE CACHALOT PLONGE. C'est toute sa vie : un aller-retour entre l'air qu'il
+  // doit respirer et les céphalopodes qu'il va chercher tout en bas. Il passe
+  // donc l'essentiel de son temps EN BAS (deux fois plus longtemps qu'en haut),
+  // et il descend vraiment au fond — pas à mi-hauteur comme avant, où il ne
+  // croisait ni calamar ni poulpe abyssal.
   cachalot(e, dt, t) {
     if (e._diveT === undefined) { e._diveT = U.rand(0, 30); e._divePhase = 'down'; }
     e._diveT -= dt;
     if (e._diveT <= 0) {
       e._divePhase = e._divePhase === 'up' ? 'down' : 'up';
-      e._diveT = U.rand(20, 35);
+      e._diveT = e._divePhase === 'down' ? U.rand(45, 70) : U.rand(14, 22);
       if (e._divePhase === 'up') Particles.splash(e.x);
     }
     if (e._surfacing) return;   // la respiration est prioritaire
-    e._diveTargetY = e._divePhase === 'up' ? CONFIG.SURFACE_Y + 300 : CONFIG.SURFACE_Y + 2000;
+    // En descente il vise le sable de la colonne où il se trouve, pas une
+    // profondeur fixe : au large c'est l'abysse, plus près c'est moins profond.
+    const fond = World.floorY(e.x) - e.size * 2;
+    e._diveTargetY = e._divePhase === 'up'
+      ? CONFIG.SURFACE_Y + 300
+      : Math.max(CONFIG.SURFACE_Y + 1900, fond);
     if (e._divePhase === 'up' && Math.random() < dt * 2) Particles.bubble(e.x, e.y - e.size * 0.5, 6);
     if (e.state === 'hunt' && Math.random() < dt * 1.2) Particles.wake(e.x + e.size, e.y);
+  },
+
+  // LE CALAMAR GÉANT EST TIMIDE (GDD §12). Le monstre des abysses, oui — mais
+  // qu'on approche d'un peu trop près et il se ratatine : il rentre ses bras,
+  // rougit, et se laisse couler en espérant qu'on ne l'ait pas vu. La scène est
+  // jouée en trois temps (repli → gêne → il se détend), sans bulle : c'est un
+  // géant qui fait le tout petit, ça se lit sur son corps.
+  calamar_geant(e, dt, t) {
+    e._timideCd = (e._timideCd ?? U.rand(0, 8)) - dt;
+    if (e._timide > 0) {
+      e._timide -= dt;
+      e._freeze = 0.2;                       // il n'ose plus bouger
+      if (e._timide <= 0) { e._repli = 0; e._timideCd = U.rand(14, 26); }
+      // `_repli` (0 → 1) est lu par drawSquid : les bras se referment en fuseau
+      e._repli = Math.min(1, (e._repli ?? 0) + dt * 3);
+      return;
+    }
+    e._repli = Math.max(0, (e._repli ?? 0) - dt * 1.5);
+    if (e._timideCd > 0 || e.state === 'hunt') return;
+
+    // Ce qui le gêne : le curseur du joueur, ou un colosse qui le frôle.
+    let vu = false;
+    if (Input.inWindow) {
+      const [mx, my] = Camera.toWorld(Input.mx, Input.my);
+      vu = U.dist2(e.x, e.y, mx, my) < (e.size * 2.4) ** 2;
+    }
+    if (!vu) {
+      for (const o of (Ecosystem.colosses || [])) {
+        if (o === e || o.dead) continue;
+        if (U.dist2(e.x, e.y, o.x, o.y) < (e.size * 3.5) ** 2) { vu = true; break; }
+      }
+    }
+    if (!vu) return;
+    e._timide = U.rand(2.2, 3.4);
+    e.emote('blush', 3);                     // le géant tout gêné
+    e._timideCd = 999;                       // repris à la fin du repli
   },
 
 };

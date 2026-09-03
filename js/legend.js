@@ -20,6 +20,8 @@ const Legend = {
     ['ZzZ', 'endormi (yeux fermés, bouche qui ronfle)'],
     ['BOUM !', 'trop nourri : il a atteint 5x sa taille et il a éclaté'],
     ['!', 'a peur'],
+    ['💡', 'le Poisson-lanterne Allumeur a allumé sa lampe : ce qui passe vient droit dessus'],
+    ['🖤', 'nuage d’encre : le poulpe ou le calamar vient de semer son poursuivant'],
   ],
 
   // Chaque action du jeu a son émotion attitrée. Tenir cette table à jour :
@@ -47,6 +49,8 @@ const Legend = {
     ['plongeon raté (oiseau)', 'sad — trempé et dépité'],
     ['gênée d\'avoir raté (murène)', 'blush'],
     ['timide (hippocampe, curseur proche)', 'blush'],
+    ['hypnotisé par une lampe de poisson-lanterne', 'happy — il nage droit sur la lumière sans plus rien voir'],
+    ['le Calamar Géant se sait observé', 'blush — il rentre ses bras en fuseau et n’ose plus bouger'],
   ],
 
   visible: false,

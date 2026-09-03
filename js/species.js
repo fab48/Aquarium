@@ -15,6 +15,14 @@
 //   stealthy: true          — furtivité : monte à l'arrêt, retombe en mouvement (poof au démarrage)
 //   trickster: true         — 1 attaque sur 3 est une fausse charge (jamais de vraie prise)
 //   nocturnal: true         — ne s'endort pas la nuit comme les autres trophic 2
+//   lure: {range, missChance} — pêche à la lampe : hypnotise les proies alentour et
+//                               les attire à sa bouche (Poisson-lanterne)
+//   ink: true               — lâche un rideau d'encre en fuyant : le poursuivant perd sa trace
+//   spanRatio: n            — demi-emprise DESSINÉE, en multiples de `size` (défaut 1,05).
+//                             À déclarer dès qu'une silhouette déborde nettement de sa
+//                             taille nominale : c'est ce que lit l'anti-chevauchement des colosses.
+//   sizeVar: 0..1           — dispersion des tailles adultes de l'espèce (défaut 0,13).
+//                             Fort chez les espèces bariolées, faible chez les colosses.
 //   gag: (entity, dt, t) => void — comportement comique périodique, appelé depuis Entity.think
 
 const SPECIES = {
@@ -28,7 +36,7 @@ const SPECIES = {
     schooling: true, groupSize: [26, 32], popCap: 96,
     favoriteFood: 'plancton_dore', eatsFood: true,
     colors: ['#ff6b8a', '#ffb84d', '#5ecfff', '#a3e64c', '#c78aff'],
-    bodyRatio: 0.62, tail: 'fan',
+    bodyRatio: 0.62, tail: 'fan', sizeVar: 0.26,   // un banc de confettis, ça dépareille
     lifespan: [180, 300],
   },
 
@@ -229,11 +237,13 @@ const SPECIES = {
   poulpe: {
     name: 'Poulpe Ninja', realName: 'Poulpe', trophic: 'scavenger', movement: 'free',
     nursery: 'deep',
-    depthBand: [400, 1600], size: 24, speed: 45,
-    schooling: false, groupSize: [2, 3], popCap: 28,   // seule proie du Cachalot : il lui faut du stock
-    favoriteFood: 'generic', eatsBones: true, eatsFood: true, stealthy: true,
+    // Il DESCEND jusqu'au fond des abysses : c'est un des rares habitants mobiles
+    // des grands fonds, et la proie de base du Cachalot comme du Calamar Géant.
+    depthBand: [400, 3400], size: 24, speed: 45,
+    schooling: false, groupSize: [2, 3], popCap: 34,   // proie du Cachalot ET du Calamar Géant
+    favoriteFood: 'generic', eatsBones: true, eatsFood: true, stealthy: true, ink: true,
     colors: ['#8a5ea8', '#6a4a8a'],
-    render: 'octopus',
+    render: 'octopus', sizeVar: 0.2,
     lifespan: [300, 500],
   },
 
@@ -264,29 +274,41 @@ const SPECIES = {
   },
 
   lanterne: {
-    name: 'Poisson-lanterne Farceur', realName: 'Poisson-lanterne', trophic: 2, movement: 'strata',
+    name: 'Poisson-lanterne Allumeur', realName: 'Poisson-lanterne (baudroie abyssale)', trophic: 2, movement: 'strata',
     nursery: 'deep',
     depthBand: [1800, 3000], size: 16, speed: 40,
     // Abysse : le plancton y est plus rare, il faut donc vivre plus longtemps
-    // pour avoir le temps de se reproduire (seule proie du Ver-Tapis).
-    schooling: false, groupSize: [3, 4], popCap: 18,
+    // pour avoir le temps de se reproduire (proie du Poisson-Tapis et du Calamar).
+    schooling: false, groupSize: [3, 4], popCap: 40,
+    // PÊCHE À LA LAMPE (GDD §12) : il allume, ce qui traîne dans le noir vient
+    // droit sur la lumière, et il croque. `grazes` reste explicite : sans lui,
+    // avoir des proies le priverait du plancton ambiant et il crèverait de faim
+    // entre deux crevettes (cf. Entity.update, `def.grazes ?? !def.prey`).
+    prey: ['crevette'], grazes: true, senseRange: 320,
+    lure: { range: 300, missChance: 0.6 },
     favoriteFood: 'plancton_dore', eatsFood: true,
     colors: ['#4a5a8a', '#ffd75e'],
-    render: 'lantern', glowAtNight: true, nocturnal: true,
+    render: 'lantern', glowAtNight: true, nocturnal: true, sizeVar: 0.18,
     lifespan: [500, 750],
   },
 
-  ver_tapis: {
-    name: 'Ver-Tapis Câlin', realName: 'Ver tapis (prédateur embusqué)', trophic: 4, movement: 'fixed',
+  poisson_tapis: {
+    // C'est un REQUIN-TAPIS (wobbegong) : une carpette à dents posée sur le sable,
+    // pas un ver. L'ancien nom (« Ver-Tapis ») ne disait rien de ce qu'il fait.
+    name: 'Poisson-Tapis Câlin', realName: 'Requin-tapis (wobbegong)', trophic: 4, movement: 'crawl',
     flatGround: true,   // se pose à plat : cherche une terrasse sableuse
     nursery: 'deep',
-    depthBand: [2000, 3400], size: 20, speed: 0,
-    schooling: false, groupSize: [1, 2],
-    // Le Poisson-lune ne descend jamais à cette profondeur : le retirer évite
-    // une proie fantôme dans l'arbre de prédation.
-    prey: ['lanterne'], ambush: { range: 170, missChance: 0.5 },
+    // IL RAMPE (`crawl`). Immobile (`fixed`) au fond des abysses, il ne croisait
+    // jamais un poisson-lanterne et mourait de faim sans avoir rien mangé : il
+    // se traîne maintenant le long du sable jusqu'à sa proie, puis l'embusque.
+    depthBand: [1900, 3400], size: 20, speed: 15,
+    schooling: false, groupSize: [2, 3], popCap: 10,
+    // `senseRange` porte bien plus loin que `ambush.range` : la première distance
+    // sert à REPÉRER (et à ramper vers), la seconde à jaillir.
+    prey: ['lanterne', 'crevette'], senseRange: 950,
+    ambush: { range: 175, missChance: 0.45 },
     colors: ['#a0785a'],
-    render: 'worm',
+    render: 'worm', sizeVar: 0.16,
     lifespan: [700, 1000],
   },
 
@@ -323,15 +345,74 @@ const SPECIES = {
     name: 'Cachalot Profond', realName: 'Cachalot', trophic: 3, movement: 'free',
     breathes: true,   // remonte souffler en surface
     nursery: 'shallow',
-    depthBand: [450, 3200], size: 100, speed: 40, sprintSpeed: 210,
+    depthBand: [450, 3400], size: 100, speed: 40, sprintSpeed: 210,
     // Sonar (GDD §12) : il repère ses proies de très loin, ce qui compense le
     // fait qu'il passe la moitié de son cycle plus bas qu'elles.
-    schooling: false, groupSize: [1, 2], popCap: 3, metabolism: 0.5, senseRange: 2200,
-    prey: ['poulpe'],
+    schooling: false, groupSize: [1, 2], popCap: 4, metabolism: 0.5, senseRange: 2200,
+    // Toute la faune céphalopode des grands fonds : c'est SA raison de plonger,
+    // et ça donne enfin une scène aux abysses (le duel avec le Calamar Géant).
+    prey: ['poulpe', 'calamar', 'calamar_geant'],
     colors: ['#4a5866'],
     bodyRatio: 0.38, tail: 'whale',
     lifespan: [1500, 2500],
     // Cycle de plongée : remonte respirer en surface puis redescend dans les grands fonds ;
     gag: (e, dt, t) => GAGS.cachalot(e, dt, t),
+  },
+
+  // --- Les grands fonds (GDD §2 « Grands fonds ») ---------------------------
+  // Les abysses n'avaient que le Poisson-lanterne et un embusqué immobile : un
+  // décor noir et vide. Ces trois espèces y montent une vraie chaîne — la
+  // crevette broute la neige marine, le calamar la chasse, le Calamar Géant
+  // chasse le calamar, et le Cachalot descend chercher tout le monde.
+
+  crevette: {
+    name: 'Crevette Guirlande', realName: 'Crevette abyssale bioluminescente', trophic: 2, movement: 'wideband',
+    nursery: 'deep',
+    depthBand: [1500, 3400], size: 7, speed: 46,
+    // Base de la chaîne abyssale : trois espèces la mangent, il lui faut donc
+    // un plafond élevé et des essaims nombreux (même rôle que le Confetti en haut).
+    schooling: true, groupSize: [12, 18], popCap: 96,
+    favoriteFood: 'micro_crevettes', eatsFood: true,
+    colors: ['#ff9d8a', '#ffc2a8', '#e88fb0'],
+    render: 'shrimp', glowAtNight: true, nocturnal: true, sizeVar: 0.22,
+    // LONGUE VIE, comme le Poisson-lanterne et pour la même raison : le plancton
+    // abyssal (0,72) remplit la jauge de ponte deux fois moins vite qu'en eau
+    // claire. Mesuré avec [160, 260] : chaque crevette n'avait le temps que
+    // d'UNE portée (donc une demi-descendance par individu, les couples se
+    // partageant la ponte) et l'espèce passait de 70 à 2 en huit minutes,
+    // entraînant le Calamar avec elle. Il lui faut trois à quatre pontes.
+    lifespan: [420, 640],
+  },
+
+  calamar: {
+    name: 'Calamar Fusée', realName: 'Calmar (encornet)', trophic: 3, movement: 'wideband',
+    nursery: 'deep',
+    depthBand: [1200, 3400], size: 19, speed: 55, sprintSpeed: 230,
+    schooling: true, groupSize: [3, 5], popCap: 24,
+    // Il fonce en marche arrière et dépasse souvent sa cible : le raté est
+    // comique, et il allège la pression sur le Poisson-lanterne, dont il est
+    // de loin le premier prédateur (45 prises en 12 min sans ce garde-fou).
+    prey: ['crevette', 'lanterne'], missChance: 0.4,
+    favoriteFood: 'micro_crevettes', eatsFood: true,
+    ink: true,   // il détale à reculons dans son nuage
+    colors: ['#c76a8a', '#9a5a7a'],
+    render: 'squid', glowAtNight: true, sizeVar: 0.18,
+    lifespan: [280, 430],
+  },
+
+  calamar_geant: {
+    name: 'Calamar Géant Timide', realName: 'Calmar géant (Architeuthis)', trophic: 4, movement: 'free',
+    nursery: 'deep',
+    // Il ne remonte JAMAIS dans l'eau claire : c'est le monstre du fond, et sa
+    // taille (≥ 70) le fait basculer dans les règles des colosses.
+    depthBand: [1900, 3400], size: 78, speed: 46, sprintSpeed: 190,
+    schooling: false, groupSize: [1, 2], popCap: 4, metabolism: 0.6, senseRange: 1800,
+    prey: ['calamar', 'poulpe'], missChance: 0.35,   // ses grands bras s'emmêlent
+    ink: true,
+    colors: ['#a34a5e'],
+    render: 'squid', giantSquid: true, sizeVar: 0.1, spanRatio: 1.45,
+    lifespan: [1000, 1500],
+    // Timide (GDD §12) : il se recroqueville dès qu'on l'approche de trop près.
+    gag: (e, dt, t) => GAGS.calamar_geant(e, dt, t),
   },
 };

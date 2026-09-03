@@ -27,7 +27,9 @@ const IdCard = {
     const parts = [];
     if (def.prey) parts.push(def.prey.map(p => SPECIES[p].name).join(', '));
     if (def.eatsBones) parts.push('arêtes (charogne)');
-    if (def.eatsFood && !def.prey) parts.push('graines / plancton');
+    // `grazes` explicite : une espèce qui a des proies ET broute (le
+    // Poisson-lanterne) ne doit pas passer pour un pur prédateur.
+    if (def.grazes || (def.eatsFood && !def.prey)) parts.push('graines / plancton');
     return parts.length ? parts.join(' · ') : '—';
   },
 

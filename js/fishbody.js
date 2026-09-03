@@ -727,8 +727,15 @@ const FishBody = {
   drawWorm(ctx, e, t) {
     const s = e.size;
     const eating = e.expression === 'eating';
-    const open = eating ? (Math.sin(t * 8 + e.phase) * 0.5 + 0.5) * 0.6 + 0.4 : 0;
+    // JAILLISSEMENT : `strikeT` monte de 0 à 1 quand l'embusqué se détend. Sans
+    // le brancher ici, l'attaque du Poisson-Tapis était totalement invisible —
+    // la proie disparaissait sans qu'on ait vu la carpette bouger.
+    const jaillit = (e.state === 'strike' || e.state === 'retract') ? (e.strikeT || 0) : 0;
+    const open = Math.max(eating ? (Math.sin(t * 8 + e.phase) * 0.5 + 0.5) * 0.6 + 0.4 : 0, jaillit);
     const breath = Math.sin(t * 1.3 + e.phase) * s * 0.06;
+    // Il se cabre : le corps se soulève et se ramasse d'avant en arrière
+    ctx.save();
+    ctx.translate(s * 0.5 * jaillit, -s * 0.5 * jaillit);
 
     // Bosse camouflée (sable), posée sur le sol : origine ≈ centre, on la plaque
     ctx.fillStyle = e.color;
@@ -768,6 +775,7 @@ const FishBody = {
     ctx.save();
     ctx.scale(0.6, 0.6); ctx.translate(-s * 0.2, -s * 0.55);
     this.drawFace(ctx, s, eating ? 'idle' : e.expression, t + e.phase, e.emoteK());
+    ctx.restore();
     ctx.restore();
     ctx.restore();
   },
@@ -905,7 +913,13 @@ const FishBody = {
     // faux morse : superposition de deux carrés d'onde de périodes premières
     const k = t * 2.2 + e.phase;
     const morse = (Math.sin(k) > -0.1 ? 1 : 0) * (Math.sin(k * 3.7) > -0.55 ? 1 : 0);
-    const lit = night > 0.5 ? morse : 0;
+    // EN PÊCHE (`_lureOn`), la lampe reste allumée FIXE, de jour comme de nuit :
+    // c'est l'appât, il faut la voir briller pour comprendre pourquoi les
+    // crevettes viennent droit dessus. Le reste du temps elle clignote en
+    // faux morse, et seulement la nuit.
+    const peche = !!e._lureOn;
+    const lit = peche ? 1 : (night > 0.5 ? morse : 0);
+    const eclat = peche ? 1 : Math.min(1, night);
 
     // Antenne (part du front, s'arque vers l'avant)
     ctx.strokeStyle = e.colorDark;
@@ -940,7 +954,7 @@ const FishBody = {
     ctx.save();
     if (lit) {
       ctx.shadowColor = '#ffe9a3';
-      ctx.shadowBlur = 22 * Math.min(1, night);
+      ctx.shadowBlur = 22 * eclat;
       ctx.fillStyle = '#fff6c9';
     } else {
       ctx.fillStyle = e.colorDark;
@@ -948,13 +962,169 @@ const FishBody = {
     ctx.beginPath(); ctx.arc(lx, ly, s * 0.3, 0, Math.PI * 2); ctx.fill();
     if (lit) {
       ctx.shadowBlur = 0;
-      ctx.fillStyle = 'rgba(255,240,180,0.25)';
-      ctx.beginPath(); ctx.arc(lx, ly, s * 0.7, 0, Math.PI * 2); ctx.fill();
+      // Halo pulsant pendant la pêche : la lampe APPELLE, elle ne se contente
+      // pas d'éclairer. Un halo fixe se confondait avec la luminescence de nuit.
+      const pulse = peche ? 1 + Math.sin(t * 4 + e.phase) * 0.25 : 1;
+      ctx.fillStyle = `rgba(255,240,180,${0.25 * eclat})`;
+      ctx.beginPath(); ctx.arc(lx, ly, s * 0.7 * pulse, 0, Math.PI * 2); ctx.fill();
+      if (peche) {
+        ctx.fillStyle = 'rgba(255,235,150,0.1)';
+        ctx.beginPath(); ctx.arc(lx, ly, s * 1.8 * pulse, 0, Math.PI * 2); ctx.fill();
+      }
     }
     ctx.restore();
 
     this.drawSpots(ctx, e);
     this.face(ctx, s, e, t);
+  },
+
+  // CALAMAR (et Calamar Géant) : manteau en cône pointé vers l'arrière, deux
+  // ailerons triangulaires en bout de manteau, une couronne de bras déployés
+  // vers l'avant. Même convention que le Poulpe (tête devant, appendices
+  // derrière la tête) : dans un aquarium, on lit d'abord le sens de nage.
+  //
+  // `def.giantSquid` ajoute les deux longs tentacules de chasse à massue, et
+  // `e._repli` (0 → 1, piloté par le gag de la timidité) referme les bras en
+  // fuseau : c'est le géant qui se fait tout petit.
+  drawSquid(ctx, e, t) {
+    const s = e.size;
+    const geant = !!e.def.giantSquid;
+    const glow = e.def.glowAtNight ? Main.nightAmount() : 0;
+    const repli = e._repli || 0;
+    const nage = Math.sin(t * 2.6 + e.phase);          // propulsion par à-coups
+
+    // --- Bras (derrière la tête, déployés vers l'arrière comme chez le poulpe)
+    ctx.strokeStyle = e.colorDark;
+    ctx.lineWidth = Math.max(1.4, s * (geant ? 0.1 : 0.13));
+    ctx.lineCap = 'round';
+    const nBras = 8;
+    for (let i = 0; i < nBras; i++) {
+      const u = (i / (nBras - 1)) * 2 - 1;              // -1 → 1
+      const ouvert = U.lerp(1, 0.12, repli);            // le repli les rassemble
+      const w = Math.sin(t * 3.4 + e.phase + i * 0.9) * (1 - repli);
+      ctx.beginPath();
+      ctx.moveTo(s * 0.5, u * s * 0.22);
+      ctx.quadraticCurveTo(s * 0.85, u * s * 0.42 * ouvert + w * s * 0.12,
+                           s * 1.2, u * s * 0.6 * ouvert + w * s * 0.24);
+      ctx.stroke();
+    }
+    // Les deux longs tentacules de chasse du géant, terminés par une massue
+    if (geant) {
+      ctx.lineWidth = Math.max(1.2, s * 0.06);
+      for (const u of [-1, 1]) {
+        const ouvert = U.lerp(1, 0.15, repli);
+        const w = Math.sin(t * 2.1 + e.phase + u) * (1 - repli);
+        const tx = s * 1.85, ty = u * s * 0.42 * ouvert + w * s * 0.32;
+        ctx.beginPath();
+        ctx.moveTo(s * 0.5, u * s * 0.1);
+        ctx.quadraticCurveTo(s * 1.2, u * s * 0.12 + w * s * 0.16, tx, ty);
+        ctx.stroke();
+        ctx.fillStyle = e.colorDark;
+        ctx.beginPath(); ctx.ellipse(tx, ty, s * 0.16, s * 0.08, 0, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    // --- Ailerons en bout de manteau (ils ondulent en continu)
+    if (glow > 0.1) { ctx.shadowColor = e.color; ctx.shadowBlur = 20 * glow; }
+    ctx.fillStyle = e.colorDark;
+    const fin = s * (0.48 + nage * 0.08);
+    for (const sgn of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.72, sgn * s * 0.1);
+      ctx.quadraticCurveTo(-s * 1.3, sgn * fin, -s * 1.5, sgn * s * 0.06);
+      ctx.quadraticCurveTo(-s * 1.1, 0, -s * 0.72, sgn * s * 0.1);
+      ctx.closePath(); ctx.fill();
+    }
+
+    // --- Manteau : cône qui s'effile vers l'arrière, gonflé au rythme de la nage
+    const gonfle = 1 + nage * 0.07;
+    ctx.fillStyle = e.color;
+    ctx.beginPath();
+    ctx.moveTo(s * 0.6, 0);
+    ctx.quadraticCurveTo(s * 0.08, -s * 0.66 * gonfle, -s * 1.45, 0);
+    ctx.quadraticCurveTo(s * 0.08, s * 0.66 * gonfle, s * 0.6, 0);
+    ctx.closePath(); ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Nervures du manteau : sans elles c'est une simple goutte de couleur
+    ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+    ctx.lineWidth = Math.max(1, s * 0.05);
+    for (let i = 1; i <= 3; i++) {
+      const x = -s * (0.12 + i * 0.32);
+      const h = s * 0.46 * gonfle * (1 - i * 0.22);
+      ctx.beginPath(); ctx.moveTo(x, -h); ctx.lineTo(x, h); ctx.stroke();
+    }
+
+    // --- Tête, entre le manteau et les bras
+    ctx.fillStyle = e.color;
+    ctx.beginPath(); ctx.ellipse(s * 0.5, 0, s * 0.5, s * 0.42, 0, 0, Math.PI * 2); ctx.fill();
+
+    this.drawSpots(ctx, e);
+    // Le visage sur la tête. Les yeux du calamar sont énormes — c'est sa
+    // signature, et chez le géant c'est le détail qui le rend attachant.
+    ctx.save();
+    ctx.translate(s * 0.42, -s * 0.02);
+    ctx.scale(geant ? 0.78 : 0.66, geant ? 0.78 : 0.66);
+    this.face(ctx, s, e, t);
+    ctx.restore();
+  },
+
+  // CREVETTE : petit corps arqué en segments, longues antennes, éventail
+  // caudal. Elle est minuscule (7 px) — tout est joué au contour, et la
+  // bioluminescence lui donne sa présence dans le noir des abysses.
+  drawShrimp(ctx, e, t) {
+    const s = e.size;
+    const glow = e.def.glowAtNight ? Main.nightAmount() : 0;
+    const flex = Math.sin(t * 7 + e.phase) * 0.22;      // elle se détend d'un coup
+
+    if (glow > 0.1) { ctx.shadowColor = e.color; ctx.shadowBlur = 14 * glow; }
+
+    // Antennes (vers l'avant, très longues)
+    ctx.strokeStyle = e.colorDark; ctx.lineWidth = Math.max(0.8, s * 0.09); ctx.lineCap = 'round';
+    for (const u of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(s * 0.7, u * s * 0.12);
+      ctx.quadraticCurveTo(s * 1.7, u * s * (0.3 + flex), s * 2.6, u * s * (0.7 + flex * 2));
+      ctx.stroke();
+    }
+    // Pattes
+    ctx.lineWidth = Math.max(0.6, s * 0.07);
+    for (let i = 0; i < 4; i++) {
+      const x = s * (0.5 - i * 0.32);
+      ctx.beginPath();
+      ctx.moveTo(x, s * 0.3);
+      ctx.lineTo(x - s * 0.12, s * 0.62 + Math.sin(t * 9 + i + e.phase) * s * 0.08);
+      ctx.stroke();
+    }
+
+    // Corps arqué : la tête devant, l'abdomen qui se recourbe vers le bas
+    ctx.fillStyle = e.color;
+    ctx.beginPath();
+    ctx.moveTo(s * 0.85, s * 0.05);
+    ctx.quadraticCurveTo(s * 0.2, -s * (0.62 + flex * 0.3), -s * 0.95, -s * 0.1);
+    ctx.quadraticCurveTo(-s * 0.5, s * 0.42, s * 0.2, s * 0.4);
+    ctx.closePath(); ctx.fill();
+
+    // Éventail caudal
+    ctx.fillStyle = e.colorDark;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.85, -s * 0.08);
+    ctx.lineTo(-s * 1.7, -s * (0.5 - flex));
+    ctx.quadraticCurveTo(-s * 1.35, 0, -s * 1.7, s * (0.42 + flex));
+    ctx.closePath(); ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Segments de la carapace
+    ctx.strokeStyle = 'rgba(255,255,255,0.28)'; ctx.lineWidth = Math.max(0.7, s * 0.06);
+    for (let i = 0; i < 3; i++) {
+      const x = -s * (0.05 + i * 0.3);
+      ctx.beginPath(); ctx.moveTo(x, -s * 0.42); ctx.lineTo(x - s * 0.1, s * 0.28); ctx.stroke();
+    }
+
+    ctx.save();
+    ctx.translate(s * 0.42, -s * 0.06); ctx.scale(0.6, 0.6);
+    this.face(ctx, s, e, t);
+    ctx.restore();
   },
 
   // Poisson-lune : grand disque plat, deux longues nageoires verticales,
@@ -1157,6 +1327,8 @@ const FishBody = {
       case 'anemone': this.drawAnemone(ctx, e, t); break;
       case 'bird': this.drawBird(ctx, e, t); break;
       case 'lantern': this.drawLantern(ctx, e, t); break;
+      case 'squid': this.drawSquid(ctx, e, t); break;
+      case 'shrimp': this.drawShrimp(ctx, e, t); break;
       case 'sunfish': this.drawSunfish(ctx, e, t); break;
       case 'clown': this.drawClown(ctx, e, t); break;
       default: this.drawFish(ctx, e, t);

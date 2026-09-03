@@ -1,8 +1,9 @@
 # Aquarium Vivant
 
 Écosystème aquatique scrollable, contemplatif et comique. Le design complet est
-dans `aquarium_vivant_game_design.docx` (24 espèces, chaîne alimentaire, scroll
-bi-axial, cycle de vie, nourriture favorite).
+dans `aquarium_vivant_game_design.docx` (chaîne alimentaire, scroll bi-axial,
+cycle de vie, nourriture favorite). Le roster en compte aujourd'hui **27**, le
+GDD en décrivait 24.
 
 ## Stack
 
@@ -26,7 +27,7 @@ fiches d'identité au survol · bouton ❔ = légende.
 
 - `config.js` — constantes monde, zones écologiques, types de nourriture. 1 m = 40 px, surface à y=300.
 - `utils.js` — helpers math/couleur (`U`).
-- `species.js` — **espèces 100 % data-driven**. Chaque fiche a un `name` rigolo **contenant la vraie espèce** ("Baleine Gros Dodo", "Poisson Confetti") et un `realName` affiché en sous-titre de la fiche d'identité. Ajouter une espèce = ajouter une entrée `SPECIES` (mouvement, bande de profondeur, proies, nourriture favorite, silhouette). **Roster complet : 24 espèces + anémones-refuges.** Flags génériques documentés en tête du fichier (`refuge`, `anchorToRefuge`, `ambush`, `aerial`, `jumps`, `stealthy`, `trickster`, `nocturnal`, `gag(e,dt,t)`).
+- `species.js` — **espèces 100 % data-driven**. Chaque fiche a un `name` rigolo **contenant la vraie espèce** ("Baleine Gros Dodo", "Poisson Confetti") et un `realName` affiché en sous-titre de la fiche d'identité. Ajouter une espèce = ajouter une entrée `SPECIES` (mouvement, bande de profondeur, proies, nourriture favorite, silhouette). **Roster complet : 27 espèces + anémones-refuges.** Flags génériques documentés en tête du fichier (`refuge`, `anchorToRefuge`, `ambush`, `lure`, `ink`, `aerial`, `jumps`, `stealthy`, `trickster`, `nocturnal`, `sizeVar`, `spanRatio`, `gag(e,dt,t)`).
 - `world.js` — triangle de profondeur en grille "profondeur max par colonne" (reco GDD §14), zones, fond sableux.
 - `camera.js` — scroll bi-axial borné par le triangle (impossible d'atteindre les abysses près de la plage).
 - `particles.js` — socle feedback réutilisable : splash, nuage de sable, bulles, sillage, **bulles d'action comiques** (`Particles.comic/hearts/stars`).
@@ -115,6 +116,34 @@ Quatre garde-fous, tous mesurés :
 Au-delà de 2,5× l'animal tremble (`_gonfle`, appliqué dans `draw`) et passe de
 `surprise` à `scared` : l'explosion s'annonce, elle ne tombe pas du ciel.
 
+### Taille : croissance, âge et gabarit
+
+`e.size` n'est plus `def.size * growth`. Quatre facteurs se multiplient, et il
+faut garder leurs rôles séparés :
+
+- `growth` (0,25 → 1) = la **maturité**, et **au-delà de 1 le gras du gavage**.
+  C'est la seule chose que nourrir fait bouger, et la seule que lit l'explosion.
+- `gabarit` = tirage individuel `1 ± def.sizeVar` (défaut 0,13), **fixé une fois
+  à la construction**. Fort chez les bariolés (Confetti 0,26), faible chez les
+  colosses, où la moindre irrégularité se remarquerait.
+- l'**âge** : de 0,90 à 1,12 sur la vie entière. Les poissons grandissent toute
+  leur vie ; un vieux est visiblement plus gros qu'un jeune adulte, sans avoir
+  été gavé.
+
+La croissance de l'alevin est **calée sur la longévité de l'espèce**
+(`enfance = maxAge * 0,2`, avec un ralentissement en approchant de la taille
+adulte : durée réelle ≈ `0,24 × maxAge`). Un taux fixe donnait la même enfance
+à un confetti et à un baleineau.
+
+Enfin, un adulte **créé directement** (peuplement du monde, immigration) reçoit
+un âge aléatoire jusqu'à 60 % de sa longévité. Sans ça toute la population de
+départ a le même âge, donc la même taille, et une classe d'âge entière meurt de
+vieillesse d'un coup.
+
+Conséquence à ne pas oublier : `def.size` reste la valeur de référence pour les
+**seuils** (colosse ≥ 70, tirant d'eau, spawn) ; `e.size` est ce qui est
+**dessiné et testé en contact**. Ne pas intervertir les deux.
+
 ### Frayères et anti-entassement
 
 Chaque espèce a une `nursery` : `'reef'` (anémones), `'shallow'` (haut-fond près du rivage), `'deep'` (sources chaudes). Prête à se reproduire, une créature **migre** vers sa frayère (état `migrate`, contrainte de profondeur assouplie) — d'où du mouvement à l'écran, et des partenaires qui se trouvent.
@@ -164,6 +193,47 @@ herbiers étaient à portée du parent, la pénalité suffisait à tout bloquer 
 les hippocampes tombaient à 2 individus. Le refus ne porte que sur
 l'**occupation** du meilleur site.
 
+### Les grands fonds
+
+Les abysses n'avaient que le Poisson-lanterne et un embusqué immobile : un décor
+noir et vide. Ils portent maintenant leur propre chaîne complète —
+**Crevette Guirlande** (broute la neige marine) → **Calamar Fusée** →
+**Calamar Géant Timide**, avec le **Cachalot** qui descend chercher tout le
+monde, le **Poulpe Ninja** qui descend maintenant jusqu'au sable
+(`depthBand` [400, 3400]) et le **Poisson-Tapis** qui rampe dessus.
+
+Trois mécaniques génériques sont nées de là, toutes utilisables ailleurs :
+
+- **`lure: {range, missChance}`** — la pêche à la lampe du Poisson-lanterne. Le
+  gros de la scène se joue **chez la proie** : `_lureT` la fait nager droit sur
+  la lumière (`Entity.move`), et le lanterne se contente de briller et de rester
+  planté. Il **remplace la chasse**, pas le reste : il continue de brouter
+  (`grazes: true` explicite, sinon avoir des proies le prive du plancton et il
+  meurt de faim) et de se reproduire. Deux garde-fous mesurés : un `_snapCd` de
+  3,5–6,5 s entre deux coups de mâchoire (sans lui, le test de raté est rejoué à
+  **chaque frame** et l'essaim y passe en deux secondes), et une émotion émise
+  **uniquement à l'entrée dans le halo** — le balayage tourne 4 fois par seconde,
+  émettre à chaque passage fait exploser le budget de bulles.
+- **`ink: true`** — le rideau d'encre. L'important n'est pas le nuage : c'est que
+  le poursuivant **perde sa cible**. Placé avant tout le reste dans `think`,
+  parce que le Poulpe est un charognard et que le moteur ne le fait donc jamais
+  « fuir » : il n'avait aucune porte de sortie.
+- **`spanRatio`** (cf. colosses).
+
+Deux pièges d'équilibre vérifiés en simulation :
+
+- **La base de la chaîne abyssale doit vivre longtemps.** Le plancton du fond
+  (0,72) remplit la jauge de ponte deux fois moins vite qu'en eau claire. Avec
+  une longévité de petit poisson ([160, 260]), chaque crevette n'avait le temps
+  que d'**une** portée — soit une demi-descendance par individu, les couples se
+  partageant la ponte — et l'espèce passait de 70 à **2 en huit minutes**, en
+  entraînant le Calamar (10 morts de faim) avec elle. Portée à [420, 640], elle
+  tient. Même raison, même remède que pour le Poisson-lanterne.
+- **Un colosse ne peut pas manger un colosse** tant que l'anti-chevauchement les
+  tient à 187 px alors que la prise se joue à 178 : le Cachalot ne pouvait
+  matériellement jamais attraper le Calamar Géant. La séparation est donc
+  suspendue le temps de la charge, dans les deux sens.
+
 ### Espèces territoriales (`territory: <px>`)
 
 La murène applique « un rocher = une murène » (GDD §12). Trois pièges rencontrés, dans l'ordre :
@@ -186,6 +256,23 @@ Pièges vérifiés (ne pas réintroduire) :
   espèces dorment.
 - Un `groupSize` de `[1,1]` condamne l'espèce : il faut au moins deux individus pour se reproduire.
 - Un prédateur embusqué (`ambush`) doit avoir un **vrai cooldown** après son coup et n'attaquer que ce qui **passe** (`speedNow > 18`) : sinon une proie immobile à côté de lui le fait jaillir en boucle (la murène « ping-pong »).
+- **`ambush.range` est la distance de JAILLISSEMENT, pas celle de détection.**
+  Un embusqué mobile doit repérer bien plus loin que son coup de mâchoire, sinon
+  il ne sait pas vers quoi ramper : `nearestPreyFor` lit donc `senseRange` en
+  priorité. Le Poisson-Tapis, immobile (`fixed`) au fond des abysses, **ne
+  mangeait jamais** et mourait de faim ; passé en `crawl` avec `senseRange: 950`,
+  il se traîne vers sa proie (`_traque`) puis l'embusque — 16 prises en 12 min.
+- **La reptation court-circuite le steering des boids.** Un rampant en parade
+  (`court`) partait donc en amour… sans se déplacer d'un pixel vers l'autre :
+  deux crabes ou deux Poisson-Tapis ne se rencontraient qu'au hasard des 195 px
+  du voisinage, et les deux espèces s'éteignaient doucement. La branche `crawl`
+  doit traiter explicitement `seekFood`, `_traque`/`hunt` **et** `court`.
+- Un rampant doit rester sur la portion de fond correspondant à **sa** bande de
+  profondeur (`Entity.bornesReptation`) : sinon le Poisson-Tapis, qui suit le
+  sable, remonte tranquillement jusqu'au récif.
+- Le **nuage de sable d'un raté** ne se justifie que près du fond : en pleine eau
+  il apparaissait tout en bas de la colonne, sans rapport avec la scène (flagrant
+  dans les abysses, où un calamar rate à 1500 px au-dessus du sable).
 
 Audit rapide en console (`FF` = avance rapide sans rendu) — voir l'historique : instrumenter `Entity.prototype.die` révèle `wellFed: 0` sur un prédateur qui n'a jamais réussi à manger.
 ### Les colosses entre eux
@@ -213,6 +300,13 @@ qui se croisent.
 Chevauchement visible des silhouettes : **0 sur 9088 relevés** sur 16 min,
 contre 75 % de recouvrement au plus fort avant.
 
+La contrainte suppose que le **rayon dessiné vaut à peu près `size`**. Une
+silhouette qui déborde doit le déclarer (`spanRatio`, demi-emprise en multiples
+de `size`) : le Calamar Géant, manteau d'un côté et tentacules de l'autre, tenait
+la distance exacte (164 px pour 164 requis) tout en paraissant **superposé** à
+son voisin. Le corriger, c'est **compacter la silhouette** *et* déclarer
+`spanRatio` — pas seulement l'un des deux.
+
 Contre l'échouage, le rappel par accélération ne suffisait pas non plus : un
 colosse lancé passait au travers. Il a une **barrière dure** (`limiteLarge()` :
 le x où la colonne d'eau atteint enfin son tirant) et une **garde au sol**
@@ -233,6 +327,33 @@ Ordre de rendu : les **rochers avant le sable** (celui-ci recouvre leur base et 
 Les **créatures** posées au sol suivent la même règle : `GROUND_RENDERS` (worm, crab, shell, star, anemone, eel) pivote avec `World.slopeAt`. Les espèces `flatGround` (ver-tapis) apparaissent en plus sur une **terrasse** — `World.init` aplanit des groupes de colonnes exprès, sinon une créature horizontale paraît posée de travers.
 
 Les espèces peuvent réclamer un **habitat** (`habitat: 'rock' | 'weed'`) : elles apparaissent alors sur les positions de décor correspondantes (`Background.habitatSpots`) — étoiles sur les rochers, hippocampes dans les herbiers. Le décor est donc initialisé **avant** l'écosystème dans `Main.init`.
+
+### Le retournement (`Entity.orientation`)
+
+Un poisson qui change de sens **pivote** : `ctx.scale(flipX, 1)` avec `flipX`
+animé de −1 à +1 (adouci en sinus, jamais exactement 0 — une matrice d'échelle
+nulle est dégénérée). Le miroir instantané se lisait comme un défaut d'affichage.
+
+**Attention, c'est ici que se rejoue « la baleine qui clignote ».** L'hystérésis
+sur le seuil ne suffit pas : le `vx` d'un colosse traîne autour de zéro,
+`_facing` rebascule avant la fin du demi-tour, et au lieu d'un clignotement à
+peine visible on obtient une baleine qui **tourne sur place en continu**, coincée
+de profil. Trois verrous, tous nécessaires :
+
+1. seuil relevé pour les gros (`speed * 0,5` au-delà de `size` 45) ;
+2. **un demi-tour commencé s'achève** — aucun nouveau sens tant que `_flipX`
+   n'a pas rejoint `_facing` ;
+3. le nouveau sens doit être **tenu** avant d'être validé, d'autant plus
+   longtemps que l'animal est gros (`0,2 + size/90` s). `_faceAt` (viser
+   quelqu'un : bisou, farce) court-circuite cette patience — c'est une
+   intention, pas une dérive de vitesse.
+
+Mesuré sur 45 s : baleine, cachalot, orque et calamar géant à **0 demi-tour/min**
+(contre 0,4 à 2,7 avec le seuil nu), et moins de 1 % du temps de profil pour les
+petites espèces.
+
+Hors champ `draw` n'est pas appelé : au retour, la créature se **pose** dans son
+sens courant plutôt que de faire un demi-tour fantôme.
 
 ### Les colosses (taille ≥ 70)
 

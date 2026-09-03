@@ -182,6 +182,19 @@ const Particles = {
     for (let i = 0; i < 3; i++) this.bubble(x - 4, y, U.rand(2, 4));
   },
 
+  // ENCRE (poulpe, calamars) : un vrai rideau qui masque la fuite. Il faut
+  // qu'il soit assez large et assez opaque pour qu'on perde la creature des
+  // yeux — sinon on ne comprend pas pourquoi son poursuivant abandonne.
+  ink(x, y, size) {
+    const n = Math.round(U.clamp(size * 0.6, 10, 34));
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, sp = U.rand(10, 55);
+      this.spawn({ type: 'ink', x: x + U.rand(-size * 0.4, size * 0.4), y: y + U.rand(-size * 0.4, size * 0.4),
+        vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 8,
+        r: U.rand(size * 0.35, size * 0.8), life: U.rand(1.8, 3.2) });
+    }
+  },
+
   update(dt) {
     for (const p of this.list) {
       p.age += dt;
@@ -196,6 +209,7 @@ const Particles = {
       else if (p.type === 'spark') { p.vy += 60 * dt; p.vx *= 0.94; p.x += p.vx * dt; p.y += p.vy * dt; }
       else if (p.type === 'sweat') { p.vy += 120 * dt; p.x += p.vx * dt; p.y += p.vy * dt; }
       else if (p.type === 'stink') { p.vx *= 0.97; p.x += p.vx * dt; p.y += p.vy * dt; p.r += 9 * dt; }
+      else if (p.type === 'ink') { p.vx *= 0.95; p.vy *= 0.95; p.x += p.vx * dt; p.y += p.vy * dt; p.r += 16 * dt; }
       else if (p.type === 'scale') { p.vy += 110 * dt; p.vx *= 0.95; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += dt * 8; }
       else if (p.type === 'blow') { p.vy += 260 * dt; p.vx *= 0.98; p.x += p.vx * dt; p.y += p.vy * dt; p.r += 14 * dt; }
       else if (p.type === 'heart') { p.vx *= 0.97; p.x += p.vx * dt; p.y += p.vy * dt; }
@@ -270,6 +284,13 @@ const Particles = {
         ctx.stroke();
       } else if (p.type === 'stink') {
         ctx.fillStyle = `rgba(150,190,110,${0.35 * (1 - t)})`;
+        ctx.beginPath(); ctx.arc(sx, sy, p.r, 0, Math.PI * 2); ctx.fill();
+      } else if (p.type === 'ink') {
+        // Opacite propre : le fondu global `1 - t` rendait le rideau translucide
+        // des la premiere seconde, et la creature restait parfaitement visible
+        // au travers. L'encre tient, puis se dilue d'un coup.
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = `rgba(12,9,22,${0.62 * (1 - t * t * t)})`;
         ctx.beginPath(); ctx.arc(sx, sy, p.r, 0, Math.PI * 2); ctx.fill();
       } else if (p.type === 'chomp') {
         // éclair d'impact façon BD : étoile blanche qui se dilate

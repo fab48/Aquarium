@@ -41,6 +41,17 @@ class Entity {
     this.age = 0;
     this.maxAge = U.rand(this.def.lifespan[0], this.def.lifespan[1]);
     this.growth = this.stage === 'adult' ? 1 : 0.25;
+    // Gabarit personnel : deux adultes de la même espèce n'ont pas la même
+    // taille. L'amplitude est propre à l'espèce (`sizeVar`) — forte chez les
+    // bariolés, faible chez les colosses, dont on remarquerait la moindre
+    // irrégularité. Tiré une fois pour toutes : la taille ne doit pas frémir.
+    this.gabarit = 1 + U.rand(-1, 1) * (this.def.sizeVar ?? 0.13);
+    // Un adulte créé directement (peuplement du monde, immigration) n'a pas
+    // d'histoire : on lui en donne une. Sans ça tout l'aquarium démarre avec des
+    // animaux du même âge — donc de la même taille (cf. `vieillesse` dans le
+    // getter `size`) — et toute une classe d'âge meurt de vieillesse d'un coup.
+    // Les nouveau-nés, eux, arrivent par le stade `egg` et gardent age = 0.
+    if (this.stage === 'adult') this.age = U.rand(0, this.maxAge * 0.6);
 
     // Faim / états
     this.hunger = U.rand(0.2, 0.5);       // 0 = repu, 1 = affamé
@@ -62,7 +73,16 @@ class Entity {
     this._refugeAnchored = false; // œuf/alevin ancré à une anémone (Ecosystem.layEgg)
   }
 
-  get size() { return this.def.size * this.growth; }
+  // Taille affichée = gabarit de l'espèce x maturité (`growth`) x gabarit
+  // personnel x âge. `growth` reste la seule chose que le GAVAGE fait bouger
+  // (au-delà de 1 c'est du gras, et à TAILLE_EXPLOSION ça éclate) : la
+  // variabilité naturelle passe donc par des facteurs séparés.
+  get size() {
+    // Les poissons grandissent toute leur vie : un vieux est sensiblement plus
+    // gros qu'un jeune adulte, sans avoir été gavé pour autant.
+    const vieillesse = U.lerp(0.9, 1.12, U.clamp(this.age / this.maxAge, 0, 1));
+    return this.def.size * this.growth * this.gabarit * vieillesse;
+  }
   get color() { return this._color ?? (this._color = U.pick(this.def.colors)); }
   get colorDark() { return this._cd ?? (this._cd = U.mixColor(this.color.startsWith('#') ? this.color : '#888888', '#102030', 0.35)); }
   colorAlpha(a) {
@@ -140,7 +160,17 @@ class Entity {
     if (this.stage === 'fry') {
       if (this.growth >= 1) this.stage = 'adult';
     }
-    if (this.growth < 1 && this.stage !== 'egg') this.growth = Math.min(1, this.growth + dt * 0.008);
+    // Croissance PROGRESSIVE, calée sur la longévité de l'espèce : un alevin de
+    // confetti est adulte en ~40 s, un baleineau met plusieurs minutes. Un taux
+    // fixe donnait à toutes les espèces la même enfance, quelle que soit leur
+    // durée de vie. Elle ralentit en approchant de la taille adulte (les
+    // derniers pourcents sont les plus lents), comme une vraie courbe de
+    // croissance — le petit reste petit un moment, puis pousse.
+    if (this.growth < 1 && this.stage !== 'egg') {
+      const enfance = this.maxAge * 0.2;                 // 20 % de la vie à grandir
+      const ralenti = U.lerp(1.5, 0.55, this.growth);    // vite d'abord, doucement à la fin
+      this.growth = Math.min(1, this.growth + dt * (0.7 / enfance) * ralenti);
+    }
 
     // Œuf : immobile, éclot
     if (this.stage === 'egg') {
@@ -179,6 +209,7 @@ class Entity {
     if (this._freeze > 0) this._freeze -= dt;
     if (this.exprTimer > 0) { this.exprTimer -= dt; if (this.exprTimer <= 0) this.expression = 'idle'; }
     if (this.wet > 0) this.wet = Math.max(0, this.wet - dt);
+    if (this._lureT > 0) this._lureT -= dt;      // hypnotisée par une lampe (cf. pecheALaLampe)
     this.stateTimer -= dt;
 
     this.updateEyeLook();
@@ -221,14 +252,21 @@ class Entity {
       this._wasStill = !moving;
     }
 
+    // ENCRE (poulpe, calamars) : un poursuivant collé au train, et c'est le
+    // rideau. Ce n'est pas décoratif — le prédateur PERD SA CIBLE. Placé avant
+    // tout le reste parce que le Poulpe est un charognard : le moteur ne le
+    // fait jamais « fuir », il n'avait donc aucune porte de sortie.
+    if (def.ink) this.encre(dt);
+
     if (this.state === 'dizzy') {
       this.hold('dizzy');
       if (this.stateTimer <= 0) { this.state = 'wander'; this.release(); }
       return;
     }
 
-    // Prédateurs embusqués fixes (Murène, Ver-Tapis) : ne se déplacent jamais,
-    // jaillissent quand une proie passe à portée.
+    // Prédateurs embusqués : ils ne poursuivent pas, ils jaillissent quand une
+    // proie passe à portée. La Murène ne bouge pas du tout ; le Poisson-Tapis,
+    // lui, rampe lentement vers ce qu'il a repéré (cf. `_traque`).
     if (def.ambush) {
       this._ambushCd = Math.max(0, (this._ambushCd ?? 0) - dt);
 
@@ -265,6 +303,11 @@ class Entity {
       this.strikeT = Math.max(0, this.strikeT - dt * 2);
       if (this._ambushCd <= 0 && this.hunger > 0.3) {
         const p = Ecosystem.nearestPreyFor(this);
+        // Embusqué MOBILE (Poisson-Tapis) : il se traîne vers ce qu'il repère au
+        // loin (`senseRange`) au lieu d'attendre qu'une proie daigne passer sur
+        // lui. Immobile au fond des abysses, il ne mangeait tout simplement
+        // jamais — c'est `move()`, branche `crawl`, qui exploite `_traque`.
+        this._traque = (def.movement === 'crawl' && p && !p.dead) ? p : null;
         // Elle n'attaque que ce qui PASSE : une proie immobile collée au rocher
         // ne déclenche rien (c'est ce qui la faisait jaillir en boucle).
         // Elle n'attaque que ce qui PASSE (une proie garée contre son rocher la
@@ -314,8 +357,14 @@ class Entity {
 
     if (this.state === 'flee') return;
 
+    // PÊCHE À LA LAMPE (Poisson-lanterne) : il ne court pas après ses proies,
+    // il ALLUME et attend qu'elles viennent se jeter dans sa bouche.
+    // Elle REMPLACE la chasse (il n'y a pas de poursuite), mais rien d'autre :
+    // le lanterne continue de brouter, d'avaler les graines et de se reproduire.
+    if (def.lure) this.pecheALaLampe(dt);
+
     // Chasse (prédateurs) / charognards
-    if (def.prey && this.hunger > 0.45 && this.state !== 'hunt') {
+    if (def.prey && !def.lure && this.hunger > 0.45 && this.state !== 'hunt') {
       const prey = Ecosystem.nearestPreyFor(this);
       if (prey) {
         this.state = 'hunt'; this.target = prey; this.stateTimer = 8;
@@ -347,7 +396,12 @@ class Entity {
           } else {
             this.state = 'dizzy'; this.stateTimer = 2.5;
             Particles.stars(this.x, this.y - this.size);
-            Particles.sandCloud(this.x, World.floorY(this.x) - 5, true);
+            // Le nuage de sable ne se justifie QUE si le raté a lieu près du
+            // fond : en pleine eau il apparaissait tout en bas de la colonne,
+            // sans rapport visible avec la scène. Flagrant dans les abysses,
+            // où un calamar rate à 1500 px au-dessus du sable.
+            const fy = World.floorY(this.x);
+            if (fy - this.y < this.size * 4) Particles.sandCloud(this.x, fy - 5, true);
             this.hunger = Math.max(0.3, this.hunger - 0.1);
           }
         } else {
@@ -434,6 +488,90 @@ class Entity {
     }
   }
 
+  // ===========================================================================
+  // ENCRE — la sortie de secours des céphalopodes (Poulpe, Calamars).
+  // ===========================================================================
+  // Un poursuivant à bout portant, et le nuage part. L'important n'est pas le
+  // nuage : c'est que le prédateur PERDE SA CIBLE et reste planté dedans. Sans
+  // ça, un Cachalot lancé sur un Calamar Géant l'attrape à tous les coups et
+  // l'espèce ne tient pas trois minutes.
+  encre(dt) {
+    this._inkCd = Math.max(0, (this._inkCd ?? 0) - dt);
+    if (this._inkCd > 0) return;
+    for (const p of Ecosystem.neighbors(this.x, this.y)) {
+      if (p.dead || p.state !== 'hunt' || p.target !== this) continue;
+      if (U.dist2(this.x, this.y, p.x, p.y) > 240 * 240) continue;
+      this._inkCd = U.rand(8, 14);          // pas un écran de fumée permanent
+      Particles.ink(this.x, this.y, this.size * 1.5);
+      p.target = null; p.state = 'wander'; p.stateTimer = 1.5;
+      p.emote('surprise', 1.8);             // il cherche autour de lui
+      // Et lui détale à reculons, dans le sens opposé au poursuivant
+      const dx = this.x - p.x, dy = this.y - p.y, d = Math.hypot(dx, dy) || 1;
+      const fuite = (this.def.sprintSpeed || this.def.speed * 2) * 1.2;
+      this.vx += dx / d * fuite; this.vy += dy / d * fuite;
+      this.state = 'flee'; this.target = p; this.stateTimer = 2;
+      return;
+    }
+  }
+
+  // ===========================================================================
+  // PÊCHE À LA LAMPE — le Poisson-lanterne (GDD §12).
+  // ===========================================================================
+  // Il n'a aucune chance à la course : sa méthode, c'est d'allumer et d'attendre.
+  // Ce qui traîne dans le noir vient droit sur la lumière, hypnotisé, et se fait
+  // croquer. La scène se joue donc surtout CHEZ LA PROIE (`_lureT`, exploité par
+  // `move`) — le lanterne, lui, se contente de briller et de rester sur place.
+  pecheALaLampe(dt) {
+    const L = this.def.lure;
+    // La lampe ne s'allume que s'il a faim : repu, il se promène éteint, et on
+    // comprend que la lumière EST l'appât.
+    this._lureOn = this.hunger > 0.35 && this.state !== 'sleep' && this.stage === 'adult';
+    if (!this._lureOn) return;
+
+    // Le balayage des proies coûte cher (une liste d'espèce entière) : on ne le
+    // refait que 4 fois par seconde, pas à chaque frame.
+    this._lureCd = (this._lureCd ?? 0) - dt;
+    if (this._lureCd <= 0) {
+      this._lureCd = 0.25;
+      for (const proie of Ecosystem.preyWithin(this, L.range)) {
+        // Émotion UNIQUEMENT à l'entrée dans le halo (`_lureT` encore à zéro),
+        // et seulement sur une proie sur six. Le balayage tourne 4 fois par
+        // seconde : émettre à chaque passage, c'est un essaim entier qui
+        // scintille en permanence — le budget de bulles explose (cf. CLAUDE.md).
+        if (!(proie._lureT > 0) && Math.random() < 0.17) proie.emote('happy', 1.6);
+        proie._lureX = this.x; proie._lureY = this.y; proie._lureT = 0.9;
+      }
+    }
+
+    // La prise : ce qui arrive à sa bouche y passe (avec des ratés). Un vrai
+    // temps de latence entre deux coups de mâchoire — sans lui, le test de raté
+    // est rejoué à CHAQUE FRAME et l'essaim entier y passe en deux secondes.
+    // « Manger un peu » : compter une prise toutes les quelques secondes.
+    this._snapCd = (this._snapCd ?? 0) - dt;
+    if (this._snapCd > 0) return;
+    for (const proie of Ecosystem.neighbors(this.x, this.y)) {
+      if (proie.dead || !this.def.prey.includes(proie.speciesId)) continue;
+      // Espèce devenue rare : on la laisse tranquille (report de prédation).
+      if ((Ecosystem.counts[proie.speciesId] || 0) <= Ecosystem.refugeFloor(proie.speciesId)) continue;
+      const contact = this.size + proie.size;
+      if (U.dist2(this.x, this.y, proie.x, proie.y) > contact * contact) continue;
+      // Il reste PLANTÉ pendant que ça vient : c'est ce qui rend la scène lisible.
+      this._freeze = 0.4;
+      this._snapCd = U.rand(3.5, 6.5);
+      if (Math.random() < L.missChance) {
+        // Raté : la proie se réveille d'un coup et déguerpit
+        proie._lureT = 0;
+        proie.emote('scared', 1.6);
+        proie.state = 'flee'; proie.target = this; proie.stateTimer = 1.6;
+        this.emote('blush', 1.8);
+      } else {
+        proie._lureT = 0;
+        Ecosystem.eat(this, proie);
+      }
+      return;
+    }
+  }
+
   onAte(foodType) {
     const fav = foodType && foodType === this.def.favoriteFood;
     this.hunger = Math.max(0, this.hunger - (fav ? 0.5 : 0.3));
@@ -455,6 +593,24 @@ class Entity {
     if (fav) Particles.sparkles(this.x, this.y - this.size, 6);
     // La reproduction ne se déclenche plus en mangeant : il faut RENCONTRER
     // un partenaire lui aussi bien nourri (cf. tryMate).
+  }
+
+  // Portion de littoral où un rampant a le droit de se traîner : celle dont le
+  // FOND tombe dans sa bande de profondeur. Calculée une fois — le relief ne
+  // change pas. Le crabe ([0, 99999]) obtient tout le monde, comme avant.
+  bornesReptation() {
+    if (this._bornesRep) return this._bornesRep;
+    const [dMin, dMax] = this.def.depthBand;
+    let xMin = null, xMax = null;
+    for (let x = World.shoreX; x < CONFIG.WORLD_WIDTH - 50; x += CONFIG.DEPTH_COLUMN_WIDTH / 2) {
+      const d = World.depthAt(x);
+      if (d < dMin || d > dMax) continue;
+      if (xMin === null) xMin = x;
+      xMax = x;
+    }
+    // Bande introuvable (relief modifié) : on ne l'enferme pas, il rampe partout.
+    if (xMin === null) { xMin = World.shoreX; xMax = CONFIG.WORLD_WIDTH - 50; }
+    return (this._bornesRep = [Math.max(xMin, World.shoreX + 60), Math.min(xMax, CONFIG.WORLD_WIDTH - 60)]);
   }
 
   // Le x le plus près de la côte où un colosse a encore assez d'eau sous la
@@ -849,11 +1005,28 @@ class Entity {
       this.y += (fy - this.y) * Math.min(1, dt * 5);
       let dir = 0;
       if (this.state === 'seekFood' && this.targetFood) dir = Math.sign(this.targetFood.x - this.x);
+      // Embusqué qui rampe (Poisson-Tapis) : il se traîne vers la proie repérée
+      // au loin. C'est ce qui le sort de la famine — planté sur place au fond
+      // des abysses, il ne voyait jamais passer le moindre poisson-lanterne.
+      else if (this._traque && !this._traque.dead) dir = Math.sign(this._traque.x - this.x);
+      else if (this.state === 'hunt' && this.target && !this.target.dead) dir = Math.sign(this.target.x - this.x);
+      // Il va REJOINDRE son partenaire. Le steering de `court` vit dans la
+      // partie boids, que la reptation court-circuite : un rampant partait donc
+      // en parade… sans jamais se déplacer d'un pixel vers l'autre. Deux
+      // Poisson-Tapis (ou deux crabes) ne se rencontraient qu'au hasard des
+      // 195 px du voisinage, et les deux espèces s'éteignaient doucement.
+      else if (this.state === 'court' && this.target && !this.target.dead) dir = Math.sign(this.target.x - this.x);
       else if (Math.random() < dt * 0.3) this._crawlDir = U.pick([-1, 0, 1]);
       dir = dir || (this._crawlDir ?? 0);
       this.vx = dir * def.speed;
       this.x += this.vx * dt;
-      this.x = U.clamp(this.x, World.shoreX, CONFIG.WORLD_WIDTH - 50);
+      // Bornes de reptation : un rampant reste sur la portion de fond qui
+      // correspond à SA bande de profondeur. Sans ça le Poisson-Tapis, qui
+      // suit le sable, remontait tranquillement jusqu'au récif — et le crabe
+      // ([0, 99999]) n'est évidemment pas concerné.
+      const [xMin, xMax] = this.bornesReptation();
+      this.x = U.clamp(this.x, xMin, xMax);
+      if (this.x <= xMin || this.x >= xMax) this._crawlDir = -(this._crawlDir ?? 1);
       this.speedNow = Math.abs(this.vx);
       return;
     }
@@ -915,9 +1088,18 @@ class Entity {
       // doivent rester à 323 px. On balaie la liste dédiée (une dizaine).
       for (const o of (Ecosystem.colosses || [])) {
         if (o === this || o.dead) continue;
+        // EXCEPTION : quand l'un chasse l'autre, la séparation dure les tient à
+        // 187 px alors que la prise se joue à 178 — le Cachalot ne pouvait
+        // matériellement jamais attraper le Calamar Géant. Le temps de la
+        // charge, ils ont le droit de se toucher.
+        if ((this.state === 'hunt' && this.target === o) || (o.state === 'hunt' && o.target === this)) continue;
         // Tangence reelle : a 0,85 les corps se chevauchaient encore, le
         // rayon d'une silhouette valant a peu pres sa `size` en longueur.
-        const minD = (this.size + o.size) * 1.05;
+        // `spanRatio` corrige les silhouettes qui débordent franchement de leur
+        // `size` : le Calamar Géant, mantelé d'un côté et tentaculé de l'autre,
+        // occupe une fois et demie son rayon nominal — respectée à 1,05, la
+        // contrainte les laissait quasiment superposés à l'écran.
+        const minD = this.size * (def.spanRatio ?? 1.05) + o.size * (o.def.spanRatio ?? 1.05);
         const d2 = U.dist2(this.x, this.y, o.x, o.y);
         if (d2 >= minD * minD) continue;
         const d = Math.max(Math.sqrt(d2), 0.5), push = (minD - d) / minD;
@@ -1008,7 +1190,14 @@ class Entity {
       ax += (dx / d * sp - this.vx) * k;
       ay += (dy / d * sp - this.vy) * k;
     };
-    if (this.state === 'seekFood' && this.targetFood) {
+    if (this._lureT > 0 && this.state !== 'flee') {
+      // HYPNOTISÉE par une lampe de poisson-lanterne : elle avance droit sur la
+      // lumière, sans plus rien voir. Une vraie peur la réveille quand même —
+      // c'est le seul état qui prime, sinon la crevette se laisse manger deux
+      // fois de suite par des prédateurs différents.
+      maxSpeed = def.speed * 0.75;
+      steer(this._lureX, this._lureY, maxSpeed, 2.5);
+    } else if (this.state === 'seekFood' && this.targetFood) {
       maxSpeed = def.speed * 1.4;
       steer(this.targetFood.x, this.targetFood.y, maxSpeed);
     } else if (this.state === 'hunt' && this.target) {
@@ -1173,6 +1362,64 @@ class Entity {
     }
   }
 
+  // RETOURNEMENT ANIMÉ : au lieu de basculer d'un coup de `scale(1,1)` à
+  // `scale(-1,1)`, le poisson passe par toutes les valeurs intermédiaires — il
+  // se met de profil, disparaît une fraction de seconde dans sa propre
+  // épaisseur, et ressort dans l'autre sens. C'est ce demi-tour qui manquait :
+  // le miroir instantané se lisait comme un défaut d'affichage.
+  //
+  // ATTENTION — c'est ici que se rejoue le bug de « la baleine qui clignote ».
+  // L'hystérésis sur `flipAt` ne suffit PAS : le vx d'un colosse traîne autour
+  // de zéro, `_facing` rebascule avant la fin du demi-tour précédent, et au
+  // lieu d'un clignotement à peine visible on obtient une baleine qui TOURNE SUR
+  // PLACE en continu, coincée de profil. D'où deux verrous en plus du seuil :
+  //   1. un demi-tour commencé s'achève — aucun nouveau sens n'est accepté tant
+  //      que `_flipX` n'a pas rejoint `_facing` ;
+  //   2. le nouveau sens doit être TENU un certain temps avant d'être validé,
+  //      d'autant plus longtemps que l'animal est gros (une baleine ne fait pas
+  //      volte-face sur un coup de nageoire).
+  // `_faceAt` (viser quelqu'un : bisou, farce) court-circuite la patience :
+  // c'est une intention, pas une dérive de vitesse.
+  orientation(dirX, t) {
+    const ecart = t - (this._flipT ?? t);
+    this._flipT = t;
+    const flipAt = Math.max(6, this.def.size >= 45 ? this.def.speed * 0.5 : this.def.speed * 0.25);
+    if (this._facing === undefined) this._facing = dirX < 0 ? -1 : 1;
+
+    // Hors champ, `draw` n'est pas appelé : au retour, le poisson se pose
+    // directement dans son sens actuel au lieu de faire un demi-tour fantôme
+    // sous les yeux du joueur qui vient de le retrouver.
+    if (this._flipX === undefined || ecart > 0.25) {
+      if (dirX > flipAt) this._facing = 1; else if (dirX < -flipAt) this._facing = -1;
+      this._flipX = this._facing;
+      return this._facing;
+    }
+    const dt = U.clamp(ecart, 0, 0.05);
+
+    // --- 1. Le sens VOULU
+    let veut = this._facing;
+    if (dirX > flipAt) veut = 1; else if (dirX < -flipAt) veut = -1;
+    if (veut !== this._facing && this._flipX === this._facing) {
+      const patience = this._faceAt ? 0 : 0.2 + Math.min(1, this.def.size / 90);
+      this._flipHold = (this._flipHold ?? 0) + dt;
+      if (this._flipHold >= patience) { this._facing = veut; this._flipHold = 0; }
+    } else if (veut === this._facing) this._flipHold = 0;
+
+    // --- 2. Le demi-tour lui-même. Un colosse ne pivote pas comme un alevin :
+    // la durée suit le gabarit (~0,22 s pour un confetti, ~0,75 s pour une baleine).
+    const duree = 0.22 + Math.min(0.55, this.def.size / 260);
+    const pas = dt * 2 / duree;
+    if (this._flipX < this._facing) this._flipX = Math.min(this._facing, this._flipX + pas);
+    else if (this._flipX > this._facing) this._flipX = Math.max(this._facing, this._flipX - pas);
+
+    // Adouci aux extrémités (sinus) : le demi-tour démarre et s'achève en
+    // douceur au lieu de s'arrêter net une fois le poisson à plat.
+    const k = Math.sin(this._flipX * Math.PI / 2);
+    // Jamais exactement 0 : une matrice d'échelle nulle est dégénérée, et le
+    // poisson disparaîtrait complètement pendant une frame ou deux.
+    return Math.abs(k) < 0.05 ? (this._flipX < 0 ? -0.05 : 0.05) : k;
+  }
+
   draw(ctx, t) {
     const [sx, sy] = Camera.toScreen(this.x, this.y);
     ctx.save();
@@ -1199,19 +1446,13 @@ class Entity {
       return;
     }
 
-    // Miroir horizontal selon la direction (le visage reste commun).
-    // HYSTÉRÉSIS : le sens ne bascule qu'au-delà d'un vrai élan horizontal.
-    // Sans ça, une grosse espèce lente dont vx oscille autour de zéro se
-    // retourne à chaque frame (la baleine qui "clignote").
-    const flipAt = Math.max(6, this.def.speed * 0.25);
+    // Sens de nage : hystérésis, verrous anti-oscillation et demi-tour animé
+    // sont tous dans `orientation()`.
     // Orientation forcée vers un point (bisou) : à l'arrêt, la vitesse ne dit
     // plus où le poisson regarde, il faut viser explicitement.
     let dirX = this.vx, dirY = this.vy;
     if (this._faceAt) { dirX = (this._faceAt.x - this.x) * 4; dirY = (this._faceAt.y - this.y) * 4; }
-    if (dirX > flipAt) this._facing = 1;
-    else if (dirX < -flipAt) this._facing = -1;
-    else if (this._facing === undefined) this._facing = dirX < 0 ? -1 : 1;
-    const facingLeft = this._facing < 0;
+    const flipX = this.orientation(dirX, t);
 
     // Créatures posées sur le fond : elles épousent la pente du sable, comme le
     // décor. Sans ça un ver-tapis ou une étoile paraît penché dans le vide.
@@ -1221,7 +1462,7 @@ class Entity {
       // bande de sable, plus elle est petite. Sans ca l'etalement se lit comme
       // un decalage vertical bizarre au lieu d'une profondeur.
       if (this._sable) ctx.scale(1 - this._sable / 420, 1 - this._sable / 420);
-      if (facingLeft) ctx.scale(-1, 1);
+      ctx.scale(flipX, 1);
       FishBody.draw(ctx, this, t);
       ctx.restore();
       return;
@@ -1249,7 +1490,7 @@ class Entity {
     // s'applique donc TEL QUEL dans les deux cas. Avec un signe inversé (l'ancien
     // code), un poisson tourné à gauche s'inclinait à l'envers — visible dès que
     // l'angle devient franc, comme pour le bisou du clown.
-    if (facingLeft) ctx.scale(-1, 1);
+    ctx.scale(flipX, 1);
     ctx.rotate(this._tilt);
     // Le dauphin se tord de rire : il roule sur lui-même
     if (this._farceRoll) ctx.rotate(Math.sin(this._farceRoll) * 0.5);

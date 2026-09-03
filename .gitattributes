@@ -1,0 +1,20 @@
+# Fins de ligne : LF partout, dans le dépôt comme sur le disque.
+#
+# Pourquoi c'est là : plusieurs sessions travaillent en parallèle sur ce dépôt,
+# et leurs outils n'écrivent pas dans le même format. Un fichier simplement
+# réécrit par l'une changeait alors de fin de ligne, et git affichait des
+# centaines de lignes modifiées pour trois de contenu réel — CLAUDE.md a affiché
+# 1054 lignes pour 9, background.js 1001 pour 265. Illisible en revue, et il
+# fallait le rattraper à la main à chaque fois.
+#
+# LF plutôt que CRLF parce que c'est déjà la majorité du dépôt (20 fichiers
+# contre 11) et le format de tous les fichiers récents.
+* text=auto eol=lf
+
+# Binaires : jamais convertis, jamais diffés comme du texte.
+*.png   binary
+*.jpg   binary
+*.gif   binary
+*.ico   binary
+*.docx  binary
+*.pdf   binary

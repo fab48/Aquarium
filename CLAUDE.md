@@ -500,7 +500,15 @@ Baleine, cachalot, orque demandent des règles à part, apprises en corrigeant l
 
 ## Performance (mesurée, pas supposée)
 
-À ~380 créatures : **dessin des créatures 0,7–1 ms, décor 0,6 ms, simulation 3,6 ms** par frame (budget 60 fps = 16,7 ms).
+**[PERFORMANCE.md](PERFORMANCE.md) est l'audit complet** (méthode, chiffres par
+poste, cible mobile, optimisations classées). À ~490 créatures : **simulation
+4,8 ms** (dont 61 % dans `Entity.move`, en recherches de voisinage), **décor
+18,6 ms** et **créatures 2,5 ms** en rastérisation logicielle à 2560×1440.
+
+Deux corrections aux chiffres qui figuraient ici : le décor coûte **trois fois**
+les créatures (trois `fillRect` plein écran en dégradé — un dégradé coûte 16 fois
+un aplat), et l'ancienne mesure « décor 0,6 ms » ne comptait que l'émission des
+commandes canvas, pas leur rastérisation.
 
 Le rendu procédural n'est donc **pas** le goulot — passer à des sprites optimiserait la partie déjà la moins chère. Le coût est dans les recherches de voisinage. Utiliser systématiquement `Ecosystem.neighbors()` (grille spatiale) et `Ecosystem.bySpecies[id]` plutôt que de balayer `entities`.
 - `input.js` — molette (vertical) / shift+molette + drag (bi-axial), clic = nourrir + splash/sable, clic maintenu = bulles, souris rapide = remous + fuite des petits.

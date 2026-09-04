@@ -67,6 +67,9 @@ const Sprites = {
       if (p[0] < minX) minX = p[0];
       if (p[0] > maxX) maxX = p[0];
     }
+    // Document encore vide (on vient de le créer dans l'atelier) : sans ce
+    // repli, toutes les mesures qui suivent partent à NaN et le rendu disparaît.
+    if (!isFinite(minX)) { minX = 0; maxX = d.naturalW || 1; }
     const c = (d.points && d.points.center) || { x: (minX + maxX) / 2, y: d.naturalH / 2 };
     return {
       w: Math.max(1, maxX - minX),        // largeur RÉELLE du dessin, pas celle du viewBox

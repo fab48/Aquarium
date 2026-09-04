@@ -126,12 +126,25 @@ const SVGImport = {
     return doc;
   },
 
+  // Document VIDE, pour dessiner de zéro. `naturalW/H` donnent la surface de
+  // travail : celle de l'image de repérage si on en charge une, sinon un format
+  // par défaut orienté comme les créatures du jeu (couché, tourné vers la droite).
+  vide(nom, W, H) {
+    return this.finaliser({ naturalW: W || 420, naturalH: H || 260, shapes: [], nom });
+  },
+
   // --- Ancres manquantes, bornes, garde-fous ---------------------------------
   finaliser(doc) {
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const sh of doc.shapes) for (const p of sh.points) {
       if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0];
       if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1];
+    }
+    // Aucune forme encore : les bornes retombent sur la surface de travail,
+    // sinon toutes les ancres par défaut sortiraient à NaN.
+    if (!isFinite(x0)) {
+      x0 = 0; y0 = 0;
+      x1 = doc.naturalW || 420; y1 = doc.naturalH || 260;
     }
     const L = x1 - x0, Ht = y1 - y0;
     const p = Object.assign({}, doc.points);

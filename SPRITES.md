@@ -44,15 +44,22 @@ dessin enregistré puis désactivé devenait introuvable — il existait sur le 
 et nulle part dans l'outil. Ouvrir un tel dessin le met à l'échelle de l'espèce
 dont il porte le nom, si elle existe.
 
-**Trois entrées** :
+**Quatre entrées** :
 
 | Bouton | Ce qu'il fait |
 |---|---|
+| Nouveau dessin | document vide, pour dessiner de zéro |
 | Partir de la silhouette du jeu | rejoue la silhouette procédurale et la convertit en formes éditables — utilisable sur les 27 espèces, sans aucun outil externe |
-| Importer un SVG… | n'importe quel dessin vectoriel (Illustrator, Inkscape, l'éditeur d'ancrages…) |
+| Importer un SVG… | n'importe quel dessin vectoriel (Illustrator, Inkscape, le poseur d'ancrages) |
 | Importer un JSON… | un document d'atelier déjà commencé |
 
-**Cinq outils**, dans la barre :
+Plus un **calque de repérage** : une image posée sous le dessin, à opacité
+réglable, pour redessiner par-dessus un rendu généré ailleurs. Elle est
+embarquée dans le document — le fichier reste autonome, on reprend le travail
+sans avoir à retrouver l'image — mais elle l'alourdit (56 ko pour un PNG de
+410×200), donc à retirer avant l'enregistrement final.
+
+**Six outils**, dans la barre :
 
 - **Ancres** — `center` (le point que le jeu place à la position de la créature),
   `nose`, `tail`, et surtout `eye` / `mouth` qui portent le visage commun.
@@ -75,6 +82,13 @@ dont il porte le nom, si elle existe.
 - **Queue** — la ligne verticale `tailBlend`. Tout ce qui est à sa gauche ondule.
 - **Points** — tirer les carrés retouche le contour ; clic sur le trait insère un
   point, <kbd>alt</kbd>+clic en supprime un.
+- **✏️ Dessiner** — poser les sommets d'un polygone au clic. Double-clic,
+  <kbd>Entrée</kbd> ou un clic sur le premier sommet ferment la forme ;
+  <kbd>retour arrière</kbd> retire le dernier point, <kbd>Échap</kbd> abandonne.
+  Couleur et **contour lissé** se choisissent avant, et se rechangent après dans
+  la liste des formes. Pas de poignées de Bézier : le lissage passe par les
+  milieux de segments, comme dans le jeu — ce qu'on trace est donc exactement ce
+  qui sera rendu.
 - **Forme** — la forme entière : on la tire pour la déplacer, et les boutons
   l'agrandissent, la tournent, la retournent ou la dupliquent autour de son
   centre. Un miroir horizontal sert à faire la nageoire de l'autre côté :

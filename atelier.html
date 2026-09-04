@@ -124,11 +124,15 @@
     <button data-outil="queue">Queue</button>
     <button data-outil="points">Points</button>
     <button data-outil="forme">Forme</button>
+    <button data-outil="dessiner">✏️ Dessiner</button>
     <span style="flex:1"></span>
+    <button id="btnNeuf">Nouveau dessin</button>
+    <button id="btnFond">Image de repérage…</button>
     <button id="btnSilhouette">Partir de la silhouette du jeu</button>
     <button id="btnSVG">Importer un SVG…</button>
     <button id="btnJSON">Importer un JSON…</button>
     <input type="file" id="fichier" hidden>
+    <input type="file" id="fichierFond" accept="image/*" hidden>
   </div>
   <div id="plan"><canvas id="vue"></canvas></div>
   <div id="humeurs"><canvas id="cHumeurs"></canvas></div>
@@ -179,6 +183,10 @@ let manifeste = {};     // espèce -> nom de fichier sprite
 let fichiers = [];      // tous les dessins présents dans Assets/
 const brouillons = {};  // espèce -> doc pas encore enregistré
 let fichierOuvert = null;   // dessin libre en cours d'édition, s'il y en a un
+let trace = null;           // polygone en cours de tracé (mode Dessiner)
+let couleurTrace = '#5b8fb5';
+let lisseTrace = true;
+let imgFond = null;         // Image() de l'éventuel calque de repérage
 let vueT = { x: 0, y: 0, k: 1 };
 let anime = false;
 let fantome = false;    // superposition de la silhouette procédurale
@@ -258,6 +266,25 @@ function ouvrirFichier(f) {
     .catch(e => dire('illisible : ' + e, 'ko'));
 }
 
+// --- Calque de repérage ------------------------------------------------------
+// Une image posée SOUS le dessin, à opacité réglable, pour redessiner par-dessus
+// un rendu généré ailleurs. Elle est embarquée dans le document (comme le
+// `sourceRaw` de l'outil d'ancrages) : le fichier reste autonome, on peut
+// reprendre le travail sans avoir à retrouver l'image d'origine.
+function chargerFond(dataURL, w, h) {
+  doc.fond = { data: dataURL, w, h, opacite: doc.fond ? doc.fond.opacite : 0.45 };
+  imgFond = new Image();
+  imgFond.onload = () => { cadrer(); };
+  imgFond.src = dataURL;
+}
+function reprendreFond() {
+  imgFond = null;
+  if (!doc || !doc.fond) return;
+  imgFond = new Image();
+  imgFond.onload = () => dessiner();
+  imgFond.src = doc.fond.data;
+}
+
 function inventaire() {
   return fetch('api/sprites').then(r => r.json())
     .then(r => { fichiers = r.sprites || []; })
@@ -277,7 +304,7 @@ function choisir(id) {
   rail();
 }
 
-function apres() { cadrer(); panneau(); rail(); dire(doc ? '' : 'Aucun dessin : importe-en un, ou pars de la silhouette du jeu.'); }
+function apres() { trace = null; reprendreFond(); cadrer(); panneau(); rail(); dire(doc ? '' : 'Aucun dessin : importe-en un, ou pars de la silhouette du jeu.'); }
 
 // ---------------------------------------------------------------------------
 // Vue : le dessin est rendu par le VRAI code du jeu
@@ -330,6 +357,15 @@ function cadrer() {
   if (!sp) { debrancher(); dessiner(); return; }
   const b = bornes(sp);
   const W = vue.clientWidth, H = vue.clientHeight;
+  // Document encore vide : on cadre la SURFACE DE TRAVAIL, sinon il n'y a rien
+  // à cadrer et le zoom part à l'infini.
+  if (!doc.shapes.length) {
+    const k0 = Math.min(W / ((doc.naturalW || 420) * 1.15), H / ((doc.naturalH || 260) * 1.2));
+    vueT.k = k0;
+    vueT.x = W / 2 - (doc.naturalW || 420) / 2 * k0;
+    vueT.y = H / 2 - (doc.naturalH || 260) / 2 * k0;
+    debrancher(); dessiner(); return;
+  }
   const k = Math.min(W / (sp.w * 1.25), H / Math.max(1, (b.y1 - b.y0) * 1.35));
   vueT.k = k;
   vueT.x = W / 2 - (b.x0 + sp.w / 2) * k;
@@ -353,6 +389,15 @@ function dessiner() {
     ctx.fillText(espece ? 'Pas encore de dessin pour cette espèce.' : 'Choisis une espèce à gauche.', W / 2, H / 2);
     ctx.textAlign = 'left';
     return;
+  }
+
+  // Calque de repérage, tout au fond
+  if (doc.fond && imgFond && imgFond.complete) {
+    ctx.save();
+    ctx.globalAlpha = doc.fond.opacite;
+    const [x, y] = versEcran([0, 0]);
+    ctx.drawImage(imgFond, x, y, doc.fond.w * vueT.k, doc.fond.h * vueT.k);
+    ctx.restore();
   }
 
   const sp = brancher();
@@ -387,6 +432,31 @@ function dessiner() {
   debrancher();
 
   poignees(sp);
+
+  // Polygone en cours de tracé : les sommets posés, le segment vers le curseur,
+  // et le retour à la fermeture. Sans le retour on ne voit pas la forme venir.
+  if (trace && trace.length) {
+    ctx.strokeStyle = couleurTrace; ctx.lineWidth = 2;
+    ctx.fillStyle = couleurTrace + '55';
+    ctx.beginPath();
+    trace.forEach((p, i) => { const [x, y] = versEcran(p); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    if (souris) { const [x, y] = versEcran(souris); ctx.lineTo(x, y); }
+    ctx.stroke();
+    if (trace.length > 1) {
+      ctx.save(); ctx.globalAlpha = 0.5; ctx.beginPath();
+      trace.forEach((p, i) => { const [x, y] = versEcran(p); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+      ctx.closePath(); ctx.fill(); ctx.restore();
+      ctx.setLineDash([4, 4]);
+      const [ax, ay] = versEcran(trace[trace.length - 1]), [bx, by] = versEcran(trace[0]);
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = couleurTrace;
+    for (const p of trace) {
+      const [x, y] = versEcran(p);
+      ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+  }
 }
 
 function poignees(sp) {
@@ -584,6 +654,18 @@ function panneau() {
         <p class="aide">Un miroir horizontal sert à faire la nageoire de l'autre côté :
           dupliquer, puis retourner, puis déplacer.<br>
           <kbd>Ctrl</kbd>+<kbd>Z</kbd> annule chaque geste.</p>`;
+    } else if (outil === 'dessiner') {
+      h += `<h2>Dessiner une forme</h2><p class="aide">Clique pour poser les sommets.
+        <kbd>double-clic</kbd> ou <b>Fermer</b> termine la forme,
+        <kbd>Échap</kbd> l'abandonne, <kbd>retour arrière</kbd> retire le dernier point.</p>
+        <label>Couleur</label>
+        <input type="color" id="cTrace" value="${couleurTrace}">
+        <label class="puce"><input type="checkbox" id="cLisse" ${lisseTrace ? 'checked' : ''}> contour lissé</label>
+        <div class="rangee">
+          <button id="bFermer" ${trace && trace.length > 2 ? '' : 'disabled'}>Fermer la forme</button>
+          <button id="bAnnulerTrace" ${trace && trace.length ? '' : 'disabled'}>Abandonner</button>
+        </div>
+        <p class="aide">${trace ? `${trace.length} sommet(s) posé(s)` : 'aucun tracé en cours'}</p>`;
     } else if (outil === 'points') {
       h += `<h2>Points</h2><p class="aide">Tire les carrés pour retoucher le contour de la
         forme sélectionnée. <kbd>clic</kbd> sur le trait pour insérer un point,
@@ -606,9 +688,11 @@ function panneau() {
          <span class="info">forme ${i + 1} · ${sh.points.length} pts</span>
        </div>`).join('') + `</div>
       <div class="rangee">
-        <input type="color" id="cFill" value="${doc.shapes[formeSel] ? doc.shapes[formeSel].fill : '#888888'}">
+        <input type="color" id="cFill" value="${(doc.shapes[formeSel] && doc.shapes[formeSel].fill) || '#888888'}">
         <button id="bMonte">▲</button><button id="bDesc">▼</button><button id="bSup">✕</button>
       </div>
+      <label class="puce"><input type="checkbox" id="cSmooth"
+        ${doc.shapes[formeSel] && doc.shapes[formeSel].smooth ? 'checked' : ''}> contour lissé</label>
       <p class="aide">L'ordre est l'ordre de dessin : la première forme est au fond.</p>`;
 
     h += `<h2>Enregistrer</h2>
@@ -622,6 +706,15 @@ function panneau() {
       </div>
       <p class="aide">« Revenir au procédural » garde le fichier : c'est ce qu'on fait pour
       les espèces dont la silhouette actuelle convient déjà, comme la murène.</p>`;
+  }
+
+  if (doc && doc.fond) {
+    h += `<h2>Calque de repérage</h2>
+      <label>Opacité <span class="val" id="vOpac">${doc.fond.opacite.toFixed(2)}</span></label>
+      <input type="range" id="sOpac" min="0" max="1" step="0.05" value="${doc.fond.opacite}">
+      <div class="rangee"><button id="bSansFond">Retirer l'image</button></div>
+      <p class="aide">Elle est embarquée dans le fichier, qui reste donc autonome —
+        mais elle l'alourdit : à retirer avant l'enregistrement final.</p>`;
   }
 
   h += `<h2>Aperçu</h2>
@@ -713,6 +806,17 @@ function cabler() {
     marquer();
   });
   on('#bFantome', 'click', () => { fantome = !fantome; panneau(); dessiner(); });
+  on('#cTrace', 'input', e => { couleurTrace = e.target.value; dessiner(); });
+  on('#cLisse', 'change', e => { lisseTrace = e.target.checked; });
+  on('#bFermer', 'click', fermerTrace);
+  on('#bAnnulerTrace', 'click', () => { trace = null; panneau(); dessiner(); });
+  on('#cSmooth', 'change', e => {
+    instantane();
+    doc.shapes[formeSel].smooth = e.target.checked;
+    marquer();
+  });
+  on('#sOpac', 'input', e => { doc.fond.opacite = +e.target.value; $('#vOpac').textContent = (+e.target.value).toFixed(2); dessiner(); });
+  on('#bSansFond', 'click', () => { instantane(); delete doc.fond; imgFond = null; marquer(); panneau(); });
   on('#bAnime', 'click', () => { anime = !anime; panneau(); });
   on('#bRecadrer', 'click', cadrer);
 }
@@ -789,6 +893,19 @@ function bouger(d) {
 }
 
 function marquer() { if (espece && doc) brouillons[espece] = doc; dessiner(); rail(); }
+
+// Le tracé devient une forme, posée AU-DESSUS de la pile : on dessine
+// généralement du corps vers les détails.
+function fermerTrace() {
+  if (!trace || trace.length < 3) return dire('il faut au moins trois sommets', 'ko');
+  instantane();
+  doc.shapes.push({ points: trace, fill: couleurTrace, smooth: lisseTrace,
+                    pivot: null, amp: 15, ferme: true });
+  formeSel = doc.shapes.length - 1;
+  trace = null;
+  marquer(); panneau();
+  dire(`forme ${doc.shapes.length} créée`, 'ok');
+}
 
 // --- Annulation -------------------------------------------------------------
 // Instantanés du document entier. C'est brutal mais un document fait quelques
@@ -921,9 +1038,32 @@ vue.addEventListener('pointerdown', ev => {
   if (outil === 'nageoires') {
     instantane();
     const [x, y] = versDoc(sx, sy);
-    doc.fins.push({ x, y, r: Math.round(doc.naturalW * 0.35), layerIndex: formeSel });
+    // Rayon déduit de la forme visée (diagonale de sa boîte × 0,75), comme dans
+    // l'outil d'ancrages : une valeur fixe est presque toujours à refaire.
+    const pts = doc.shapes[formeSel] ? doc.shapes[formeSel].points : null;
+    let r = Math.round(doc.naturalW * 0.35);
+    if (pts && pts.length) {
+      let a = Infinity, b = Infinity, c = -Infinity, e2 = -Infinity;
+      for (const q of pts) { a = Math.min(a, q[0]); b = Math.min(b, q[1]); c = Math.max(c, q[0]); e2 = Math.max(e2, q[1]); }
+      r = Math.max(10, Math.round(Math.hypot(c - a, e2 - b) * 0.75));
+    }
+    doc.fins.push({ x, y, r, layerIndex: formeSel });
     finSel = doc.fins.length - 1;
     marquer(); panneau();
+    return;
+  }
+
+  // Mode Dessiner : chaque clic pose un sommet. Un clic sur le PREMIER sommet
+  // referme la forme, comme dans tout outil de tracé.
+  if (outil === 'dessiner') {
+    const [x, y] = versDoc(sx, sy);
+    if (trace && trace.length > 2) {
+      const [px, py] = versEcran(trace[0]);
+      if (Math.hypot(sx - px, sy - py) < 10) { fermerTrace(); return; }
+    }
+    if (!trace) trace = [];
+    trace.push([x, y]);
+    panneau(); dessiner();
     return;
   }
 
@@ -945,7 +1085,13 @@ vue.addEventListener('pointerdown', ev => {
   vue.setPointerCapture(ev.pointerId);
 });
 
+let souris = null;          // position courante, pour l'élastique du tracé
 vue.addEventListener('pointermove', ev => {
+  if (outil === 'dessiner' && trace) {
+    const rr = vue.getBoundingClientRect();
+    souris = versDoc(ev.clientX - rr.left, ev.clientY - rr.top);
+    dessiner();
+  }
   if (!attrape) return;
   const r = vue.getBoundingClientRect();
   const sx = ev.clientX - r.left, sy = ev.clientY - r.top;
@@ -974,6 +1120,15 @@ vue.addEventListener('pointerup', () => {
   attrape = null;
 });
 
+vue.addEventListener('dblclick', () => { if (outil === 'dessiner') fermerTrace(); });
+
+addEventListener('keydown', ev => {
+  if (outil !== 'dessiner' || !trace) return;
+  if (ev.key === 'Escape') { trace = null; panneau(); dessiner(); }
+  else if (ev.key === 'Backspace') { ev.preventDefault(); trace.pop(); panneau(); dessiner(); }
+  else if (ev.key === 'Enter') fermerTrace();
+});
+
 vue.addEventListener('wheel', ev => {
   ev.preventDefault();
   const r = vue.getBoundingClientRect();
@@ -987,6 +1142,44 @@ vue.addEventListener('wheel', ev => {
 // ---------------------------------------------------------------------------
 // Import
 // ---------------------------------------------------------------------------
+$('#btnNeuf').onclick = () => {
+  if (!espece) return dire('choisis d\'abord une espèce', 'ko');
+  debrancher();
+  doc = SVGImport.vide(espece);
+  doc.espece = espece; doc.nom = espece;
+  formeSel = 0; finSel = 0; trace = null; imgFond = null;
+  outil = 'dessiner';
+  document.querySelectorAll('#barre button[data-outil]').forEach(b =>
+    b.classList.toggle('on', b.dataset.outil === 'dessiner'));
+  marquer(); cadrer(); panneau();
+  dire('document vide — pose les sommets de ta première forme', 'ok');
+};
+
+$('#btnFond').onclick = () => {
+  if (!doc) return dire('ouvre ou crée d\'abord un dessin', 'ko');
+  $('#fichierFond').click();
+};
+$('#fichierFond').onchange = ev => {
+  const f = ev.target.files[0]; if (!f) return;
+  const fr = new FileReader();
+  fr.onload = () => {
+    const im = new Image();
+    im.onload = () => {
+      instantane();
+      // La surface de travail prend la taille de l'image : on dessine DANS son
+      // repère, pas à côté.
+      if (!doc.shapes.length) { doc.naturalW = im.width; doc.naturalH = im.height; }
+      chargerFond(fr.result, im.width, im.height);
+      marquer(); panneau();
+      dire(`${f.name} en calque de repérage (${im.width}×${im.height})`, 'ok');
+    };
+    im.onerror = () => dire('image illisible', 'ko');
+    im.src = fr.result;
+  };
+  fr.readAsDataURL(f);
+  ev.target.value = '';
+};
+
 $('#btnSilhouette').onclick = () => {
   if (!espece) return dire('choisis d\'abord une espèce', 'ko');
   try {
@@ -1024,7 +1217,8 @@ function ouvrir(contenu, nom, type) {
       : SVGImport.finaliser(Object.assign(
           typeof contenu === 'string' ? JSON.parse(contenu) : contenu, { nom }));
     doc.espece = espece; doc.nom = nom;
-    formeSel = 0; finSel = 0;
+    formeSel = 0; finSel = 0; trace = null;
+    reprendreFond();
     marquer(); cadrer(); panneau();
     dire(`${nom} importé : ${doc.shapes.length} formes, `
        + `${doc.shapes.reduce((n, s) => n + s.points.length, 0)} points`, 'ok');

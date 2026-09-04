@@ -1,6 +1,15 @@
 // Décor : ciel, plage, colonne d'eau dégradée par profondeur, fond sableux,
 // layers parallax (roches), god rays, plancton, cycle jour/nuit (GDD §2, §10).
 
+// Les trois houles de la surface, du LOIN vers le PRÈS. `dy` les décale
+// verticalement (la plus lointaine est un peu plus haute), `A`/`L` donnent
+// l'amplitude et la longueur d'onde, `v` la vitesse, `a` l'opacité.
+const HOULES = [
+  { dy: -5, A1: 5.5, L1: 95, v1: 0.9, A2: 2.2, L2: 38, v2: 1.5, ph: 1.7, a: 0.22, w: 2 },
+  { dy: -2, A1: 4.5, L1: 60, v1: 1.4, A2: 2.0, L2: 27, v2: 2.1, ph: 0.6, a: 0.34, w: 2.2 },
+  { dy: 0,  A1: 4.0, L1: 60, v1: 1.8, A2: 2.0, L2: 23, v2: 2.6, ph: 0,   a: 0.5,  w: 2.5 },
+];
+
 const Background = {
   rocks: [],      // décor moyen-plan parallax
   plankton: [],
@@ -414,16 +423,28 @@ const Background = {
       this.stripFill(ctx, 'ciel', [[0, this.skyColor(true)], [1, this.skyColor()]],
         0, y0, W, cielH);
       this.ciel(ctx, t, surfSy, cielH, W, H, night);
-      // vagues
-      ctx.strokeStyle = `rgba(255,255,255,${0.5 - night * 0.3})`;
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      for (let sx = 0; sx <= W; sx += 8) {
-        const wx = sx + Camera.x;
-        const y = surfSy + Math.sin(wx / 60 + t * 1.8) * 4 + Math.sin(wx / 23 - t * 2.6) * 2;
-        sx === 0 ? ctx.moveTo(sx, y) : ctx.lineTo(sx, y);
+      // VAGUES EN TROIS COUCHES. Une seule ligne d'écume donnait une surface
+      // plate, comme une vitre. Trois houles de longueurs, de vitesses et de
+      // PROFONDEURS différentes suffisent à donner du relief : celle du fond
+      // est plus haute, plus lente et plus pâle (elle est loin), celle du
+      // devant plus basse, plus vive et plus contrastée.
+      //
+      // Le coût est trivial — trois polylignes de ~90 points contre une — et
+      // c'est ce qui manquait le plus à la lecture de la surface.
+      for (let c = 0; c < HOULES.length; c++) {
+        const h = HOULES[c];
+        ctx.strokeStyle = `rgba(255,255,255,${(h.a - night * h.a * 0.6).toFixed(3)})`;
+        ctx.lineWidth = h.w;
+        ctx.beginPath();
+        for (let sx = 0; sx <= W; sx += 8) {
+          const wx = sx + Camera.x;
+          const y = surfSy + h.dy
+                  + Math.sin(wx / h.L1 + t * h.v1 + h.ph) * h.A1
+                  + Math.sin(wx / h.L2 - t * h.v2) * h.A2;
+          sx === 0 ? ctx.moveTo(sx, y) : ctx.lineTo(sx, y);
+        }
+        ctx.stroke();
       }
-      ctx.stroke();
     }
 
     // --- God rays (atténués avec la profondeur, GDD §2) ---
@@ -599,6 +620,48 @@ const Background = {
             const wy = CONFIG.SURFACE_Y
               + Math.sin(wx / 60 + t * 1.8) * 4 + Math.sin(wx / 23 - t * 2.6) * 2
               + Math.sin(t * 2.2 + k * 0.6) * 1.5;
+            const ex = Camera.sx(wx), ey = Camera.sy(wy);
+            k === 0 ? ctx.moveTo(ex, ey) : ctx.lineTo(ex, ey);
+          }
+          ctx.stroke();
+        }
+
+        // LE RESSAC. Trois langues d'eau qui montent sur le sable et
+        // redescendent, décalées dans le temps. C'est le seul endroit du jeu
+        // où l'eau BOUGE par rapport à la terre, et sans lui la plage est une
+        // découpe nette qui ne respire pas.
+        //
+        // Chaque langue suit le SABLE (pas la ligne d'eau) : elle glisse sur
+        // la pente, s'amincit en montant, et laisse une frange d'écume à sa
+        // crête. La phase de chacune est décalée d'un tiers de cycle, sinon
+        // les trois montent et descendent ensemble comme un seul bloc.
+        for (let l = 0; l < 3; l++) {
+          const ph = t * 0.55 + l * (Math.PI * 2 / 3);
+          const monte = (Math.sin(ph) + 1) / 2;          // 0 = retirée, 1 = au plus haut
+          const portee = 90 + l * 55;
+          const haut = shoreWX - portee * monte;         // le sable est à GAUCHE du rivage
+          const bas = shoreWX + 120;
+          // Nappe d'eau translucide entre la crête et la mer
+          ctx.fillStyle = `rgba(180,225,245,${(0.3 * monte * (1 - night * 0.5)).toFixed(3)})`;
+          ctx.beginPath();
+          for (let k = 0; k <= 10; k++) {
+            const wx = U.lerp(haut, bas, k / 10);
+            const wy = World.floorY(wx) - 2;
+            const ex = Camera.sx(wx), ey = Camera.sy(wy);
+            k === 0 ? ctx.moveTo(ex, ey) : ctx.lineTo(ex, ey);
+          }
+          for (let k = 10; k >= 0; k--) {
+            const wx = U.lerp(haut, bas, k / 10);
+            ctx.lineTo(Camera.sx(wx), Camera.sy(World.floorY(wx) + 3 + k * 1.4));
+          }
+          ctx.closePath(); ctx.fill();
+          // Frange d'écume à la crête : c'est elle qui se voit vraiment
+          ctx.strokeStyle = `rgba(255,255,255,${(0.7 * monte * (1 - night * 0.45)).toFixed(3)})`;
+          ctx.lineWidth = 2 + monte * 2;
+          ctx.beginPath();
+          for (let k = 0; k <= 7; k++) {
+            const wx = haut + k * 9 + Math.sin(t * 3 + k + l) * 3;
+            const wy = World.floorY(wx) - 2 + Math.sin(t * 4 + k * 1.3) * 1.6;
             const ex = Camera.sx(wx), ey = Camera.sy(wy);
             k === 0 ? ctx.moveTo(ex, ey) : ctx.lineTo(ex, ey);
           }

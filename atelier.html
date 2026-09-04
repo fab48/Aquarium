@@ -1167,6 +1167,10 @@ function sectionApparence() {
       <button id="bSansFill" class="${sh.fill === null ? 'on' : ''}" title="Trait seul, sans remplissage">Trait seul</button>
     </div>
     <label class="puce"><input type="checkbox" id="cSmooth" ${sh.smooth ? 'checked' : ''}> contour lissé</label>
+    <label class="puce"><input type="checkbox" id="cOuvert" ${sh.ferme === false ? 'checked' : ''}> contour ouvert</label>`
+    + A(`Un <b>contour ouvert</b> ne se referme pas : c'est ce qu'il faut à une antenne,
+        une moustache, un fil de méduse. Le boucler dessinerait une corde en travers de
+        la créature.`) + `
 
     <h2>Dégradé</h2>
     <label class="puce"><input type="checkbox" id="cDeg" ${deg ? 'checked' : ''}> dégradé sur cette forme</label>`;
@@ -1590,6 +1594,15 @@ function cabler() {
     // disparaît purement et simplement.
     if (f.fill === null) f.fill = f._fillAvant || '#888888';
     else { f._fillAvant = f.fill; f.fill = null; if (!f.stroke) { f.stroke = '#1c2733'; f.lineWidth = f.lineWidth || 3; } }
+    marquer(); panneau();
+  });
+  on('#cOuvert', 'change', e => {
+    instantane();
+    const f = sh(); if (!f) return;
+    // Un contour ouvert n'a de sens qu'avec un trait : sans lui il n'y a plus
+    // qu'un remplissage bâclé, refermé n'importe comment par le moteur.
+    if (e.target.checked) { f.ferme = false; f.stroke = f.stroke || f.fill || '#1c2733'; f.lineWidth = f.lineWidth || 3; }
+    else delete f.ferme;
     marquer(); panneau();
   });
   on('#cDeg', 'change', e => {

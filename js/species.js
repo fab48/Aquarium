@@ -27,6 +27,18 @@
 //   sizeVar: 0..1           — dispersion des tailles adultes de l'espèce (défaut 0,13).
 //                             Fort chez les espèces bariolées, faible chez les colosses.
 //   gag: (entity, dt, t) => void — comportement comique périodique, appelé depuis Entity.think
+//
+// Apparence — lus par le socle commun du visage (`FishBody.visageDe`), donc
+// valables AUSSI BIEN sur une silhouette procédurale que sur un dessin. Le
+// dessin, quand il en déclare, l'emporte (c'est lui qu'on vient de régler dans
+// l'atelier) :
+//   boucheStyle: 'standard' | 'grande' | 'petite' | 'gueule' | 'bec' | 'ventouse'
+//                             — la FORME de la bouche. Ce qu'elle exprime reste
+//                             piloté par les émotions, communes à tout l'aquarium :
+//                             un bec sait sourire, une gueule à dents sait bâiller.
+//   visage: { encre, sourcil, pupille, blanc, gorge, langue, levres, dent, bec, joue }
+//                             — surcharge PARTIELLE de `FishBody.VISAGE`. Tout ce
+//                             qui n'est pas déclaré garde la valeur commune.
 
 const SPECIES = {
 

@@ -199,6 +199,16 @@ const COUL = { center: '#0a8f3c', nose: '#8a5ea8', eye: '#e0322f', eye2: '#e0322
                mouth: '#1560d8', tail: '#c98a1b' };
 function ancres() { return CLE_ANCRES.filter(c => doc && doc.points[c]); }
 
+// Taille de la bouche en unités du dessin. Tant qu'elle n'a pas été réglée, elle
+// suit l'œil — c'est le comportement d'origine, qu'on ne veut pas changer sous
+// les pieds d'un dessin déjà calé. `drawFace` place l'œil à 0,22 fois la taille
+// du visage et la bouche à ~0,2 : l'équivalence ne dépend donc pas du zoom.
+function tailleBouche() {
+  if (!doc || !doc.points.mouth) return 0;
+  if (doc.points.mouth.r != null) return doc.points.mouth.r;
+  return (doc.points.eye.r || 10) * 0.2 / 0.22;
+}
+
 // ---------------------------------------------------------------------------
 // Rail des espèces
 // ---------------------------------------------------------------------------
@@ -522,13 +532,17 @@ function poignees(sp) {
     const a = doc.points[cle]; if (!a) continue;
     const [x, y] = versEcran([a.x, a.y]);
     const vif = outil === 'ancres';
-    if (cle.startsWith('eye') && a.r) {   // cercle de taille de l'œil
-      ctx.strokeStyle = vif ? 'rgba(224,50,47,.85)' : 'rgba(224,50,47,.3)';
+    // Cercle de taille : l'œil, et la bouche. La bouche n'a pas toujours de `r`
+    // enregistré — on montre alors la valeur qu'elle suit.
+    const rayon = cle === 'mouth' ? tailleBouche() : a.r;
+    if ((cle.startsWith('eye') || cle === 'mouth') && rayon) {
+      const teinte = cle === 'mouth' ? '21,96,216' : '224,50,47';
+      ctx.strokeStyle = `rgba(${teinte},${vif ? 0.85 : 0.3})`;
       ctx.lineWidth = vif ? 2 : 1;
-      ctx.beginPath(); ctx.arc(x, y, a.r * vueT.k, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, y, rayon * vueT.k, 0, Math.PI * 2); ctx.stroke();
       if (vif) {   // poignée de rayon, à droite du cercle
-        ctx.fillStyle = '#e0322f';
-        ctx.beginPath(); ctx.arc(x + a.r * vueT.k, y, 4.5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = COUL[cle];
+        ctx.beginPath(); ctx.arc(x + rayon * vueT.k, y, 4.5, 0, Math.PI * 2); ctx.fill();
       }
     }
     ctx.strokeStyle = COUL[cle]; ctx.lineWidth = vif ? 2 : 1.2;
@@ -601,6 +615,11 @@ function panneau() {
         <label>Taille de l'œil <span class="val" id="vR">${(doc.points.eye.r || 0).toFixed(1)}</span></label>
         <input type="range" id="sR" min="1" max="${Math.round(doc.naturalW * 0.3)}" step="0.5" value="${doc.points.eye.r || 10}">
         <div class="rangee"><button id="bAutoOeil">Déduire du dessin</button></div>
+        <label>Taille de la bouche <span class="val" id="vBR">${tailleBouche().toFixed(1)}</span></label>
+        <input type="range" id="sBR" min="1" max="${Math.round(doc.naturalW * 0.3)}" step="0.5" value="${tailleBouche()}">
+        <p class="aide">${doc.points.mouth.r == null
+          ? 'Suit la taille de l\'œil tant qu\'on n\'y touche pas.'
+          : 'Réglée à part de l\'œil.'} Le cercle bleu sur le dessin : tire sa poignée droite.</p>
 
         <h2>Nombre d'yeux</h2>
         <div class="rangee"><button id="bDeuxYeux" class="${deux ? 'on' : ''}">${deux ? 'Revenir à un œil' : 'Passer à deux yeux'}</button></div>
@@ -759,6 +778,16 @@ function cabler() {
     else o.ecart = Math.round((o.r || 10) * 2.6 * 10) / 10;
     marquer(); panneau();
   });
+  on('#sBR', 'pointerdown', instantane);
+  on('#sBR', 'input', e => {
+    doc.points.mouth.r = +e.target.value;
+    $('#vBR').textContent = (+e.target.value).toFixed(1);
+    marquer();
+  });
+  // Au relâchement seulement : reconstruire le panneau pendant le glissé
+  // arracherait le curseur sous le doigt. C'est là que la mention « suit l'œil »
+  // devient fausse et doit disparaître.
+  on('#sBR', 'change', () => panneau());
   on('#bAutoOeil', 'click', () => {
     instantane();
     doc.points.eye.r = SVGImport.rayonOeil(doc.shapes, doc.points.eye, doc.naturalW);
@@ -947,11 +976,13 @@ function pres(sx, sy) {
   if (!doc) return null;
   const seuil = 11;
   if (outil === 'ancres') {
-    for (const cle of ['eye', 'eye2']) {
+    for (const cle of ['eye', 'eye2', 'mouth']) {
       const a = doc.points[cle];
-      if (!a || !a.r) continue;
+      if (!a) continue;
+      const r = cle === 'mouth' ? tailleBouche() : a.r;
+      if (!r) continue;
       const [x, y] = versEcran([a.x, a.y]);
-      if (Math.hypot(sx - (x + a.r * vueT.k), sy - y) < seuil) return { type: 'rayonOeil', cle };
+      if (Math.hypot(sx - (x + r * vueT.k), sy - y) < seuil) return { type: 'rayonOeil', cle };
     }
     // La croix la PLUS PROCHE, pas la première trouvée : sur une petite tête,
     // center, nose, eye et mouth tiennent dans quarante pixels, et la première
@@ -1236,8 +1267,12 @@ function aEnvoyer() {
   // triple de taille pour rien.
   const a = v => Math.round(v * 100) / 100;
   for (const sh of d.shapes) sh.points = sh.points.map(p => [a(p[0]), a(p[1])]);
-  for (const c in d.points) { d.points[c].x = a(d.points[c].x); d.points[c].y = a(d.points[c].y); }
-  if (d.points.eye) d.points.eye.r = a(d.points.eye.r);
+  for (const c in d.points) {
+    const pt = d.points[c];
+    pt.x = a(pt.x); pt.y = a(pt.y);
+    if (pt.r != null) pt.r = a(pt.r);
+    if (pt.ecart != null) pt.ecart = a(pt.ecart);
+  }
   for (const f of d.fins) { f.x = a(f.x); f.y = a(f.y); f.r = Math.round(f.r); }
   d.tailBlend = a(d.tailBlend);
   return d;

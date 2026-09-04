@@ -105,6 +105,11 @@ const Sprites = {
       //    abstraite mais utile pour un rattrapage grossier.
       echelle: d.echelle, tailleJeu: d.tailleJeu, spriteScale: d.spriteScale,
       faceR: d.points && d.points.eye && d.points.eye.r,
+      // Taille de la BOUCHE, indépendante de celle de l'œil. Elle en était
+      // déduite, ce qui va sur un visage de dessin animé standard mais pas sur
+      // une gueule de requin ou un bec d'oiseau. `drawFace` dessine la bouche à
+      // ~0,2 fois la taille du visage, d'où la conversion.
+      boucheR: d.points && d.points.mouth && d.points.mouth.r,
       faceK: d.faceK, faceTx: d.faceTx, faceTy: d.faceTy,
       shapes,
       // Le JSON d'origine, gardé tel quel : l'atelier le réenregistre enrichi

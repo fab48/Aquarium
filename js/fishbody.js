@@ -412,8 +412,11 @@ const FishBody = {
       if (bo) {
         const expr = e.expression, k2 = e.emoteK ? e.emoteK() : 1;
         const em = this.EMOTIONS[expr] || this.EMOTIONS.idle;
+        // À défaut de taille propre, la bouche suit l'œil — le comportement
+        // d'avant, pour que les dessins déjà calés ne bougent pas.
+        const fsB = sp.boucheR ? (sp.boucheR * k) / 0.2 : fs;
         ctx.save();
-        this.bouche(ctx, (bo.x - sp.cx) * k + dx, (bo.y - sp.cy) * k + dy, fs,
+        this.bouche(ctx, (bo.x - sp.cx) * k + dx, (bo.y - sp.cy) * k + dy, fsB,
                     k2 > 0.35 ? em.mouth : this.EMOTIONS.idle.mouth, t + (e.phase || 0));
         ctx.restore();
       }
@@ -1150,15 +1153,14 @@ const FishBody = {
     // Lampe
     ctx.save();
     if (lit) {
-      ctx.shadowColor = '#ffe9a3';
-      ctx.shadowBlur = 22 * eclat;
+      // aura de la lampe : halo pré-rendu (§5.9), à la place de shadowBlur
+      this.halo(ctx, lx, ly, s * 0.6 + 22 * eclat, '#ffe9a3', 0.8 * eclat);
       ctx.fillStyle = '#fff6c9';
     } else {
       ctx.fillStyle = e.colorDark;
     }
     ctx.beginPath(); ctx.arc(lx, ly, s * 0.3, 0, Math.PI * 2); ctx.fill();
     if (lit) {
-      ctx.shadowBlur = 0;
       // Halo pulsant pendant la pêche : la lampe APPELLE, elle ne se contente
       // pas d'éclairer. Un halo fixe se confondait avec la luminescence de nuit.
       const pulse = peche ? 1 + Math.sin(t * 4 + e.phase) * 0.25 : 1;
@@ -1183,6 +1185,33 @@ const FishBody = {
   // `def.giantSquid` ajoute les deux longs tentacules de chasse à massue, et
   // `e._repli` (0 → 1, piloté par le gag de la timidité) referme les bras en
   // fuseau : c'est le géant qui se fait tout petit.
+  // Halo lumineux PRÉ-RENDU (PERFORMANCE.md §5.9) : remplace ctx.shadowBlur,
+  // l'opération la plus chère de Canvas 2D en rendu logiciel — supportable en
+  // eau claire (4 appels/frame mesurés), ruineuse dans les abysses où toutes
+  // les créatures luminescentes sont réunies. Un disque en dégradé radial par
+  // couleur, mis en cache une fois pour toutes, posé au drawImage.
+  _halos: {},
+  halo(ctx, x, y, r, color, alpha = 1) {
+    if (r <= 0 || alpha <= 0) return;
+    let c = this._halos[color];
+    if (!c) {
+      c = this._halos[color] = document.createElement('canvas');
+      c.width = c.height = 64;
+      const hc = c.getContext('2d');
+      const rgb = U.hexRGB(color.startsWith('#') ? color : '#ffffff');
+      const g = hc.createRadialGradient(32, 32, 2, 32, 32, 32);
+      g.addColorStop(0, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.85)`);
+      g.addColorStop(0.5, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.28)`);
+      g.addColorStop(1, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0)`);
+      hc.fillStyle = g;
+      hc.fillRect(0, 0, 64, 64);
+    }
+    const ga = ctx.globalAlpha;
+    ctx.globalAlpha = ga * Math.min(1, alpha);
+    ctx.drawImage(c, x - r, y - r, r * 2, r * 2);
+    ctx.globalAlpha = ga;
+  },
+
   drawSquid(ctx, e, t) {
     const s = e.size;
     const geant = !!e.def.giantSquid;
@@ -1222,7 +1251,8 @@ const FishBody = {
     }
 
     // --- Ailerons en bout de manteau (ils ondulent en continu)
-    if (glow > 0.1) { ctx.shadowColor = e.color; ctx.shadowBlur = 20 * glow; }
+    // bioluminescence : halo pré-rendu (§5.9), à la place de shadowBlur
+    if (glow > 0.1) this.halo(ctx, -s * 0.45, 0, s * 1.7 + 20 * glow, e.color, 0.55 * glow);
     ctx.fillStyle = e.colorDark;
     const fin = s * (0.48 + nage * 0.08);
     for (const sgn of [-1, 1]) {
@@ -1241,7 +1271,6 @@ const FishBody = {
     ctx.quadraticCurveTo(s * 0.08, -s * 0.66 * gonfle, -s * 1.45, 0);
     ctx.quadraticCurveTo(s * 0.08, s * 0.66 * gonfle, s * 0.6, 0);
     ctx.closePath(); ctx.fill();
-    ctx.shadowBlur = 0;
 
     // Nervures du manteau : sans elles c'est une simple goutte de couleur
     ctx.strokeStyle = 'rgba(255,255,255,0.16)';
@@ -1274,7 +1303,9 @@ const FishBody = {
     const glow = e.def.glowAtNight ? Main.nightAmount() : 0;
     const flex = Math.sin(t * 7 + e.phase) * 0.22;      // elle se détend d'un coup
 
-    if (glow > 0.1) { ctx.shadowColor = e.color; ctx.shadowBlur = 14 * glow; }
+    // bioluminescence : halo pré-rendu (§5.9), à la place de shadowBlur —
+    // crucial ici : les crevettes sont l'espèce la plus nombreuse des abysses
+    if (glow > 0.1) this.halo(ctx, 0, 0, s * 1.5 + 14 * glow, e.color, 0.55 * glow);
 
     // Antennes (vers l'avant, très longues)
     ctx.strokeStyle = e.colorDark; ctx.lineWidth = Math.max(0.8, s * 0.09); ctx.lineCap = 'round';
@@ -1309,7 +1340,6 @@ const FishBody = {
     ctx.lineTo(-s * 1.7, -s * (0.5 - flex));
     ctx.quadraticCurveTo(-s * 1.35, 0, -s * 1.7, s * (0.42 + flex));
     ctx.closePath(); ctx.fill();
-    ctx.shadowBlur = 0;
 
     // Segments de la carapace
     ctx.strokeStyle = 'rgba(255,255,255,0.28)'; ctx.lineWidth = Math.max(0.7, s * 0.06);
@@ -1384,9 +1414,8 @@ const FishBody = {
     const s = e.size;
     const pulse = Math.sin(t * 2.2 + e.phase) * 0.15 + 1;
     const glow = e.def.glowAtNight ? Main.nightAmount() : 0;
-    if (glow > 0.1) {
-      ctx.shadowColor = e.color; ctx.shadowBlur = 25 * glow;
-    }
+    // bioluminescence : halo pré-rendu (§5.9), à la place de shadowBlur
+    if (glow > 0.1) this.halo(ctx, 0, -s * 0.15, s * 1.5 + 25 * glow, e.color, 0.6 * glow);
     ctx.fillStyle = e.colorAlpha(0.75 + glow * 0.25);
     // cloche
     ctx.beginPath();
@@ -1394,7 +1423,6 @@ const FishBody = {
     ctx.quadraticCurveTo(s * pulse * 0.6, s * 0.35, 0, s * 0.3);
     ctx.quadraticCurveTo(-s * pulse * 0.6, s * 0.35, -s * pulse, 0);
     ctx.fill();
-    ctx.shadowBlur = 0;
     // tentacules
     ctx.strokeStyle = e.colorAlpha(0.55); ctx.lineWidth = 1.5;
     for (let i = -2; i <= 2; i++) {

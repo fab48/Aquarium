@@ -64,7 +64,11 @@ sans avoir à retrouver l'image — mais elle l'alourdit (56 ko pour un PNG de
 - **Ancres** — `center` (le point que le jeu place à la position de la créature),
   `nose`, `tail`, et surtout `eye` / `mouth` qui portent le visage commun.
   L'ancre `eye` est un **cercle** dont on tire la poignée : son rayon donne la
-  taille de l'œil. Chaque ancre a aussi ses **coordonnées en clair** : sur une
+  taille de l'œil ; la bouche a le sien, qui la règle **indépendamment** —
+  elle en était déduite, ce qui va sur un visage de dessin animé standard mais
+  pas sur une gueule de requin ou un bec d'oiseau. Tant qu'on n'y touche pas
+  elle continue de suivre l'œil, pour ne pas déplacer un dessin déjà calé.
+  Chaque ancre a aussi ses **coordonnées en clair** : sur une
   petite tête, `center`, `nose`, `eye` et `mouth` tiennent dans quarante pixels
   et deviennent impossibles à viser à la souris. (Le clic prend d'ailleurs la
   croix la **plus proche**, pas la première de la liste, qui raflait tout.)
@@ -175,6 +179,7 @@ d'espèce reste lu : le manifeste ne fait que le compléter ou l'annuler.
 | `points.eye2` | deuxième œil **placé librement** (tête tournée, dessin asymétrique) | dérivé de `ecart` |
 | `points.eye.r` | **taille de l'œil, en unités du dessin** — la calibration à préférer | on passe à `faceK` |
 | `points.mouth` | ancre de la bouche, **honorée séparément** | bouche à sa place par défaut |
+| `points.mouth.r` | **taille de la bouche**, indépendante de celle de l'œil | la bouche suit l'œil |
 | `points.nose`, `points.tail` | repères de l'atelier | ignorés par le jeu |
 | `shapes[].points` | contour, `[[x,y], …]` | — |
 | `shapes[].fill` | couleur pleine, ou `null` pour un tracé au trait seul | gris |

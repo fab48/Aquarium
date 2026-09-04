@@ -219,13 +219,28 @@ class Entity {
     // herbivores, charognards) se nourrit du fond de la chaîne alimentaire.
     // Ça ne rassasie jamais complètement — il faut manger mieux pour se
     // reproduire — mais ça évite de mourir de faim sans le joueur (GDD §1, §9).
-    if (this.def.grazes ?? !this.def.prey) {
+    // Broutage du plancton : les filtreurs et les herbivores, mais AUSSI tout
+    // prédateur qui n'a qu'UNE seule espèce au menu — il n'a aucune marge si
+    // elle se raréfie. Le Poisson-lanterne le déclarait déjà à la main
+    // (`grazes: true`) pour cette raison exacte ; la règle est maintenant
+    // générale et couvre le Thon (4 morts de faim en 6 min) et le Poisson-lune.
+    const broute = this.def.grazes ?? !(this.def.prey && this.def.prey.length > 1);
+    // DISETTE : un carnivore dont TOUTES les proies sont passées sous leur
+    // plancher de protection n'a plus rien à chasser. Il se rabat alors sur ce
+    // qu'il trouve — assez pour ne pas mourir, jamais assez pour se reproduire.
+    // Sans ça, le mécanisme censé éviter les extinctions en cascade en
+    // provoquait une par le haut : Orque éteinte et Requin à 1 en 18 min.
+    const disette = !broute && Ecosystem.disette(this.def);
+    if (broute || disette) {
       const dens = World.planktonAt(this.y);
-      const cap = 1 - 0.45 * dens;
-      if (this.hunger > cap) this.hunger = Math.max(cap, this.hunger - dt * 0.03);
+      const k = disette ? 0.5 : 1;                 // un requin ne vit pas de plancton
+      const cap = 1 - 0.45 * dens * k;
+      if (this.hunger > cap) this.hunger = Math.max(cap, this.hunger - dt * 0.03 * k);
       // Natalité naturelle : il faut ~80 s de broutage pour être prêt à se
       // reproduire, soit plusieurs portées dans une vie. Nourrir accélère.
-      this.wellFed += dt * 0.012 * dens;
+      // En disette, aucun gain : la population du prédateur stagne le temps que
+      // ses proies remontent, au lieu de s'effondrer.
+      if (!disette) this.wellFed += dt * 0.012 * dens;
     }
 
     if (this.hunger >= 1 || this.age > this.maxAge) { this.die(); return; }
@@ -901,10 +916,13 @@ class Entity {
     if (this.stage !== 'adult' || this.wellFed < 1) return;
     if ((this._mateCd ?? 0) > 0) { this._mateCd -= dt; return; }
 
-    // Espèces fixes (coquillages, anémones, murènes…) : elles ne peuvent pas
-    // aller à la rencontre d'un partenaire. Si aucun voisin n'est à portée,
-    // elles lâchent leurs œufs dans le courant (ponte diffusée).
-    if (this.def.movement === 'fixed' && !this._broadcastTried) {
+    // Ponte en DIFFUSION. Concerne toutes les espèces qui ne migrent pas vers
+    // leur frayère (`Ecosystem.migre`) : les fixes, mais aussi les trop lentes.
+    // Elles ne peuvent pas aller chercher un partenaire à l'autre bout d'un
+    // monde de 8000 px, alors si aucun voisin n'est à portée elles lâchent
+    // leurs œufs dans le courant. Sans ça la Méduse (dérive à 12 px/s) ne
+    // pondait que 2 fois en 18 min et passait de 35 individus à 4.
+    if (!Ecosystem.migre(this.def) && !this._broadcastTried) {
       this._broadcastTried = true;
       const mate = Ecosystem.neighbors(this.x, this.y).some(o =>
         o !== this && !o.dead && o.speciesId === this.speciesId && o.stage === 'adult' && o.wellFed >= 1);

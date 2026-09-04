@@ -107,11 +107,19 @@ Les VFX sont throttlés par individu (`_vfxCd`) et les réactions de groupe (peu
 
 ## Équilibre de l'écosystème
 
-Quatre mécanismes le rendent stable **sans réglage espèce par espèce**. Les toucher demande de revérifier une simulation longue.
+Six mécanismes le rendent stable **sans réglage espèce par espèce**. Les toucher demande de revérifier une simulation longue.
 
-1. **Plancton ambiant** (`World.planktonAt`) — toute espèce sans `prey` broute le niveau 1 de la chaîne. Le broutage plafonne la faim (jamais de mort de faim) mais ne rassasie pas complètement : nourrir reste utile, et la natalité naturelle est lente (GDD §9).
-2. **Report de prédation** (`Ecosystem.refugeFloor`) — une espèce tombée sous ~22 % de son plafond n'est plus chassée, le temps qu'elle remonte. C'est ce qui empêche les extinctions en cascade.
-3. **Recherche de partenaire** (`Entity.tryMate` + état `court`) — sans elle, les espèces rares ne se croisent jamais dans un monde de 8000 px. Les espèces `fixed` pondent en diffusion faute de voisin.
+**Audit du 4 septembre 2026** — avant correction, l'aquarium s'effondrait par le haut : Orque **éteinte**, Requin à 1, Thon 22→2, Perroquet 19→2, Méduse 35→4 en 18 min, et **11 des 22 liens trophiques déclarés n'avaient jamais servi une seule fois**. Après les correctifs 1, 2 et 3 : **zéro espèce éteinte**, 20 liens sur 23 actifs, et **plus aucune mort de faim** en dehors du Fou Moustachu. La méthode : instrumenter `Entity.prototype.die` (cause de mort) et `Ecosystem.eat` (qui mange qui), puis faire tourner `Ecosystem.update` sans rendu — en appelant **aussi** `Food.update` et `Particles.update`, sinon arêtes et sable s'accumulent (artefact de mesure, pas un bug du jeu).
+
+1. **Plancton ambiant** (`World.planktonAt`) — broutent le niveau 1 de la chaîne : toute espèce sans `prey`, **et tout prédateur qui n'a qu'UNE seule espèce à son menu** (il n'a aucune marge si elle se raréfie — le Thon passait de 20 à 2 en 18 min). Le broutage plafonne la faim (jamais de mort de faim) mais ne rassasie pas complètement : nourrir reste utile, et la natalité naturelle est lente (GDD §9).
+2. **Report de prédation** (`Ecosystem.refugeFloor`) — une espèce tombée sous **~35 %** de son plafond n'est plus chassée, le temps qu'elle remonte. C'est ce qui empêche les extinctions en cascade.
+
+   Cette proportion fixe l'effectif **d'équilibre** d'une espèce chassée, pas seulement son seuil de secours : dès que la prédation est efficace, la proie descend jusqu'à son plancher et s'y stabilise. À 22 % le banc de Confetti tombait à 21 pour un plafond de 96 — le banc le plus visible du jeu disparaissait.
+
+   Le plancher est en outre **borné sous le plafond**. La chasse exige `counts > refugeFloor` : une espèce dont le plafond vaut son plancher était protégée **en permanence**. C'était le cas du Calamar Géant (plafond 4, plancher 4), proie principale du Cachalot — zéro prise possible, jamais.
+
+2 bis. **Disette** (`Ecosystem.disette`) — le pendant du report, côté prédateur. Quand **toutes** ses proies sont passées sous leur plancher, un carnivore n'a plus rien à chasser : il se rabat sur le plancton à moitié rendement, assez pour ne pas mourir, jamais assez pour se reproduire. Sans lui, le mécanisme censé éviter les extinctions en cascade en provoquait une **par le haut** : mesuré sur 18 min, l'Orque éteinte et le Requin tombé à 1, avec 10 000 recherches de proie infructueuses.
+3. **Recherche de partenaire** (`Entity.tryMate` + état `court`) — sans elle, les espèces rares ne se croisent jamais dans un monde de 8000 px. Les espèces qui **ne migrent pas** (`Ecosystem.migre` : les fixes, mais aussi les trop lentes) pondent **en diffusion** faute de voisin — sans ça la Méduse, qui dérive à 12 px/s, ne pondait que 2 fois en 18 min et passait de 35 individus à 4.
 4. **Immigration** (`Ecosystem.immigration`) — filet de sécurité : une espèce localement éteinte revient du large. Le joueur ne peut pas perdre une espèce définitivement.
 5. **Boom provoqué par le joueur** (`Ecosystem.boom` / `feedBoost`) — nourrir une espèce fait monter son plafond jusqu'au double. Les prédateurs se reportent alors sur elle (`nearestPreyFor` pondère par l'abondance), ce qui ramène tout à l'équilibre sans jamais punir le joueur (GDD §9). Le boom décroît vite : il faut nourrir **en continu** pour le maintenir.
 

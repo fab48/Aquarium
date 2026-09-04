@@ -266,7 +266,7 @@ const Ecosystem = {
     // Seules les nageuses rapides et mobiles migrent. Une méduse qui dérive à
     // 12 px/s n'atteindrait jamais une frayère lointaine et cesserait de se
     // reproduire : les lentes fraient sur place.
-    if (def.speed < 45 || ['drift', 'anchored', 'crawl', 'fixed'].includes(def.movement)) return null;
+    if (!this.migre(def)) return null;
     const kind = def.nursery || (def.depthBand[1] > 1700 ? 'deep' : 'reef');
     if (kind === 'reef') {
       // Chaque individu a SA frayère attitrée (répartie par identifiant) : sinon
@@ -672,8 +672,38 @@ const Ecosystem = {
   // report de prédation (les prédateurs se rabattent sur ce qui est abondant),
   // le mécanisme qui empêche les extinctions en cascade dans un vrai réseau
   // trophique — et qui évite d'avoir à régler chaque espèce à la main.
+  // Le plancher ne peut JAMAIS rejoindre le plafond. La chasse exige
+  // `counts > refugeFloor` : une espèce dont le plafond vaut son plancher est
+  // protégée EN PERMANENCE, et son prédateur meurt de faim. C'était le cas du
+  // Calamar Géant (plafond 4, plancher 4), qui est la proie principale du
+  // Cachalot : mesuré sur 18 min, zéro prise, jamais possible.
+  // La proportion (0,35) fixe l'effectif D'ÉQUILIBRE d'une espèce chassée, pas
+  // seulement son seuil de secours : dès que la prédation est efficace, la proie
+  // descend jusqu'à son plancher et s'y stabilise. À 0,22 le banc de Confetti
+  // tombait à 21 pour un plafond de 96 — le banc le plus visible du jeu
+  // disparaissait. Ce relèvement n'affame plus personne : la disette (ci-dessous)
+  // prend le relais côté prédateur.
   refugeFloor(speciesId) {
-    return Math.max(4, Math.round(this.popCap(SPECIES[speciesId]) * 0.22));
+    const cap = this.popCap(SPECIES[speciesId]);
+    return Math.min(Math.max(4, Math.round(cap * 0.35)), Math.max(1, cap - 2));
+  },
+
+  // Toutes ses proies sont-elles sous leur plancher ? Alors il n'a RIEN à
+  // chasser. Le report de prédation, censé éviter les extinctions en cascade,
+  // provoque alors exactement l'inverse en haut de la chaîne : mesuré sur
+  // 18 min, l'Orque éteinte et le Requin tombé à 1, tous deux morts de faim
+  // avec 10 000 recherches de proie infructueuses.
+  disette(def) {
+    if (!def.prey || !def.prey.length) return false;
+    return def.prey.every(p => (this.counts[p] || 0) <= this.refugeFloor(p));
+  },
+
+  // Une espèce migre-t-elle vers sa frayère ? Les lentes et les immobiles non :
+  // une méduse qui dérive à 12 px/s n'atteindrait jamais une frayère lointaine.
+  // Lu par `nurseryPoint` ET par la ponte en diffusion (`Entity.tryMate`), pour
+  // que les deux ne puissent pas diverger.
+  migre(def) {
+    return def.speed >= 45 && !['drift', 'anchored', 'crawl', 'fixed'].includes(def.movement);
   },
 
   // Voisins dans les 9 cellules autour de (x, y).

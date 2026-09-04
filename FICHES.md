@@ -1,337 +1,499 @@
 # Fiches des espèces
 
-Une fiche par espèce du roster (**30**). ✅ marque ce qui est **codé et vérifié
-en simulation** — au 4 septembre 2026, tout ce document l'est : les 30 phrases,
-les 30 faux noms latins, les huit renommages, les 30 gags, la frayère de plage
-et les trois espèces neuves.
+Une fiche par créature du roster — **51 espèces**. Tout ce document décrit le
+jeu **tel qu'il tourne** : phrases, faux noms latins, actions, régimes, frayères
+et plafonds sont relevés dans le code, pas souhaités.
 
-Les 22 espèces encore à inventer sont dans `IDEES.md` §1 ; elles n'entrent ici
-qu'une fois leur comportement décidé.
+Les espèces encore à inventer sont dans `IDEES.md` §1.
 
----
-
-## Règles générales décidées
-
-### Où vivent les phrases — tranché
-
-**La phrase n'apparaît QUE dans la fiche d'identité** (la loupe). Jamais en
-bulle : le budget de bulles est déjà tenu à ~250/min et l'aquarium raconte ses
-histoires par le visage, pas par le texte. Une ligne à ajouter dans
-`idcard.js`, un champ `phrase` dans `SPECIES`.
-
-### Le faux nom latin
-
-Chaque fiche porte en plus un **faux nom latin rigolo**, affiché sous le vrai nom
-d'espèce. C'est la blague qui rend la fiche amusante à ouvrir, et elle glisse au
-passage la vraie information : *Scarus petomanus* apprend « Scarus » sans en
-avoir l'air. Champ `latin` dans `SPECIES`, une ligne dans `idcard.js`.
-
-### Les oiseaux frayent sur la plage
-
-Nouvelle frayère **`beach`** : les oiseaux ne pondent pas dans l'eau. Elle se
-place sur le sable **émergé**, au-dessus de la ligne d'eau (`World.shoreX`, côté
-plage). Concerne le Fou Moustachu, le ✅ Pélican, et plus tard le cormoran et le
-goéland. C'est la première frayère hors de l'eau : `Ecosystem.nurseryPoint` et la
-migration de ponte devront l'accepter sans déclencher la noyade à l'air libre
-(`_sec`, qui tue au bout de 4 s hors de l'eau).
-
-### La maladie — qui rend malade qui
-
-`Entity.malaise()` existe déjà (borne la faim à 0,9, dégoût visible, ne tue
-jamais). Deux sources aujourd'hui, quatre de plus à brancher :
-
-| Source | État |
-|---|---|
-| Avaler un caca | ✅ codé |
-| Respirer le prout du Perroquet Pétomane | ✅ codé |
-| Toucher un **Fugu Gonflé** | ✅ à créer |
-| Toucher un **Oursin Pic-pic** | ✅ à créer |
-| Toucher une **Rascasse Épineuse** | ✅ à créer |
-| Se prendre la décharge d'une **Anguille Coup-de-Jus** | ✅ à créer — mais elle **assomme**, elle ne rend pas malade |
-
-**Tous ceux qui pic-pic rendent malade.** Un seul flag générique `piquant: true`
-suffit : au contact, la victime prend un `malaise()` et détale. C'est la
-contrepartie de leur immunité — personne ne les mange, et c'est pour ça.
-
-**Une exception à écrire** : le Poisson-Tapis mange les cacas **sans être
-malade**.
+*Dernière mise à jour : 5 septembre 2026.*
 
 ---
 
-## Ce que l'inventaire révèle
+## Comment lire une fiche
 
-*État mis à jour le 4 septembre 2026, après implémentation.*
+- **Phrase** — elle n'apparaît **que dans la fiche d'identité** (la loupe),
+  jamais en bulle : le budget de bulles est déjà tenu à ~250/min pour tout
+  l'aquarium, et l'aquarium raconte par le visage, pas par le texte.
+- **Faux nom latin** — la blague qui rend la fiche amusante à ouvrir, et qui
+  glisse la vraie information au passage : *Scarus petomanus* apprend
+  « Scarus » sans en avoir l'air.
+- **Plafond / plancher** — le plancher (35 % du plafond) est le seuil sous
+  lequel l'espèce n'est plus chassée. Une fois la prédation efficace, c'est
+  **lui** qui fixe l'effectif d'équilibre, pas le plafond.
+- **Frai éclair** — nourrir cette espèce fait des œufs **immédiatement**.
+  Réservé au bas de la chaîne : ce sont eux qu'on mange, et le joueur doit
+  pouvoir les renflouer tout de suite.
 
-| Information | Renseignée | Reste |
-|---|:--:|---|
-| Nom, vraie espèce, couleurs, taille, longévité | **30 / 30** | — |
-| Frayère (`nursery`) | **30 / 30** | ✅ `beach` créée pour les oiseaux |
-| **Phrase** | ✅ **30 / 30** | affichée dans la loupe, nulle part ailleurs |
-| **Faux nom latin** | ✅ **30 / 30** | affiché sous la vraie espèce |
-| Action rigolote (`gag`) | ✅ **30 / 30** | était 10 / 27 |
-| Nourriture favorite (`favoriteFood`) | 18 / 30 | les grands prédateurs restent innourrissables — décision à prendre |
-| Sprite dessiné (`sprite`) | 1 / 30 | 29 encore en silhouette procédurale |
-| Prédateur | 16 / 30 | crabe, hippocampe et les calmars en ont un depuis |
-
-**Budget de bulles : ~508/min pour une cible de 250.** Passer de 10 gags à 30 l'a
-fait exploser à 1284 ; trois brides l'ont ramené à 508. Reste à finir, méthode
-dans `CLAUDE.md`.
-
-Légende des frayères : **récif** = anémones · **haut-fond** = près du rivage ·
-**profond** = sources chaudes · **plage** = sable émergé (à créer).
+Frayères : **récif** = anémones et coraux · **haut-fond** = pleine eau éclairée ·
+**profond** = sources chaudes · **plage** = sable émergé, pour les oiseaux et
+la tortue.
 
 ---
 
-## Surface et plein ciel
+## Le ciel (4)
 
-### Sardine Bulle-fofolle — *petite sardine* — *Sardina bullabulla*
-- **Phrase** — « Glou glou glou ! Oh, encore une bulle ! »
-- **Action** — ✅ **codée** : chapelet de bulles permanent et gros glouglou joyeux.
-- **Nourriture** — Plancton doré · **Frayère** — haut-fond
-- **Mangé par** — Fou Moustachu · ✅ Pélican (en l'air uniquement)
-- **À compléter** — la seule espèce dont la phrase *est déjà* son gag : elle sert de modèle. Elle saute (`jumps`), donc le Pélican la guettera là-haut.
+### Pélican Attrape-Tout — *Pélican* — *Pelecanus attrapatoutus*
+- **Phrase** — « J’ai de la place pour tout le monde ! »
+- **Action** — il cueille les poissons volants **en plein vol** sans jamais entrer dans l'eau. Sur un raté, sa poche se remplit… et le poisson ressort par le haut.
+- **Mange** — Poisson Volant Cascadeur, Sardine Bulle-fofolle · **Favori** — —
+- **Mangé par** — personne
+- T4 grand prédateur · taille 27 · frayère **plage** · plafond 4, plancher 2
 
-### Poisson Volant Cascadeur — *exocet* — *Exocetus cascadeurus*
-- **Phrase** — « Regardez-moi ça ! Et… HOP ! »
-- **Action** — ✅ il rate son saut, atterrit sur le dos d'un autre, et prend un air `proud` comme si c'était voulu.
-- **Nourriture** — Plancton doré · **Frayère** — haut-fond
-- **Mangé par** — Fou Moustachu · ✅ Pélican (en l'air uniquement)
-- **À compléter** — **son saut ne sert à rien aujourd'hui** : personne ne l'attend en l'air. Le Pélican rend la scène lisible sans rien changer au poisson.
-
-### Fou Moustachu Volant — *fou de Bassan* — *Sula moustachus*
+### Fou Moustachu Volant — *Oiseau marin plongeur* — *Sula moustachus*
 - **Phrase** — « Repéré ! …plouf. »
-- **Action** — ✅ il plonge, remonte avec une **algue** au lieu d'un poisson, et la jette rageusement.
-- **Nourriture** — ❌ aucune · **Frayère** — ✅ **plage**
-- **Mangé par** — personne (sommet de la chaîne aérienne)
-- **À compléter** — son rôle se lit **par contraste** avec le Pélican : le Fou plonge dans l'eau, le Pélican ne la touche jamais.
-
-### ✅ Pélican Attrape-Tout — *pélican* — *Pelecanus attrapatoutus*
-- **Phrase** — « J'ai de la place pour tout le monde ! »
-- **Action** — il patrouille au-dessus de la surface et **cueille les poissons volants EN PLEIN VOL**, sans jamais entrer dans l'eau. Sur un raté : il referme le bec, sa **poche se gonfle**… et le poisson en ressort par le haut (`scared`) pendant qu'il prend un air `ashamed`.
-- **Nourriture** — ❌ aucune · **Frayère** — ✅ **plage**
-- **Mange** — Poisson Volant, Sardine Bulle-fofolle — **uniquement en phase aérienne**
+- **Action** — il plonge, remonte avec une algue au lieu d'un poisson, et la jette rageusement.
+- **Mange** — Poisson Volant Cascadeur, Sardine Bulle-fofolle · **Favori** — —
 - **Mangé par** — personne
-- **Fait** — mécanique `snatch: true`, rendu `pouch: true`. Spécification complète et pièges d'équilibre dans `IDEES.md` §1, section Ciel.
+- T4 grand prédateur · taille 22 · frayère **haut-fond** · plafond 8, plancher 4
+
+### Cormoran Sous-Marin — *Cormoran* — *Phalacrocorax submarinus*
+- **Phrase** — « Je descends, je reviens. »
+- **Action** — il plonge cinq fois plus bas que le Fou et **nage vraiment sous l'eau**, puis ressort en secouant ses plumes.
+- **Mange** — Maquereau Métronome, Crevette Sauteuse · **Favori** — —
+- **Mangé par** — personne
+- T4 grand prédateur · taille 21 · frayère **plage** · plafond 5, plancher 3
+
+### Goéland Chapardeur — *Goéland argenté* — *Larus chapardus*
+- **Phrase** — « C’est à moi, maintenant. »
+- **Action** — **il ne chasse rien** : il guette un oiseau qui vient d'attraper quelque chose, fond dessus et repart avec sa prise.
+- **Mange** — plancton · **Favori** — —
+- **Mangé par** — personne
+- T3 prédateur moyen · taille 20 · frayère **plage** · plafond 6, plancher 4
 
 ---
 
-## Eau claire et récif
+## La surface (2)
 
-### Poisson Confetti — *banc de poissons tropicaux* — *Confettius multicolorus*
-- **Phrase** — « On est nombreux, mais on est PAS pareils ! »
-- **Action** — ✅ **validée**, codée : le banc dessine une forme un instant — **un cœur, un rond, un carré** — puis se disperse, gêné d'avoir été vu.
-- **Nourriture** — Plancton doré · **Frayère** — haut-fond
-- **Mangé par** — Thon, Dauphin, Murène
-- **À compléter** — l'espèce la plus nombreuse de l'aquarium (plafond 96). La forme se dessine en donnant à chaque individu du banc une place assignée, le temps de la pose.
+### Poisson Volant Cascadeur — *Exocet* — *Exocetus cascadeurus*
+- **Phrase** — « Regardez-moi ça ! Et… HOP ! »
+- **Action** — il rate son saut et prend un air très fier, comme si c'était voulu.
+- **Mange** — plancton · **Favori** — Plancton doré
+- **Mangé par** — Fou Moustachu Volant, Pélican Attrape-Tout
+- T2 petit poisson · taille 14 · frayère **haut-fond** · plafond 34, plancher 12 · **frai éclair**
 
-### Thon Speedy — *thon* — *Thunnus vroumvroum*
-- **Phrase** — « Poussez-vous, je suis pressé ! »
-- **Action** — ✅ il affiche un **« Vrouuuuuum vrouuum »** en passant à fond. Le seul cas où le texte est justifié : c'est un bruit, pas une réplique.
-- **Nourriture** — Micro-crevettes · **Frayère** — haut-fond
-- **Mangé par** — Requin, Orque
+### Sardine Bulle-fofolle — *Petite sardine de surface* — *Sardina bullabulla*
+- **Phrase** — « Glou glou glou ! Oh, encore une bulle ! »
+- **Action** — chapelet de bulles permanent et gros glouglou joyeux. Sa phrase EST son gag.
+- **Mange** — plancton · **Favori** — Plancton doré
+- **Mangé par** — Fou Moustachu Volant, Pélican Attrape-Tout, Espadon Voilier
+- T2 petit poisson · taille 13 · frayère **haut-fond** · plafond 36, plancher 13 · **frai éclair**
 
-### Poisson-clown Chatouille — *poisson-clown* — *Amphiprion guiliguili*
-- **Phrase** — « Guili-guili ! »
-- **Action** — ✅ **codée** : il vise le flanc d'un plus gros et le chatouille jusqu'au bisou.
-- **Nourriture** — Micro-crevettes · **Frayère** — récif
-- **Mangé par** — ✅ **Mérou Patatras** *(validé — c'était la seule espèce de récif que rien ne mangeait)*
+---
 
-### ✅ Mérou Patatras — *mérou* — *Epinephelus patatras*
-- **Phrase** — « Chut… je ne suis pas là. »
-- **Action** — ✅ **codée** : embusqué (`ambush`), il **aspire** sa proie d'un coup de bouche — visage `eating` et bulle au moment de la gorgée.
-- **Nourriture** — ❌ aucune renseignée · **Frayère** — récif
-- **Mange** — Poisson-clown, Confetti, Fugu
+## L'eau claire et le récif (19)
+
+### Espadon Voilier — *Voilier / espadon* — *Istiophorus fiouuus*
+- **Phrase** — « Vous avez vu passer quelqu’un ? »
+- **Action** — il charge en ligne droite et siffle en passant.
+- **Mange** — Dorade Dorée, Sardine Bulle-fofolle, Maquereau Métronome · **Favori** — —
 - **Mangé par** — personne
-- **À compléter** — c'est lui qui donne enfin un prédateur au Poisson-clown ; son nom « Patatras » ne se voit pas encore à l'écran, tout se joue dans l'embuscade et l'aspiration.
+- T4 grand prédateur · taille 46 · frayère **haut-fond** · plafond 6, plancher 4
 
-### Hippocampe Zen — *hippocampe* — *Hippocampus rougissimus*
-*(renommé : « Timide » → « Zen »)*
-- **Phrase** — « Ne me regardez pas… »
-- **Action** — ✅ **codée** : il rougit quand le curseur reste près de lui.
-- **Nourriture** — Micro-crevettes · **Frayère** — récif (herbiers)
-- **Mangé par** — ✅ **Murène du Récif** *(à ajouter — il n'a aucun prédateur aujourd'hui)*
-- **À vérifier** — l'hippocampe vit à 200–1000 px, la murène à 350–1700 : ils se croisent bien. Mais l'hippocampe est **ancré** à son herbier (`homeRadius: 22`) : il ne peut pas fuir. Soit la murène le mange trop facilement, soit son `missChance` doit compenser.
-
-### Poisson-perroquet Pétomane — *poisson-perroquet* — *Scarus petomanus*
-- **Phrase** — « C'est pas moi ! »
-- **Action** — ✅ **codée**, en 4 temps : il se fige gêné → se tortille → **détonation** par la queue (avec propulsion) → les voisins verdissent et **prennent un malaise**.
-- **Nourriture** — Plancton doré · **Frayère** — récif
-- **Mangé par** — Requin, Dauphin, Murène
-- **À compléter** — le gag le plus abouti du jeu, et **l'une des deux sources de maladie déjà codées**. C'est le niveau à viser pour les autres.
-
-### Dauphin Farceur — *dauphin* — *Delphinus blagueurus*
+### Dauphin Farceur — *Dauphin* — *Delphinus blagueurus*
 - **Phrase** — « BOUH ! …hihihi ! »
-- **Action** — ✅ **codée**, en 3 temps : approche discrète → jaillissement « BOUH ! » → il se plie de rire en tournant sur lui-même.
-- **Nourriture** — Micro-crevettes · **Frayère** — haut-fond
-- **Mangé par** — ⚠️ **plus personne** si l'Orque passe aux calmars et aux thons (voir sa fiche). À trancher.
-- **À compléter** — candidat naturel au rôle de **maître nageur** (`IDEES.md` §2).
+- **Action** — en trois temps : approche discrète, jaillissement « BOUH ! », et il se plie de rire en tournant sur lui-même.
+- **Mange** — Poisson Confetti, Poisson-perroquet Pétomane · **Favori** — Micro-crevettes
+- **Mangé par** — personne
+- T3 prédateur moyen · taille 42 · frayère **haut-fond** · plafond 10, plancher 4
 
-### Coquillage Rieur — *bénitier* — *Bivalvus hilarius*
+### Thon Speedy — *Thon* — *Thunnus vroumvroum*
+- **Phrase** — « Poussez-vous, je suis pressé ! »
+- **Action** — il klaxonne un « VROUUUM » en passant à fond. Le seul texte justifié du jeu : c'est un bruit, pas une réplique.
+- **Mange** — Poisson Confetti · **Favori** — Micro-crevettes
+- **Mangé par** — Requin Dents-Molles, Orque Echo
+- T3 prédateur moyen · taille 26 · frayère **haut-fond** · plafond 20, plancher 7
+
+### Poisson-perroquet Pétomane — *Poisson-perroquet* — *Scarus petomanus*
+- **Phrase** — « C’est pas moi ! »
+- **Action** — en quatre temps : il se fige gêné, se tortille, **détonation** par la queue avec propulsion, et les voisins verdissent. Le gag le plus abouti du jeu.
+- **Mange** — plancton · **Favori** — Plancton doré
+- **Mangé par** — Requin Dents-Molles, Dauphin Farceur, Murène du Récif
+- T2 petit poisson · taille 20 · frayère **récif** · plafond 20, plancher 7
+
+### Corail Viva — *Corail branchu* — *Acropora vivarium*
+- **Phrase** — « Installez-vous, il y a de la place. »
+- **Action** — *(aucune — décor vivant, second refuge de ponte à côté de l'anémone)*
+- **Mange** — plancton · **Favori** — Plancton doré
+- **Mangé par** — personne
+- T1 brouteur · taille 20 · frayère **récif** · plafond 10, plancher 4
+
+### Anémone Câline — *Anémone de mer* — *Anemonia calinus*
+- **Phrase** — « Entrez, entrez, c’est chauffé ! »
+- **Action** — elle balance ses bras en musique, et fait le câlin dont elle a hérité de l'Étoile : elle attrape un passant, replie ses bras autour, et le câliné rougit.
+- **Mange** — plancton · **Favori** — Plancton doré
+- **Mangé par** — personne
+- T1 brouteur · taille 18 · frayère **récif** · plafond 12, plancher 4
+
+### Poisson Police — *Poisson-sergent* — *Abudefduf gendarmus*
+- **Phrase** — « Circulez, y’a rien à voir ! »
+- **Action** — il repère un pétomane, un caca frais ou un farceur, fonce dessus et le sermonne — le fautif file, tout honteux.
+- **Mange** — plancton · **Favori** — Graines
+- **Mangé par** — personne
+- T3 prédateur moyen · taille 17 · frayère **récif** · plafond 6, plancher 4
+
+### Dorade Dorée — *Dorade royale* — *Sparus doreus*
+- **Phrase** — « Nous sommes les plus brillants. »
+- **Action** — *(aucune — espèce d'ambiance, et c'est assumé)*
+- **Mange** — plancton · **Favori** — Graines
+- **Mangé par** — Espadon Voilier, Barracuda Perce-Ballon
+- T2 petit poisson · taille 16 · frayère **haut-fond** · plafond 26, plancher 9 · **frai éclair**
+
+### Fugu Gonflé — *Poisson-globe* — *Tetraodon ballonus*
+- **Phrase** — « N’approche pas… je gonfle ! »
+- **Action** — il gonfle dès qu'on approche, en avalant de l'eau (les bulles le disent), et **pique au contact**. Une fois dégonflé il souffle un grand coup, soulagé.
+- **Mange** — plancton · **Favori** — Plancton doré
+- **Mangé par** — Mérou Patatras, Barracuda Perce-Ballon
+- T2 petit poisson · taille 15 · frayère **récif** · plafond 10, plancher 4
+
+### Maquereau Métronome — *Maquereau* — *Scomber metronomus*
+- **Phrase** — « Un, deux. Un, deux. »
+- **Action** — *(aucune — espèce d'ambiance)*
+- **Mange** — plancton · **Favori** — Micro-crevettes
+- **Mangé par** — Espadon Voilier, Cormoran Sous-Marin, Barracuda Perce-Ballon
+- T2 petit poisson · taille 14 · frayère **haut-fond** · plafond 22, plancher 8 · **frai éclair**
+
+### Hippocampe Zen — *Hippocampe* — *Hippocampus rougissimus*
+- **Phrase** — « Ne me regardez pas… »
+- **Action** — il rougit quand le curseur reste près de lui. Il s'accroche **au bout des herbes**.
+- **Mange** — plancton · **Favori** — Micro-crevettes
+- **Mangé par** — Murène du Récif
+- T2 petit poisson · taille 13 · frayère **récif** · plafond 12, plancher 4
+
+### Poisson Coffre-au-Trésor — *Poisson-coffre* — *Ostracion cubicus*
+- **Phrase** — « Je nage très bien. Si si. »
+- **Action** — il nage très mal : il avance par à-coups en tournant sur lui-même, et il a l'air très content de lui.
+- **Mange** — plancton · **Favori** — Plancton doré
+- **Mangé par** — personne
+- T2 petit poisson · taille 13 · frayère **récif** · plafond 9, plancher 4
+
+### Coquillage Rieur — *Bénitier* — *Bivalvus hilarius*
 - **Phrase** — « Hi hi hi ! …hi. »
-- **Action** — ✅ il s'ouvre parfois en grand et fabrique une **perle qui brille**.
-- **Nourriture** — Plancton doré · **Frayère** — récif
-- **Mangé par** — ✅ **un oiseau**
-- **À vérifier** — un oiseau ne descend aujourd'hui qu'à 130 px sous la surface, et les coquillages vivent **posés sur le fond** (0–1000 px). Seuls ceux **les plus proches du rivage** seraient à portée. Soit on l'assume (l'oiseau va les chercher dans le ressac, ce qui est joli), soit c'est le ✅ Cormoran Plongeur qui s'en charge — c'est lui qui nage sous l'eau.
+- **Action** — il s'ouvre parfois en grand et fabrique une perle qui brille.
+- **Mange** — plancton · **Favori** — Plancton doré
+- **Mangé par** — personne
+- T1 brouteur · taille 12 · frayère **récif** · plafond 16, plancher 6
 
-### Étoile de Mer Ventouse — *étoile de mer* — *Asterias ventousa*
-*(renommée : « Câline » → « Ventouse », le surnom Câline passe à l'Anémone)*
+### Poisson-clown Chatouille — *Poisson-clown* — *Amphiprion guiliguili*
+- **Phrase** — « Guili-guili ! »
+- **Action** — il vise le flanc d'un plus gros et le chatouille jusqu'au bisou.
+- **Mange** — plancton · **Favori** — Micro-crevettes
+- **Mangé par** — Mérou Patatras
+- T2 petit poisson · taille 12 · frayère **récif** · plafond 12, plancher 4
+
+### Poisson Papillon Amoureux — *Poisson-papillon* — *Chaetodon duobus*
+- **Phrase** — « On ne se quitte jamais, hein ? »
+- **Action** — ils vont **toujours par deux** : chacun se choisit un compagnon et le suit côte à côte, avec des cœurs quand ils se trouvent.
+- **Mange** — plancton · **Favori** — Plancton doré
+- **Mangé par** — Rascasse Épineuse
+- T2 petit poisson · taille 12 · frayère **récif** · plafond 14, plancher 5
+
+### Poisson Confetti — *Banc de poissons tropicaux* — *Confettius multicolorus*
+- **Phrase** — « On est nombreux, mais on est PAS pareils ! »
+- **Action** — le banc dessine une forme — un cœur, un rond ou un carré — puis se disperse, gêné d'avoir été vu.
+- **Mange** — plancton · **Favori** — Plancton doré
+- **Mangé par** — Thon Speedy, Dauphin Farceur, Murène du Récif
+- T2 petit poisson · taille 11 · frayère **haut-fond** · plafond 80, plancher 28 · **frai éclair**
+
+### Étoile de Mer Ventouse — *Étoile de mer* — *Asterias ventousa*
 - **Phrase** — « Viens là, toi ! Plok ! »
-- **Action** — ✅ **nouvelle** : elle se **colle** à un poisson qui passe et rigole de se faire transporter ; au bout d'un moment elle se détache pour rejoindre un rocher. Son ancien câlin est **transféré à l'Anémone**.
-- **Nourriture** — Plancton doré · **Frayère** — récif (rochers)
+- **Action** — elle se colle à un passant et rigole de se faire transporter, puis se décroche pour rejoindre un rocher. Son ancien câlin est passé à l'Anémone.
+- **Mange** — plancton · **Favori** — Plancton doré
 - **Mangé par** — personne
-- **À compléter** — c'est le gag le plus ambitieux de la liste : l'étoile devient **passagère** d'une autre créature (attachement, transport, détachement, retour au rocher). Le retour au rocher réutilise `Background.habitatSpots('rock')`, déjà en place.
+- T1 brouteur · taille 10 · frayère **récif** · plafond 16, plancher 6
 
-### Anémone Câline — *anémone de mer* — *Anemonia calinus*
-*(surnom repris à l'Étoile)*
-- **Phrase** — « Entrez, entrez, c'est chauffé ! »
-- **Action** — ✅ **deux choses** : elle **balance ses bras de gauche à droite en musique**, comme le Crabe Disco ; et elle **hérite du câlin de l'Étoile** — elle attrape un passant, replie ses bras autour, et le câliné rougit (gros cooldown, 30 s).
-- **Nourriture** — Plancton doré · **Frayère** — récif
+### Poisson Dentiste — *Labre nettoyeur* — *Labroides dentistus*
+- **Phrase** — « Ouvrez grand… ça ne fera pas mal ! »
+- **Action** — il ouvre une **station de nettoyage** : un gros s'arrête, ouvre grand, il travaille dedans. C'est lui qui refait les dents du Requin. Personne ne le mange, jamais — le contrat vaut même pour un prédateur affamé.
+- **Mange** — plancton · **Favori** — Micro-crevettes
 - **Mangé par** — personne
-- **À compléter** — c'est le **refuge de ponte** de tout le récif (`refuge: true`) : le câlin lui va mieux qu'à l'étoile, il dit ce qu'elle est.
+- T2 petit poisson · taille 10 · frayère **récif** · plafond 8, plancher 4
+
+### Crevette Sauteuse — *Crevette de récif* — *Palaemon saltator*
+- **Phrase** — « Et hop ! Et hop ! »
+- **Action** — *(aucune — espèce d'ambiance)*
+- **Mange** — plancton · **Favori** — Micro-crevettes
+- **Mangé par** — Cormoran Sous-Marin, Rascasse Épineuse
+- T2 petit poisson · taille 6 · frayère **récif** · plafond 24, plancher 8 · **frai éclair**
 
 ---
 
-## Zone trouble
+## La zone trouble (12)
 
-### Méduse Flottante — *méduse* — *Gelatinus sanstetus*
-- **Phrase** — « Pas de tête, pas de souci. »
-- **Action** — ✅ prise dans le courant, elle part en **loopings** malgré elle, visage `dizzy`.
-- **Nourriture** — Plancton doré · **Frayère** — haut-fond
-- **Mangé par** — Murène, Poisson-lune
-- **À compléter** — la ✅ **Tortue Papi** (`IDEES.md` §1) reste son prédateur manquant.
-
-### Requin Dents-Molles — *requin* — *Carcharodon dentimollis*
+### Requin Dents-Molles — *Requin* — *Carcharodon dentimollis*
 - **Phrase** — « Grrr… aïe, mes dents. »
-- **Action** — ✅ **son nom devient sa mécanique** : quand il mange, **il perd ses dents**. Il ne peut alors plus manger du tout, et doit aller voir le ✅ **Poisson Dentiste** pour qu'elles repoussent.
-- **Nourriture** — ❌ aucune · **Frayère** — ✅ **bas-fond** *(aujourd'hui : haut-fond)*
-- **Mangé par** — personne (apex)
-- **✅ Codée** — **la plus belle boucle de tout le document**, et le garde-fou est en place : édenté, il **repousse automatiquement au bout de 12 à 22 s** (le filet de sécurité, exactement comme la leçon de la Murène), mais croiser le ✅ **Poisson Dentiste** fait repousser ses dents **instantanément** — le dentiste est un raccourci narratif, pas une dépendance vitale. Le Requin n'a donc jamais faim sans porte de sortie.
-
-### Murène du Récif — *murène* — *Muraena monrocherus*
-- **Phrase** — « C'est MON rocher. »
-- **Action** — ✅ elle sort la tête, **bâille** longuement, et rentre — un jaillissement pour rien qui fait détaler tout le récif.
-- **Nourriture** — ❌ aucune · **Frayère** — récif
-- **Mange** — Confetti, Perroquet, Méduse · ✅ **+ Hippocampe**
+- **Action** — son nom est devenu sa mécanique — **quand il mange, il perd une dent**, et il ne peut plus attraper personne tant qu'elle n'a pas repoussé. Le Poisson Dentiste la lui refait sur-le-champ ; sinon elle revient toute seule, faute de quoi il mourrait de faim.
+- **Mange** — Thon Speedy, Poisson-perroquet Pétomane · **Favori** — —
 - **Mangé par** — personne
-- **À compléter** — un rocher = une murène (`territory`), la seule espèce territoriale.
+- T4 grand prédateur · taille 70 · frayère **haut-fond** · plafond 6, plancher 4
 
-### Raie Ronron — *raie manta* — *Manta ronronus*
+### Barracuda Perce-Ballon — *Barracuda* — *Sphyraena perceballon*
+- **Phrase** — « J’adore le bruit que ça fait. »
+- **Action** — il fonce droit sur un Fugu gonflé et **le fait exploser**. Le seul à pouvoir le manger sans se piquer.
+- **Mange** — Fugu Gonflé, Dorade Dorée, Maquereau Métronome · **Favori** — —
+- **Mangé par** — personne
+- T4 grand prédateur · taille 40 · frayère **haut-fond** · plafond 7, plancher 4
+
+### Mérou Patatras — *Mérou* — *Epinephelus patatras*
+- **Phrase** — « Chut… je ne suis pas là. »
+- **Action** — il n'attrape pas, il **aspire** : une bouche énorme et la proie est happée.
+- **Mange** — Poisson-clown Chatouille, Fugu Gonflé · **Favori** — —
+- **Mangé par** — personne
+- T4 grand prédateur · taille 38 · frayère **récif** · plafond 6, plancher 4
+
+### Raie Ronron — *Raie manta* — *Manta ronronus*
 - **Phrase** — « Rrrrron… »
-- **Action** — ✅ **codée** : elle ronronne (♪), descend fouiller le sable et mastique.
-- **Nourriture** — **Vers de sable** · **Frayère** — profond
+- **Action** — elle ronronne, descend fouiller le sable et mastique.
+- **Mange** — plancton · **Favori** — Vers de sable
 - **Mangé par** — personne
+- T3 prédateur moyen · taille 34 · frayère **profond** · plafond 14, plancher 5
 
-### Poisson-lune Bada-boum — *môle* — *Mola badaboum*
-*(renommé : « Zen » → « Bada-boum »)*
-- **Phrase** — « Tout est calme… tout est… BADA-BOUM. »
-- **Action** — ✅ **validée**, codée : il s'endort en pleine nage et **coule** lentement jusqu'à toucher le fond, où il se réveille en sursaut.
-- **Nourriture** — ❌ aucune · **Frayère** — haut-fond
-- **Mange** — Méduses · ✅ **+ Crevette Guirlande**
+### Tortue Papi — *Tortue caouanne* — *Caretta papyrus*
+- **Phrase** — « Rien ne sert de courir… »
+- **Action** — **elle sort de l'eau pour pondre**, en cinq temps : elle nage jusqu'au rivage, rampe hors de l'eau, creuse en projetant du sable, pond, puis redescend à la mer et repart très au large. Le seul animal du jeu qui a le droit d'être sur le sable sec.
+- **Mange** — Méduse Flottante · **Favori** — —
 - **Mangé par** — personne
-- **⚠️ À vérifier** — le Poisson-lune vit à 200–1600 px, la Crevette Guirlande à 1500–3400 : **100 px de recouvrement seulement**. Il la poursuivrait sans jamais l'atteindre, le piège documenté dans `CLAUDE.md`. Soit descendre sa bande, soit renoncer à cette proie.
+- T3 prédateur moyen · taille 34 · frayère **plage** · plafond 7, plancher 4
 
-### Orque Echo — *orque* — *Orcinus echoechoecho*
-*(renommée : « Blagueuse » → « Echo »)*
-- **Phrase** — « Attends, attends, j'en ai une bonne. »
-- **Action** — ✅ elle lance des **échos la nuit**, qui **réveillent les poissons des profondeurs**. Beau contrepoint au sommeil général de la nuit (GDD §10), et ça donne enfin un sens au nom « Echo ».
-- **Nourriture** — ❌ aucune · **Frayère** — haut-fond
-- **Mange** — ✅ **Thon, Calmar Violette** *(tranché — le Calamar Géant sort de son menu, le Dauphin aussi)*
-- **Mangé par** — personne (apex)
-- **✅ Tranché** — le Calamar Géant est réservé au **Cachalot**, seul assez profond (et seul à plonger-remonter respirer) pour justifier la chasse ; l'Orque descend jusqu'à 2400 px, ce qui suffit à croiser le Calmar Violette (1200–3400). Le Dauphin sort du menu et **reste sans prédateur** : sommet de sa propre chaîne, comme le Requin.
+### Murène du Récif — *Murène* — *Muraena monrocherus*
+- **Phrase** — « C’est MON rocher. »
+- **Action** — elle sort la tête, bâille longuement, et rentre — un jaillissement pour rien qui fait détaler tout le récif.
+- **Mange** — Poisson Confetti, Poisson-perroquet Pétomane, Méduse Flottante, Hippocampe Zen · **Favori** — —
+- **Mangé par** — personne
+- T4 grand prédateur · taille 30 · frayère **récif** · plafond 6, plancher 4
+
+### Rascasse Épineuse — *Poisson-scorpion* — *Scorpaena caillouxus*
+- **Phrase** — « … (c’est un caillou, promis) »
+- **Action** — elle se fait passer pour un caillou — jusqu'au jaillissement.
+- **Mange** — Crevette Sauteuse, Poisson Papillon Amoureux · **Favori** — —
+- **Mangé par** — personne
+- T4 grand prédateur · taille 18 · frayère **récif** · plafond 7, plancher 4
+
+### Méduse Flottante — *Méduse* — *Gelatinus sanstetus*
+- **Phrase** — « Pas de tête, pas de souci. »
+- **Action** — prise dans le courant, elle part en loopings malgré elle, les yeux qui tournent.
+- **Mange** — plancton · **Favori** — Plancton doré
+- **Mangé par** — Murène du Récif, Poisson-lune Bada-boum, Tortue Papi
+- T2 petit poisson · taille 16 · frayère **haut-fond** · plafond 44, plancher 15 · **frai éclair**
+
+### Anguille Jardinière — *Anguille-jardinière* — *Heteroconger cachettus*
+- **Phrase** — « Vite, tout le monde dans le trou ! »
+- **Action** — la colonie ondule hors du sable et **rentre dans le trou d'un coup** dès qu'un prédateur passe.
+- **Mange** — plancton · **Favori** — Plancton doré
+- **Mangé par** — personne
+- T2 petit poisson · taille 11 · frayère **récif** · plafond 18, plancher 6
+
+### Bernard-l’Ermite Déménageur — *Pagure* — *Pagurus demenagus*
+- **Phrase** — « Celle-là me plairait bien… »
+- **Action** — il trouve sa coquille trop petite, en cherche une autre — et va lorgner celle du Coquillage Rieur, qui n'apprécie pas.
+- **Mange** — plancton · **Favori** — Graines
+- **Mangé par** — personne
+- charognard · taille 11 · frayère **récif** · plafond 14, plancher 5
+
+### Oursin Pic-Pic — *Oursin* — *Echinus picpicus*
+- **Phrase** — « On ne touche pas. Vraiment pas. »
+- **Action** — *(aucune — décor vivant piquant)*
+- **Mange** — plancton · **Favori** — Plancton doré
+- **Mangé par** — personne
+- T1 brouteur · taille 10 · frayère **récif** · plafond 14, plancher 5
+
+### Nudibranche Fluo — *Limace de mer* — *Nudibranchia fluorus*
+- **Phrase** — « Regardez mes couleurs ! »
+- **Action** — il pulse de couleur en broutant, comme s'il digérait quelque chose de très sucré.
+- **Mange** — plancton · **Favori** — Plancton doré
+- **Mangé par** — personne
+- T1 brouteur · taille 8 · frayère **récif** · plafond 16, plancher 6
 
 ---
 
-## Grands fonds et abysses
+## Les grands fonds (13)
 
-### Baudroie-lanterne Allumeur — *baudroie abyssale* — *Melanocetus allumus*
-*(renommée : « Poisson-lanterne » → « Baudroie-lanterne »)*
-- **Phrase** — « Par ici la lumière, mes petits… »
-- **Action** — ✅ **la nuit, on ne voit plus que sa lanterne** : son corps disparaît en fondu, et **il réapparaît quand il mange**. Superbe, et ça ne coûte qu'une opacité pilotée par `Main.nightAmount()` et `_chew`.
-- **Nourriture** — Plancton doré · **Frayère** — profond
-- **Mange** — Crevette Guirlande
-- **Mangé par** — Poisson-Tapis, Calmar Violette
-
-### Crevette Guirlande — *crevette abyssale* — *Caridina guirlandus*
-- **Phrase** — « On clignote tous ensemble ? À trois ! »
-- **Action** — ✅ tout l'essaim clignote en rythme — et il y en a **toujours une à contretemps**.
-- **Nourriture** — Micro-crevettes · **Frayère** — profond
-- **Mangé par** — Baudroie-lanterne, Poisson-Tapis, Calmar Violette · ✅ + Poisson-lune *(sous réserve, voir sa fiche)*
-- **À compléter** — base de toute la chaîne abyssale, longévité rallongée exprès (420–640). **Quatre prédateurs, c'est beaucoup** : c'est elle qui s'effondre en premier si on ajoute encore.
-- **✅ Tranché** — reproduction accélérée (`fertile: true`) : portées de 2 à 6 œufs au lieu de 1 à 3, et délai entre deux pontes réduit (12 s en diffusion, 8 s en couple, contre 30 s et 18 s pour les autres espèces). En plus de la longévité déjà rallongée, ça compense les quatre prédateurs sans y toucher.
-
-### Calmar Violette — *encornet* — *Loligo violetta*
-*(renommé : « Calamar Fusée » → « Calmar Violette »)*
-- **Phrase** — « Trois, deux, un… PSCHIT ! »
-- **Action** — ✅ **3, 2, 1** — il s'envole comme une fusée, puis **retombe dans les profondeurs**.
-- **Nourriture** — Micro-crevettes · **Frayère** — profond
-- **Mange** — Crevette Guirlande, Baudroie-lanterne
-- **Mangé par** — Cachalot · ✅ **+ Orque** *(tranché — le Calamar Géant sort du menu de l'Orque)*
-
-### Calamar Géant Timide — *Architeuthis* — *Architeuthis timidissimus*
-- **Phrase** — « …vous m'avez vu ? Zut. »
-- **Action** — ✅ **il garde sa timidité** : on l'approche, il rentre ses bras, rougit et se laisse couler. C'est tout — il reste bien, bien au fond du fond, et c'est ce silence qui le définit.
-- **Nourriture** — ❌ aucune · **Frayère** — profond
-- **Mange** — Calmar Violette, Poulpe
-- **Mangé par** — ✅ **Cachalot uniquement** *(tranché — c'est lui, et lui seul, qui plonge le chercher et remonte respirer ensuite)*
-
-### Poisson-Tapis Grande-Bouche — *requin-tapis (wobbegong)* — *Orectolobus grandebouche*
-*(renommé : « Poisson-Tapis Câlin » → « Poisson-Tapis Grande-Bouche », le câlin a disparu)*
-- **Phrase** — « …………… »  *(il ne dit rien, il attend)*
-- **Action** — ✅ **plus aucun câlin** : il **embusque**, immobile sur le sable, et **ouvre une énorme bouche** quand une proie s'approche du fond.
-- **Nourriture** — ✅ Micro-crevettes · **Frayère** — profond
-- **Mange** — Baudroie-lanterne, Crevette Guirlande · ✅ **+ Crabe Disco** · ✅ **+ les cacas, sans être malade**
-- **Mangé par** — personne
-- **✅ Tranché** — nom et gag mis à jour dans le code (`species.js` / `gags.js`) : « Grande-Bouche » remplace « Câlin » partout, y compris dans le nom affiché. Son immunité aux cacas reste la première exception à `Entity.malaise()`.
-
-### Poulpe Ninja — *poulpe* — *Octopus ninjaticus*
-- **Phrase** — « Vous ne m'avez jamais vu. »
-- **Action** — ✅ **son comportement ninja ne se voit pas** : phases visibles à écrire (se faufiler, se figer, disparaître d'un coup, réapparaître ailleurs), plus le **rot d'encre** mis en scène.
-- **Nourriture** — Graines · **Frayère** — profond
-- **Mangé par** — Cachalot, Calamar Géant
-
-### Crabe Disco — *crabe* — *Cancer discotecus*
-- **Phrase** — « Ça pince ET ça danse ! »
-- **Action** — ✅ **codée** : il plante ses pinces, s'arrête net et **danse** sur place en changeant de couleur.
-- **Nourriture** — Graines (et les arêtes) · **Frayère** — récif
-- **Mangé par** — ✅ **Poisson-Tapis** · ✅ **+ Anguille** *(il n'avait aucun prédateur)*
-- **À compléter** — le seul sans bande de profondeur (`[0, 99999]`) : il vit sur tout le fond, donc certains crabes sont bien à portée du Poisson-Tapis abyssal. C'est lui qui fera le **crabe magicien** (`IDEES.md` §2).
-
-### Cachalot Profond — *cachalot* — *Physeter profundissimus*
-- **Phrase** — « Je descends chercher le goûter. »
-- **Action** — ✅ **codée** : un aller-retour perpétuel entre l'air qu'il doit respirer et les céphalopodes du fond ; il passe deux fois plus de temps en bas qu'en haut.
-- **Nourriture** — ❌ aucune · **Frayère** — haut-fond
-- **Mange** — ✅ **Calamar Géant, Calmar Violette** *(le Poulpe sort du menu)*
-- **Mangé par** — personne (apex)
-- **✅ Tranché** — c'est bien le Cachalot, et lui seul, qui chasse le Calamar Géant : ses plongées répétées (`breathes`, cycle air/profondeur) sont la mise en scène qui justifie la chasse. Retirer le Poulpe ne lui laisse qu'**un seul** prédateur, le Calamar Géant — acceptable, c'est le dernier maillon.
-
-### Baleine Gros Dodo — *baleine à fanons* — *Balaena roupillonus*
+### Baleine Gros Dodo — *Baleine à fanons* — *Balaena roupillonus*
 - **Phrase** — « Encore cinq minutes… »
-- **Action** — ✅ elle ronfle si fort que les petits poissons devant elle sont **soufflés** à chaque expiration.
-- **Nourriture** — ❌ aucune (elle filtre le plancton) · **Frayère** — haut-fond
+- **Action** — elle ronfle si fort que les petits poissons devant elle sont soufflés à chaque expiration.
+- **Mange** — plancton · **Favori** — —
 - **Mangé par** — personne
-- **À compléter** — 190 de taille, la plus grosse ; **elle ne mange personne**, ce n'est pas un prédateur.
+- T3 prédateur moyen · taille 190 · frayère **haut-fond** · plafond 3, plancher 1
 
-### ✅ Anguille Coup-de-Jus — *anguille électrique* — *Electrophorus zzzap* — **codée**
+### Cachalot Profond — *Cachalot* — *Physeter profundissimus*
+- **Phrase** — « Je descends chercher le goûter. »
+- **Action** — un aller-retour perpétuel entre l'air qu'il doit respirer et les céphalopodes du fond ; il passe deux fois plus de temps en bas qu'en haut.
+- **Mange** — Calmar Violette, Calamar Géant Timide · **Favori** — —
+- **Mangé par** — personne
+- T3 prédateur moyen · taille 100 · frayère **haut-fond** · plafond 4, plancher 2
+
+### Calamar Géant Timide — *Calmar géant (Architeuthis)* — *Architeuthis timidissimus*
+- **Phrase** — « …vous m’avez vu ? Zut. »
+- **Action** — on l'approche, il rentre ses bras, rougit et se laisse couler en espérant qu'on ne l'ait pas vu. Un géant qui fait le tout petit.
+- **Mange** — Calmar Violette, Poulpe Ninja · **Favori** — —
+- **Mangé par** — Cachalot Profond
+- T4 grand prédateur · taille 78 · frayère **profond** · plafond 4, plancher 2
+
+### Orque Echo — *Orque* — *Orcinus echoechoecho*
+- **Phrase** — « Attends, attends, j’en ai une bonne. »
+- **Action** — elle lance des échos la nuit, qui **réveillent les poissons des profondeurs**.
+- **Mange** — Thon Speedy, Calmar Violette · **Favori** — —
+- **Mangé par** — personne
+- T4 grand prédateur · taille 70 · frayère **haut-fond** · plafond 5, plancher 3
+
+### Poisson-lune Bada-boum — *Môle / poisson-lune* — *Mola badaboum*
+- **Phrase** — « Tout est calme… tout est… BADA-BOUM. »
+- **Action** — il s'endort en pleine nage et **coule** lentement jusqu'à toucher le fond, où il se réveille en sursaut. C'est exactement ce que « Bada-boum » raconte.
+- **Mange** — Méduse Flottante, Crevette Guirlande · **Favori** — —
+- **Mangé par** — personne
+- T3 prédateur moyen · taille 50 · frayère **haut-fond** · plafond 8, plancher 4
+
+### Anguille Coup-de-Jus — *Anguille électrique* — *Electrophorus zzzap*
 - **Phrase** — « Touche pas, ça pique fort ! »
-- **Action** — elle **électrocute** ce qui l'approche : des **éclairs** partent d'elle, et les touchés sont **sonnés**, jamais tués — exactement l'effet du choc contre un colosse (`Entity.assomme` : il part en vrille, voit des étoiles, reste hébété quelques secondes). *(2026-09-05 : elle ne tuait au premier coup que les œufs et alevins — retiré, elle ne fait plus qu'assommer, tout le monde, sans exception.)*
-- **Nourriture** — ✅ **Crabe Disco** (+ broute le plancton entre deux prises, `grazes: true`) · **Frayère** — profond
-- **Mangé par** — personne (comme tous les piquants)
-- **Fait** — une mécanique générique `shock: { range, cooldown }` :
-  - la décharge frappe **tous** les voisins dans le rayon, pas seulement un ;
-  - effet : `assomme()`, qui existe déjà et se lit déjà (vrille + étoiles) — **aucune mort**, quel que soit l'âge ou la taille de la cible ;
-  - un **cooldown franc** entre deux décharges, sinon elle vide son voisinage en quelques secondes — la leçon de la murène « ping-pong » et du `_snapCd` de la Baudroie ;
-  - les éclairs sont un VFX dans `particles.js`.
-- **✅ Tranché** — ce n'est donc **pas** une mécanique qui tue : elle reste hors des garde-fous d'équilibre (report de prédation, `refugeFloor`) parce qu'elle ne tue jamais, pas parce qu'elle les contournerait.
+- **Action** — elle **électrocute tout son voisinage d'un coup** : des éclairs partent d'elle, les touchés sont sonnés, les alevins n'y survivent pas. De petites étincelles courent sur elle avant la décharge.
+- **Mange** — Crabe Disco · **Favori** — —
+- **Mangé par** — personne
+- T3 prédateur moyen · taille 26 · frayère **profond** · plafond 6, plancher 4
+
+### Poulpe Ninja — *Poulpe* — *Octopus ninjaticus*
+- **Phrase** — « Vous ne m’avez jamais vu. »
+- **Action** — **le ninja, enfin visible** : il se fige et regarde autour de lui, nuage d'encre, il s'efface complètement, ressort à 300 px de là et réapparaît en fondu, très fier. Son encre part en ROT annoncé.
+- **Mange** — plancton · **Favori** — Graines
+- **Mangé par** — Calamar Géant Timide
+- charognard · taille 24 · frayère **profond** · plafond 24, plancher 8
+
+### Poisson-Tapis Grande-Bouche — *Requin-tapis (wobbegong)* — *Orectolobus grandebouche*
+- **Phrase** — « …………… (il attend) »
+- **Action** — **plus de câlin** : il attend, confondu avec le sable, et ouvre une gueule plus large que lui. Il avale aussi les cacas sans être malade — le seul.
+- **Mange** — Baudroie-lanterne Allumeur, Crevette Guirlande, Crabe Disco · **Favori** — —
+- **Mangé par** — personne
+- T4 grand prédateur · taille 20 · frayère **profond** · plafond 10, plancher 4
+
+### Calmar Violette — *Calmar (encornet)* — *Loligo violetta*
+- **Phrase** — « Trois, deux, un… PSCHIT ! »
+- **Action** — trois, deux, un — il décolle à reculons, trop fort, et se cogne.
+- **Mange** — Crevette Guirlande, Baudroie-lanterne Allumeur · **Favori** — Micro-crevettes
+- **Mangé par** — Orque Echo, Cachalot Profond, Calamar Géant Timide
+- T3 prédateur moyen · taille 19 · frayère **profond** · plafond 24, plancher 8 · **frai éclair**
+
+### Baudroie-lanterne Allumeur — *Poisson-lanterne (baudroie abyssale)* — *Melanocetus allumus*
+- **Phrase** — « Par ici la lumière, mes petits… »
+- **Action** — la nuit, **son corps disparaît et il ne reste que la lanterne**. Elle réapparaît quand elle mange.
+- **Mange** — Crevette Guirlande · **Favori** — Plancton doré
+- **Mangé par** — Poisson-Tapis Grande-Bouche, Calmar Violette
+- T2 petit poisson · taille 16 · frayère **profond** · plafond 28, plancher 10
+
+### Concombre Aspirateur — *Holothurie* — *Holothuria aspirator*
+- **Phrase** — « Encore moi qui nettoie. Bien sûr. »
+- **Action** — il aspire le sable en râlant, et laisse un sillon propre : le seul animal du jeu qui **nettoie**.
+- **Mange** — plancton · **Favori** — Graines
+- **Mangé par** — personne
+- T1 brouteur · taille 14 · frayère **profond** · plafond 12, plancher 4
+
+### Crevette Guirlande — *Crevette abyssale bioluminescente* — *Caridina guirlandus*
+- **Phrase** — « On clignote tous ensemble ? À trois ! »
+- **Action** — tout l'essaim clignote en rythme — et il y en a toujours une à contretemps, toujours la même.
+- **Mange** — plancton · **Favori** — Micro-crevettes
+- **Mangé par** — Baudroie-lanterne Allumeur, Poisson-Tapis Grande-Bouche, Poisson-lune Bada-boum, Calmar Violette
+- T2 petit poisson · taille 7 · frayère **profond** · plafond 62, plancher 22 · **frai éclair**
+
+### Krill Étincelle — *Krill* — *Euphausia scintilla*
+- **Phrase** — « On est un million, tu sais. »
+- **Action** — *(aucune — espèce d'ambiance ; la Baleine et la Raie filtrent enfin quelque chose de visible)*
+- **Mange** — plancton · **Favori** — Plancton doré
+- **Mangé par** — personne
+- T1 brouteur · taille 4 · frayère **haut-fond** · plafond 30, plancher 11 · **frai éclair**
 
 ---
 
-## Ce qui restait à trancher — tout est fait (2026-09-04)
+## Partout sur le fond (1)
 
-1. **✅ L'Orque mange le Calmar Violette**, pas le Calamar Géant : `prey: ['thon', 'calamar']`. Sa bande passe à 450–2400 px, assez pour croiser le Calmar Violette (1200–3400).
-2. **✅ Bande réglée** avec le point 1 : plus aucune proie inatteignable sur son menu.
-3. **✅ Le Dauphin reste sans prédateur**, assumé — sommet de sa propre chaîne, comme le Requin.
-4. **✅ Le Requin édenté** a son garde-fou : repousse automatique en 12–22 s, le Poisson Dentiste ne fait qu'accélérer la guérison. Il ne peut plus mourir de faim édenté.
-5. **✅ La Crevette Guirlande** garde ses quatre prédateurs mais devient `fertile: true` : portées doublées (2–6 œufs) et cooldown de ponte réduit de moitié.
-6. **✅ Le Poisson-Tapis** est renommé **Poisson-Tapis Grande-Bouche**, plus aucune trace de « câlin » dans le code ou les fiches.
+### Crabe Disco — *Crabe* — *Cancer discotecus*
+- **Phrase** — « Ça pince ET ça danse ! »
+- **Action** — il plante ses pinces, s'arrête net et danse sur place en changeant de couleur.
+- **Mange** — plancton · **Favori** — Graines
+- **Mangé par** — Poisson-Tapis Grande-Bouche, Anguille Coup-de-Jus
+- charognard · taille 13 · frayère **récif** · plafond 14, plancher 5
 
-Et les deux petites choses : l'**Anguille chasse le Crabe** (2026-09-05) — seul maillon avec de la marge, aucune pression sur une chaîne déjà tendue ; le **Calamar Géant garde sa timidité** déjà codée, décrite dans sa fiche ci-dessus.
+---
+
+## Les règles qui valent pour tout le monde
+
+### Qui rend malade qui
+
+`Entity.malaise()` borne la faim à 0,9, se voit sur le visage, et **ne tue
+jamais**. Quatre sources :
+
+| Source | |
+|---|---|
+| Avaler un caca | tout le monde, **sauf le Poisson-Tapis**, qui s'en régale |
+| Respirer le prout du Perroquet Pétomane | les voisins verdissent |
+| Toucher un **Fugu Gonflé** ou un **Oursin Pic-Pic** | `piquant` — cooldown par victime |
+| Toucher une **Rascasse Épineuse** | idem |
+
+L'**Anguille Coup-de-Jus** est à part : elle ne rend pas malade, elle
+**assomme** — et tue les alevins.
+
+### Qui sort de l'eau
+
+Trois cas, et trois seulement :
+
+- les **oiseaux**, qui y vivent (et qui broutent la surface, pas l'air — sans
+  quoi le Pélican mourait de faim) ;
+- les **sauteurs** (`jumps`), le temps d'un saut ;
+- la **Tortue Papi**, qui monte pondre sur le sable sec (`ponteTerrestre`).
+  C'est la seule qui franchit sa propre barrière de rivage, et le sable ne la
+  tue pas pendant sa scène.
+
+Tout le reste est tenu à l'écart du rivage : **150 px d'eau minimum** pour un
+nageur, **900 px pour un colosse**, et de quoi les recouvrir pour les créatures
+de fond.
+
+### Six espèces d'ambiance n'ont pas de gag
+
+Dorade, Corail, Maquereau, Crevette Sauteuse, Oursin, Krill. C'est **assumé** :
+on les regarde en masse sans les suivre. Leur donner une scène coûterait du
+budget de bulles sans rien raconter de plus.
+
+---
+
+## Journal des réglages d'équilibre
+
+Chaque ligne a été mesurée en simulation, jamais supposée. La méthode :
+instrumenter `Entity.prototype.die` (cause de mort) et `Ecosystem.eat` (qui
+mange qui), puis faire tourner `Ecosystem.update` sans rendu — en appelant
+**aussi** `Food.update` et `Particles.update`, sinon arêtes et sable
+s'accumulent et faussent tout.
+
+### Ce qui a été réparé
+
+| Problème mesuré | Correctif |
+|---|---|
+| L'aquarium s'effondrait par le haut : Orque **éteinte**, Requin à 1, Thon 22→2 | La **disette** — un carnivore dont toutes les proies sont protégées broute à moitié rendement |
+| **11 des 22 liens trophiques n'avaient jamais servi** | Le plancher ne peut plus rejoindre le plafond (le Calamar Géant était inchassable **par construction**) |
+| La Méduse pondait 2 fois en 18 min et passait de 35 à 4 | Ponte en diffusion pour **tout ce qui ne migre pas**, pas seulement les espèces fixes |
+| Le banc de Confetti tombait à 21 pour un plafond de 96 | Plancher porté de 22 % à **35 %** : c'est lui qui fixe l'effectif d'équilibre |
+| Tout s'entassait contre la plage dès que le curseur poussait | **150 px d'eau minimum** pour tout nageur (le Confetti descendait à 46) |
+| La Baleine venait trop près du rivage | **900 px** pour un colosse : sa barrière recule de x=1790 à 2420 |
+| On trouvait des coquillages sur le **sable sec** | Même plancher d'eau au spawn et en reptation |
+| Un crabe endormi traversait sa bande de sable toute la nuit | Le sommeil coupe la vitesse **et** l'accélération — deux fois, car la reptation court-circuite le steering |
+| Le Thon, le Mérou, le Barracuda, l'Espadon et les oiseaux mouraient de faim | Ils broutent : un prédateur à proie unique ou à proies rares n'a aucune marge |
+| Le Confetti était au menu de **cinq** prédateurs | Il sort de celui du Mérou et de la Rascasse, qui ont d'autres proies |
+| L'Orque ne pouvait atteindre aucun de ses calmars | Sa bande descend de 1500 à 2400 : une proie hors bande est **inatteignable** |
+| Le Krill passait de 28 à 8 en 4 min | Longévité portée à [420, 620] — une base de chaîne à vie courte n'a le temps que d'une portée |
+
+### État actuel
+
+- **Zéro espèce éteinte**, **zéro mort de faim** sur les simulations de contrôle.
+- ~590 entités pour 51 espèces, simulation à **6,1 ms** par frame.
+- Budget de bulles : **~508/min** pour une cible de 250. Ramené de 1284, mais
+  encore au double. Méthode pour finir dans `CLAUDE.md`.
+
+### Les trois pièges qui reviennent toujours
+
+1. **Une proie hors de la bande de profondeur de son prédateur est
+   inatteignable.** Il la poursuit, sa contrainte verticale le rappelle, il
+   meurt de faim sans jamais manger.
+2. **Concentrer plusieurs prédateurs sur une même proie la fait s'effondrer**,
+   et tout ce qui en dépend avec elle. Trois, c'est déjà beaucoup.
+3. **Une base de chaîne doit vivre longtemps.** Avec une longévité de petit
+   poisson, elle n'a le temps que d'une portée et s'éteint.
+
+Et un piège de méthode : **en simulation à vide, personne ne va sur la plage.**
+C'est le curseur du joueur qui pousse. Une mesure sans interaction peut donc
+déclarer sain un système qui ne l'est pas.

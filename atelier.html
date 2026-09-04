@@ -198,6 +198,7 @@ let trace = null;           // polygone en cours de tracé (mode Dessiner)
 let couleurTrace = '#5b8fb5';
 let lisseTrace = true;
 let imgFond = null;         // Image() de l'éventuel calque de repérage
+let REPERES = {};           // espèce -> { w, h, rang } : la planche découpée
 let vueT = { x: 0, y: 0, k: 1 };
 let anime = false;
 let fantome = false;    // superposition de la silhouette procédurale

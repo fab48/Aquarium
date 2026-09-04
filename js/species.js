@@ -36,7 +36,7 @@ const SPECIES = {
     depthBand: [80, 750], size: 11, speed: 70,
     // Espèce clé de voûte du niveau 2 : plusieurs prédateurs en dépendent,
     // il lui faut donc un plafond de population élevé.
-    schooling: true, groupSize: [26, 32], popCap: 64,
+    schooling: true, groupSize: [26, 32], popCap: 80,   // LE banc du jeu : 18 individus n'en font plus un
     favoriteFood: 'plancton_dore', eatsFood: true,
     colors: ['#ff6b8a', '#ffb84d', '#5ecfff', '#a3e64c', '#c78aff'],
     bodyRatio: 0.62, tail: 'fan', sizeVar: 0.26,   // un banc de confettis, ça dépareille
@@ -442,7 +442,7 @@ const SPECIES = {
     name: 'Calmar Violette', realName: 'Calmar (encornet)', trophic: 3, movement: 'wideband',
     nursery: 'deep',
     depthBand: [1200, 3400], size: 19, speed: 55, sprintSpeed: 230,
-    schooling: true, groupSize: [3, 5], popCap: 18,
+    schooling: true, groupSize: [3, 5], popCap: 24,   // chassé par trois : cachalot, calamar géant, orque
     // Il fonce en marche arrière et dépasse souvent sa cible : le raté est
     // comique, et il allège la pression sur le Poisson-lanterne, dont il est
     // de loin le premier prédateur (45 prises en 12 min sans ce garde-fou).
@@ -595,7 +595,7 @@ const SPECIES = {
     name: 'Dorade Dorée', realName: 'Dorade royale', trophic: 2, movement: 'wideband',
     nursery: 'shallow',
     depthBand: [120, 800], size: 16, speed: 78,
-    schooling: true, groupSize: [7, 11], popCap: 20,
+    schooling: true, groupSize: [7, 11], popCap: 26,
     favoriteFood: 'generic', eatsFood: true,
     colors: ['#f2d98a', '#b9a15a'],
     bodyRatio: 0.6, tail: 'lunate', sizeVar: 0.14,
@@ -653,6 +653,10 @@ const SPECIES = {
     name: 'Tortue Papi', realName: 'Tortue caouanne', trophic: 3, movement: 'free',
     nursery: 'beach',                  // elle pond sur la plage, comme les vraies
     depthBand: [40, 1400], size: 34, speed: 32, sprintSpeed: 78,
+    // Elle vit AU LARGE : on ne la voit près de la côte que pour la ponte, et
+    // c'est ce qui rend la scène rare et remarquable.
+    offshore: 1200,
+    ponteTerrestre: true,              // elle SORT DE L'EAU pour pondre
     schooling: false, groupSize: [1, 2], popCap: 7, metabolism: 0.6,
     prey: ['meduse'], missChance: 0.25, senseRange: 1100,
     breathes: true, grazes: true,

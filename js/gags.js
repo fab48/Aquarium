@@ -856,14 +856,86 @@ const GAGS = {
     if (Math.random() < dt * 0.03) e.emote('happy', 1.6, false);
   },
 
-  // LA TORTUE REMONTE RESPIRER, prend son temps, et redescend. `breathes` fait
-  // déjà le travail ; le gag ajoute la LENTEUR assumée — elle bâille.
+  // LA TORTUE MONTE PONDRE SUR LA PLAGE. C'est le seul animal du jeu qui sort
+  // de l'eau volontairement, et c'est toute sa scène — en quatre temps :
+  //   0. `approche` — elle NAGE jusqu'au rivage. Sans cette phase elle jouait
+  //                   toute la scène en pleine eau, à 1700 px de la plage :
+  //                   ramper à 22 px/s ne franchit pas 1700 px ;
+  //   1. `montee`  — elle rampe hors de l'eau, de plus en plus lentement ;
+  //   2. `creuse`  — elle s'arrête et pousse le sable derrière elle ;
+  //   3. `ponte`   — les œufs, et un soupir ;
+  //   4. `retour`  — elle redescend à la mer, et repart TRÈS au large.
+  // Le reste du temps elle nage au loin (`offshore`), on ne la voit près de la
+  // côte QUE pour ça.
   tortue(e, dt, t) {
-    e._bailleCd = (e._bailleCd ?? U.rand(20, 50)) - dt;
-    if (e._bailleCd > 0) return;
-    e._bailleCd = U.rand(40, 90);
-    e.emote('sleeping', 2.4, false);
-    e._freeze = 1.2;
+    if (e._plage) {
+      e._plageT -= dt;
+      const sol = World.floorY(e.x) - e.size * 0.5;
+
+      if (e._plagePh === 'approche') {
+        // Elle met le cap sur la plage. On passe par la cible de steering
+        // (`_figX/_figY`, la priorité la plus haute de `move`) et non par `vx`
+        // en dur : l'intégration l'aurait écrasée.
+        e._figX = World.shoreX + 40;
+        e._figY = CONFIG.SURFACE_Y + 40;
+        // Elle bascule en reptation quand elle a VRAIMENT pied. Le repli sur
+        // `_plageT` est un filet, pas un chemin normal : sans le test de
+        // profondeur elle se mettait à ramper en pleine eau.
+        if (World.depthAt(e.x) < 110 || e.x < World.shoreX + 80) {
+          e._figX = null; e._figY = null;
+          e._plagePh = 'montee'; e._plageT = 12;
+        } else if (e._plageT <= 0) {
+          e._figX = null; e._figY = null;
+          e._plage = false; e._plagePh = null; e._ponteCd = 40;   // elle renonce
+        }
+        return;
+      }
+      if (e._plagePh === 'montee') {
+        // Elle rampe vers le haut de la plage, à contre-pente et à bout de forces
+        e.vx = -22; e.vy = 0; e.y = sol;
+        if (Math.random() < dt * 2) Particles.sandCloud(e.x + e.size * 0.6, sol + e.size * 0.3);
+        if (e._plageT <= 0 || World.depthAt(e.x) < -70) {
+          e._plagePh = 'creuse'; e._plageT = 3.2;
+          e.emote('angry', 2, false);              // l'effort
+        }
+        return;
+      }
+      if (e._plagePh === 'creuse') {
+        e.vx = 0; e.vy = 0; e.y = sol;
+        if (Math.random() < dt * 6) Particles.sandCloud(e.x - e.size * 0.9, sol + e.size * 0.2, true);
+        if (e._plageT <= 0) {
+          e._plagePh = 'ponte'; e._plageT = 2.6;
+          for (let k = 0; k < U.randInt(2, 4); k++) {
+            Ecosystem.layEgg(e, e.x - e.size * 0.8 + U.rand(-14, 14), sol + U.rand(0, 10));
+          }
+          e.wellFed = 0; e._mateCd = 90;
+          e.emote('love', 2.6);
+          Particles.hearts(e.x, e.y - e.size);
+        }
+        return;
+      }
+      if (e._plagePh === 'ponte') {
+        e.vx = 0; e.vy = 0; e.y = sol;
+        if (e._plageT <= 0) { e._plagePh = 'retour'; e._plageT = 26; e.emote('happy', 2.2); }
+        return;
+      }
+      // Retour à la mer : elle redescend la pente jusqu'à être vraiment à l'eau
+      e.vx = 46; e.vy = 20;
+      if (!World.isUnderwater(e.x, e.y)) e.y = sol;
+      if (e._plageT <= 0 || World.depthAt(e.x) > 120) {
+        e._plage = false; e._plagePh = null;
+        e._ponteCd = U.rand(120, 260);            // elle ne remonte pas de sitôt
+        e.state = 'wander'; e.stateTimer = 8;
+      }
+      return;
+    }
+
+    // Déclenchement : prête à pondre, et pas trop loin du rivage.
+    e._ponteCd = (e._ponteCd ?? U.rand(40, 140)) - dt;
+    if (e._ponteCd > 0 || e.stage !== 'adult' || e.wellFed < 1) return;
+    e._plage = true; e._plagePh = 'approche'; e._plageT = 70;
+    e.state = 'wander'; e.target = null;
+    Particles.comic(e.x, e.y - e.size * 1.4, '🥚');
   },
 
   // L'ESPADON CHARGE EN LIGNE DROITE, et il siffle en passant.

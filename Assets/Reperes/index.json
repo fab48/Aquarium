@@ -1,0 +1,152 @@
+{
+"anemone": {
+"h": 157,
+"rang": 13,
+"w": 176
+},
+"anguille": {
+"h": 112,
+"rang": 29,
+"w": 176
+},
+"bulle_fofolle": {
+"h": 106,
+"rang": 1,
+"w": 158
+},
+"cachalot": {
+"h": 101,
+"rang": 27,
+"w": 196
+},
+"calamar": {
+"h": 150,
+"rang": 22,
+"w": 173
+},
+"calamar_geant": {
+"h": 148,
+"rang": 23,
+"w": 186
+},
+"clown": {
+"h": 112,
+"rang": 7,
+"w": 155
+},
+"confetti": {
+"h": 130,
+"rang": 5,
+"w": 160
+},
+"coquillage": {
+"h": 150,
+"rang": 11,
+"w": 174
+},
+"crabe": {
+"h": 160,
+"rang": 26,
+"w": 183
+},
+"crevette": {
+"h": 144,
+"rang": 21,
+"w": 162
+},
+"dauphin": {
+"h": 147,
+"rang": 10,
+"w": 179
+},
+"etoile": {
+"h": 160,
+"rang": 12,
+"w": 192
+},
+"gros_dodo": {
+"h": 146,
+"rang": 28,
+"w": 178
+},
+"hippocampe": {
+"h": 176,
+"rang": 8,
+"w": 110
+},
+"lanterne": {
+"h": 146,
+"rang": 20,
+"w": 186
+},
+"meduse": {
+"h": 165,
+"rang": 14,
+"w": 144
+},
+"merou": {
+"h": 122,
+"rang": 30,
+"w": 178
+},
+"moustachu": {
+"h": 135,
+"rang": 3,
+"w": 161
+},
+"murene": {
+"h": 152,
+"rang": 16,
+"w": 184
+},
+"orque": {
+"h": 143,
+"rang": 19,
+"w": 164
+},
+"pelican": {
+"h": 147,
+"rang": 4,
+"w": 182
+},
+"perroquet": {
+"h": 128,
+"rang": 9,
+"w": 185
+},
+"poisson_lune": {
+"h": 190,
+"rang": 18,
+"w": 146
+},
+"poisson_tapis": {
+"h": 105,
+"rang": 24,
+"w": 192
+},
+"poulpe": {
+"h": 146,
+"rang": 25,
+"w": 175
+},
+"raie": {
+"h": 170,
+"rang": 17,
+"w": 177
+},
+"requin": {
+"h": 125,
+"rang": 15,
+"w": 194
+},
+"thon": {
+"h": 121,
+"rang": 6,
+"w": 178
+},
+"volant": {
+"h": 146,
+"rang": 2,
+"w": 166
+}
+}

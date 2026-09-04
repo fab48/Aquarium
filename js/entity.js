@@ -274,7 +274,10 @@ class Entity {
     // rendre ce cas rare ; c'est le filet de sécurité, et un vrai destin de
     // poisson : hors de l'eau, il frétille de plus en plus faiblement, puis
     // meurt. Sauteurs et volants en sont exclus, c'est leur métier.
-    if (!this.def.aerial && !this.def.jumps && this.jumpState !== 'air'
+    // `ponteTerrestre` : la Tortue SORT DE L'EAU pour pondre, et c'est voulu.
+    // Tant qu'elle est dans sa scène de ponte (`_plage`), le sable ne la tue
+    // pas — c'est le seul animal du jeu qui a le droit d'y être.
+    if (!this.def.aerial && !this.def.jumps && this.jumpState !== 'air' && !this._plage
         && !this._surfacing && this.def.movement !== 'crawl' && this.def.movement !== 'fixed') {
       if (World.isUnderwater(this.x, this.y)) this._sec = 0;
       else {
@@ -1061,6 +1064,10 @@ class Entity {
   // nourris, qui se croisent → cœurs → 1 à 3 œufs selon leur forme.
   tryMate(dt) {
     if (this.stage !== 'adult' || this.wellFed < 1) return;
+    // `ponteTerrestre` : la Tortue ne pond QUE sur la plage, jamais dans l'eau.
+    // Sans cette sortie, la ponte ordinaire (appelée juste avant `think`) vidait
+    // sa réserve et la scène de plage ne se déclenchait jamais.
+    if (this.def.ponteTerrestre) return;
     if ((this._mateCd ?? 0) > 0) { this._mateCd -= dt; return; }
 
     // Ponte en DIFFUSION. Concerne toutes les espèces qui ne migrent pas vers
@@ -1143,6 +1150,18 @@ class Entity {
     if (def.movement === 'fixed') {
       this.vx = this.vy = 0;
       this.x = this.anchorX; this.y = this.anchorY;
+      return;
+    }
+
+    // TORTUE SUR LA PLAGE : à partir du moment où elle rampe, sa scène de ponte
+    // (GAGS.tortue) pilote ENTIÈREMENT son déplacement. Sans cette sortie,
+    // l'intégration normale écrasait la vitesse imposée par la scène et le
+    // clamp `maxSpeed` la ralentissait : on la voyait « ramper » en pleine eau,
+    // à 1300 px de profondeur, au lieu de monter sur le sable.
+    if (this._plage && this._plagePh && this._plagePh !== 'approche') {
+      this.x += this.vx * dt;
+      this.y = World.floorY(this.x) - this.size * 0.5;
+      this.speedNow = Math.abs(this.vx);
       return;
     }
 
@@ -1557,7 +1576,7 @@ class Entity {
     // l'eau (mesuré : 6,9 % du temps pour les sardines et les confettis).
     // Les sauteurs (poisson volant, dauphin, orque) et les cétacés en train de
     // respirer en sont évidemment exemptés.
-    if (!def.aerial && !def.jumps && !this._surfacing && this.jumpState !== 'air') {
+    if (!def.aerial && !def.jumps && !this._surfacing && this.jumpState !== 'air' && !this._plage) {
       const plafond = CONFIG.SURFACE_Y + this.size * 0.7;
       if (this.y < plafond) { this.y = plafond; this.vy = Math.max(this.vy, 0); }
     }
@@ -1577,11 +1596,18 @@ class Entity {
     }
     // Barrière dure au rivage pour TOUT nageur, à sa propre échelle : le rappel
     // par accélération se franchit quand un banc paniqué file vers la plage.
-    if (!def.aerial && def.movement !== 'crawl') {
+    // La tortue qui monte pondre franchit sa propre barrière : c'est tout
+    // l'intérêt. Le reste du temps elle est tenue TRÈS au large (`offshore`).
+    // La tortue qui MONTE PONDRE franchit sa propre barrière — pendant la
+    // migration comme pendant la scène de plage. Sans l'exemption en migration
+    // elle restait bloquée à 1200 px d'eau, c'est-à-dire à 1500 px du rivage,
+    // et la ponte terrestre ne se déclenchait jamais.
+    const montePondre = def.ponteTerrestre && (this._plage || this.state === 'migrate');
+    if (!def.aerial && def.movement !== 'crawl' && !montePondre) {
       const bord = this.limiteLarge();
       if (this.x < bord) { this.x = bord; this.vx = Math.max(this.vx, 0); ax += 250; }
     }
-    if (this.x < shoreX + 100) ax += (shoreX + 100 - this.x) * 2;
+    if (this.x < shoreX + 100 && !montePondre) ax += (shoreX + 100 - this.x) * 2;
     if (this.x > CONFIG.WORLD_WIDTH - 100) ax += (CONFIG.WORLD_WIDTH - 100 - this.x) * 2;
 
     // Intégration

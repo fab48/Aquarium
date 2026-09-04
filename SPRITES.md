@@ -416,12 +416,45 @@ exportés par un panneau de l'éditeur. Ils n'existaient nulle part. Ils sont
 maintenant implémentés **en repli** de `points.eye.r`, plus direct à régler.
 
 ---
-
 ## 8. Ce qui manque encore
 
-- **Un dessin par espèce.** Seul le requin en a un. Les 26 autres s'ouvrent dans
-  l'atelier en un clic (« partir de la silhouette du jeu »), et certaines n'en
-  ont sans doute pas besoin.
+*Revu le 4 septembre 2026, atelier ouvert et manifeste inspecté.*
+
+### Ce qui bloque tout de suite
+
+- **Le crabe est dessiné mais pas branché.** `Assets/crabe.json` existe (11
+  formes, ancres posées, `spriteScale` réglé) mais n'est **pas dans le
+  manifeste** : le jeu continue d'afficher la silhouette procédurale. Deux
+  choses lui manquent avant d'être activable :
+  - **aucun appendice** (`fins: []`) — ses huit pattes ne bougeront pas, alors
+    que c'est exactement ce pour quoi le type `tentacule` a été ajouté ;
+  - **`sansQueue` n'est pas posé**, et `tailBlend` vaut 51,7 sur un dessin large
+    de 166 : tout ce qui est à gauche de cette ligne va onduler. C'est le
+    « tiers du crabe qui tortille » déjà identifié.
+
+### Le trou le plus sérieux : la bande d'humeurs ne montre pas tout
+
+L'atelier prévisualise **7 humeurs** (`idle`, `happy`, `angry`, `sleeping`,
+`scared`, `kiss`, `disgust`) alors que `FishBody.EMOTIONS` en compte **18**. On
+calibre donc un visage sur 7 cas et le jeu en joue 18. Les onze absentes :
+
+`love` · `eating` · `dizzy` · `blush` · `proud` · `ashamed` · `laughing` ·
+`surprise` · `wink` · `sad` · `smug`
+
+La plus gênante est **`eating`** : c'est elle qui ouvre la bouche en grand,
+donc celle qui met le plus à l'épreuve l'ancre de bouche et son rayon — le
+réglage le plus délicat de tout l'atelier, et le seul qu'on ne peut pas voir.
+Viennent ensuite `dizzy` et `surprise`, qui déforment le plus les yeux.
+
+### Le reste
+
+- **Un dessin par espèce.** Seul le requin en a un d'activé. Les 26 autres
+  s'ouvrent dans l'atelier en un clic (« partir de la silhouette du jeu »), et
+  certaines n'en ont sans doute pas besoin.
+- **Trois gabarits seulement** (`Poisson`, `De face`, `Rampant`). Il en manque
+  au moins deux que le roster réclame déjà : un **oiseau** (le Fou Moustachu, et
+  les trois autres à venir) et une **méduse** — une silhouette verticale dont
+  la bouche et les yeux ne sont pas placés comme ceux d'un poisson.
 - **Le miroir.** Un dessin est fait tourné vers la droite ; le jeu le retourne
   par `scale(-1, 1)` avec le demi-tour animé. Un dessin asymétrique (une tache
   sur un seul flanc) se retrouvera donc de l'autre côté la moitié du temps.
@@ -431,3 +464,7 @@ maintenant implémentés **en repli** de `points.eye.r`, plus direct à régler.
 - **Le dessin à main levée.** L'atelier retouche un contour point par point mais
   ne remplace pas un outil de tracé : pour créer une forme de zéro, dessiner
   ailleurs et importer le SVG.
+- **Aucun aperçu en situation.** On voit la créature seule sur fond clair, jamais
+  à sa taille réelle au milieu des autres, ni dans la couleur d'eau de sa
+  profondeur. Un dessin abyssal jugé au bon contraste dans l'atelier peut se
+  révéler illisible à 3 000 px de fond.

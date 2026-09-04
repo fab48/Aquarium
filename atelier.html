@@ -581,6 +581,11 @@ function poser(expr, t, ind = 0) {
 function brancher() {
   if (!doc) return null;
   const cle = '__atelier__';
+  // La palette du visage est mise en cache par `FishBody` sur l'objet source :
+  // en jeu elle ne change jamais (elle sort d'un JSON), ici on la modifie au
+  // curseur. Sans cette purge, changer la couleur d'une pupille n'aurait aucun
+  // effet à l'écran — l'objet est muté, sa version fusionnée reste en cache.
+  if (doc.visage) FishBody._palCache.delete(doc.visage);
   Sprites.cache[cle] = Sprites.preparer(doc);
   defEspece().sprite = cle;
   return Sprites.cache[cle];

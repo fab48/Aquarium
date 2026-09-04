@@ -434,3 +434,94 @@ simulation longue) — toujours le plus gros gain potentiel de simulation, et
 toujours le plus risqué. Et côté mobile, le fonctionnel du §4 (pinch-to-zoom,
 `touch-action`, équivalents tactiles) n'est pas de la performance mais reste à
 faire.
+
+---
+
+# Point de performance du 5 septembre 2026
+
+*51 espèces, ~530 entités, canvas 2404×1850 (dpr 2), page fraîche, JIT chaud
+(400 frames de préchauffage avant chaque mesure).*
+
+| Poste | ms/frame |
+|---|---:|
+| Frame complète | **22,7** |
+| dont dessin | 18,3 |
+| dont simulation | **4,3** |
+
+La simulation a été **divisée par deux** (5,55 → 2,85 ms mesurée isolément) par
+le culling ci-dessous. Le dessin est désormais le seul goulot, et il est
+**limité par le remplissage**, pas par le nombre de créatures.
+
+## Le culling de simulation (fait)
+
+~530 entités simulées pour ~80 à 110 visibles. Les autres ne pensent plus
+qu'**une frame sur trois**, avec un `dt` triplé : leur trajectoire est trois
+fois moins finement intégrée, ce qui ne se voit pas puisqu'elles sont hors de
+l'écran.
+
+Trois garde-fous, parce que `PERFORMANCE.md §5.14` prévenait que ce mécanisme
+peut fausser l'écosystème :
+
+- la marge est **généreuse** (900 px au-delà du bord) : une créature qui entre
+  dans le champ a repris son pas fin bien avant d'être visible ;
+- **les colosses et les chasseurs en action** gardent le pas fin où qu'ils
+  soient — ce sont leurs contraintes (anti-chevauchement dur, charge) qui
+  supportent le moins un gros pas ;
+- la répartition se fait **par identifiant**, donc le tiers simulé change à
+  chaque frame et personne n'est jamais gelé.
+
+Contrôle en simulation longue après coup : **zéro extinction, zéro espèce en
+chute, une seule mort de faim** sur 3,9 min. L'écosystème ne bouge pas.
+
+## Le piège de mesure qui a coûté le plus de temps
+
+Le profilage par espèce donnait des chiffres absurdes :
+
+| Espèce | coût mesuré *dans la scène* | coût mesuré *isolément* |
+|---|---:|---:|
+| Cormoran | 818 µs | 8 µs |
+| Oursin | 656 µs | 8 µs |
+| Coquillage | 534 µs | 3 µs |
+
+Un facteur **cent**. L'explication n'a rien à voir avec ces silhouettes : ce
+sont les **premières dessinées** dans l'ordre de tri, juste après le décor.
+Canvas 2D empile les commandes sans les exécuter ; le premier appel qui force le
+pipeline à se vider **absorbe le temps de tout ce qui précède**. Le chronomètre
+l'attribue à la mauvaise créature.
+
+Deux règles qui en découlent, pour toute mesure de rendu future :
+
+1. **Un coût de dessin mesuré par appel est faux** tant qu'on n'a pas de
+   barrière. Mesurer par **différence** (avec et sans le poste), jamais en
+   enveloppant l'appel.
+2. **Le premier poste dessiné porte le chapeau des autres.** C'est ce qui avait
+   fait croire, dans l'audit précédent, que le décor coûtait 18 ms et les
+   créatures 2,5 — puis l'inverse une fois le décor optimisé. Ni l'un ni l'autre
+   n'était vrai : c'est le **total** qui compte, et il se répartit selon l'ordre
+   de dessin.
+
+Toutes les silhouettes, mesurées isolément sur 400 tracés chacune, coûtent entre
+**3 et 30 µs** — la murène le plus, le coquillage le moins. Pour 100 créatures à
+l'écran, cela fait environ **1,3 ms**. Le reste des 18 ms est du remplissage.
+
+## Ce qu'il reste à faire, par ordre de gain
+
+1. **Le remplissage du décor.** Le levier existe déjà (l'adaptation automatique
+   du dpr quand la frame dépasse 40 ms) mais il ne se déclenche qu'en dernier
+   recours. Pré-rendre les dégradés plein écran dans un canvas étroit puis les
+   étirer reste le correctif de fond — un étirement de texture est un
+   remplissage plat, pas un dégradé.
+2. **Ne pas dessiner ce qui est plus petit qu'un pixel ou deux.** À zoom 0,35,
+   une crevette de 7 px en fait 2,5 à l'écran. Attention au pop visuel : il
+   faudrait un fondu, pas une disparition sèche.
+3. **La marge de culling du dessin** est à 150 px. La réduire à 60 retire
+   quelques créatures par frame — gain marginal, à ne faire que si le reste ne
+   suffit pas.
+
+## Ce qui n'est PAS le problème (vérifié)
+
+- **Les silhouettes des nouvelles espèces.** Tortue, oursin, ruban électrique et
+  anguille-jardinière coûtent 8 à 15 µs, dans la moyenne basse.
+- **Le halo bioluminescent.** Pré-rendu et mémoïsé par couleur.
+- **Le nombre d'entités simulées**, depuis le culling.
+- **La grille spatiale** (0,3 ms) et les particules (0,16 ms).

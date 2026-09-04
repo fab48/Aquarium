@@ -59,6 +59,24 @@ qu'elle bougeait.
 
 `FishBody.EMOTIONS` est une table de paramètres (ouverture d'œil, pupille, regard, paupière, **angle et hauteur du sourcil**, bouche, rougeur) : idle, happy, love, eating, sleeping, dizzy, scared, blush, angry, proud, ashamed. Ajouter une émotion = ajouter une ligne.
 
+**Ce que la bouche EXPRIME est séparé de ce à quoi elle RESSEMBLE.** Les
+émotions restent communes à tout l'aquarium ; la forme de la bouche est un
+réglage d'espèce ou de dessin (`boucheStyle` : `standard`, `grande`, `petite`,
+`gueule` à dents, `bec`, `ventouse`, table `FishBody.BOUCHES`). Tout le monde
+avait la même petite bouche de dessin animé, becs d'oiseau et gueules de requin
+compris. Le partage tient grâce à `FishBody.GESTE`, qui réduit chacune des
+quatorze bouches du catalogue à **deux nombres** — combien elle est ouverte, si
+elle sourit ou boude : c'est avec ça qu'un bec joue les dix-huit émotions sans
+qu'on le redessine dix-huit fois.
+
+De même, ce que le visage **peint** passait par trois couleurs en dur (encre
+`#1c2733`, gorge, langue). `FishBody.VISAGE` est une palette **surchargeable
+partiellement** — trait, sourcil, pupille, blanc de l'œil, gorge, langue, lèvres,
+dents, bec, joue — déclarée sur la fiche d'espèce (`def.visage`) ou sur le
+dessin (`visage`, réglé dans l'atelier), le dessin l'emportant. Le visage étant
+dessiné **par-dessus** le corps, repeindre le corps ne changeait rien : c'était
+la seule prise possible sur une pupille dorée ou un bec orange.
+
 **[EMOTIONS.md](EMOTIONS.md) est la table de référence** : catalogue des expressions, correspondance action → émotion, budget de bulles, idées de gags à brancher. Le mettre à jour en même temps que `FishBody.EMOTIONS` et `js/legend.js`.
 
 **Toute silhouette doit passer par le système commun.** `FishBody.face()` pour
@@ -524,6 +542,26 @@ Quatre règles :
 - **Le chargement est asynchrone et ne bloque aucune frame** : tant que le
   fichier n'est pas là (ou s'il est illisible), la silhouette procédurale
   continue d'être dessinée.
+- **Un dessin doit savoir faire ce que la silhouette savait déjà.** Les
+  silhouettes procédurales font varier chaque individu (`Entity.color` tire dans
+  `def.colors` — c'est ce qui fait chatoyer le banc de confettis), la méduse est
+  translucide, le lanterne s'allume la nuit (`glowAtNight`). Un dessin fait main
+  n'avait rien de tout ça : quarante confettis dessinés sortaient du même moule.
+  D'où quatre champs par forme, tous réglés dans l'atelier —
+  **`couleur`** (cinq modes : fixe, la couleur de l'individu, sa version foncée,
+  un tirage dans une palette, une teinte décalée au hasard — tous
+  **déterministes**, tirés de l'identifiant et mis en cache comme `Entity.color`),
+  **`degrade`** (dont le premier arrêt est la couleur *résolue* : un dégradé à
+  couleurs fixes annulerait la variation individuelle),
+  **`alpha`** et **`lueur`**. Le halo de `lueur` passe par `FishBody.halo` (image
+  en cache) et non par un `shadowBlur`, qui travaille en pixels **écran** et
+  grossirait donc sur un petit poisson vu de loin.
+- **Un accessoire de gag enfermé dans une silhouette disparaît avec elle.** La
+  danse du Crabe Disco a déjà été hissée dans `FishBody.choregraphie()`,
+  appliquée AUTOUR du corps quel qu'il soit. Restent la **poche du Pélican**, la
+  **lampe du Poisson-lanterne** et le **rocher de la Murène** : activer un dessin
+  sur l'une de ces trois espèces sans faire la même opération supprimerait son
+  gag.
 - **La queue ondule, les nageoires pivotent.** Les points en deçà de `tailBlend`
   sont déviés en `u²` (le battement part du pédoncule caudal, pas du milieu du
   corps), et une forme qui porte un `pivot` tourne autour au lieu d'onduler.
@@ -603,7 +641,15 @@ sable 12 % → 4,3 %.
 - `sprites.js` — chargement des dessins de l'éditeur SVG (`Assets/*.json`), consommés par `FishBody.drawSprite`. Une espèce qui déclare `sprite:` remplace sa silhouette procédurale, **jamais son visage**.
 - `svgexport.js` / `svgimport.js` — les deux sens du pont : rejouer une silhouette procédurale dans un faux contexte 2D qui enregistre au lieu de peindre pour la sortir en SVG, et échantillonner un dessin vectoriel pour le faire entrer.
 - `ANCHOR_TOOL.md` — spécification du « poseur d'ancrages », l'outil construit à part (Artifact autonome, hors dépôt) dont l'atelier reprend les capacités.
-- `atelier.html` — **l'outil unique** (page à part, servie par le même serveur de dev) : importer, poser les ancres et les nageoires, calibrer le visage, prévisualiser avec le VRAI rendu du jeu, et **enregistrer directement dans `Assets/`**. Une espèce s'active par le manifeste `Assets/sprites.json`, sans toucher au code. **[SPRITES.md](SPRITES.md) est le contrat complet.**
+- `atelier.html` — **l'outil unique** (page à part, servie par le même serveur de dev) : importer, poser les ancres et les nageoires, calibrer le visage, peindre les calques, prévisualiser avec le VRAI rendu du jeu, et **enregistrer directement dans `Assets/`**. Une espèce s'active par le manifeste `Assets/sprites.json`, sans toucher au code. **[SPRITES.md](SPRITES.md) est le contrat complet.**
+  Trois règles d'interface, apprises en le rangeant : le haut du panneau
+  appartient à l'**outil sélectionné** et l'annonce (le reste est en sections
+  repliables dont l'état est retenu **hors du DOM** — le panneau est reconstruit
+  à chaque geste) ; l'**aide est un calque** (bouton 💡), elle occupait les deux
+  tiers de la colonne ; et le rail range les 51 espèces **par état**
+  d'avancement, pas dans l'ordre de `SPECIES`, avec un filtre — la rubrique
+  « sans dessin de référence » est la liste, tenue à jour toute seule, de ce
+  qu'il reste à dessiner.
 - `decoupe_planche.py` — découpe `Assets/Concepts/Design Final.png` (les 30
   créatures dessinées) en **un repère par espèce** dans `Assets/Reperes/`.
   L'atelier les pose tout seuls en calque de repérage. Les 17 vignettes qui
@@ -662,7 +708,19 @@ Baleine, cachalot, orque demandent des règles à part, apprises en corrigeant l
 
 ## Performance (mesurée, pas supposée)
 
-**[PERFORMANCE.md](PERFORMANCE.md) est l'audit complet** : méthode et ses
+**[PERFORMANCE.md](PERFORMANCE.md) est l'audit complet** — son dernier point
+(5 septembre 2026) donne l'état courant : **frame 22,7 ms**, dont 18,3 de dessin
+et 4,3 de simulation, après le **culling de simulation** (une entité hors champ
+ne pense qu'une frame sur trois : −5,55 → 2,85 ms, sans bouger l'écosystème).
+
+Et un piège de mesure à connaître avant de profiler le rendu : **le premier
+poste dessiné porte le chapeau de tous les autres.** Canvas 2D empile les
+commandes sans les exécuter ; le premier appel qui force le pipeline à se vider
+absorbe le temps de ce qui précède. Le Coquillage semblait coûter 534 µs ; mesuré
+isolément il en coûte **3**. Toujours mesurer par différence, jamais en
+enveloppant l'appel.
+
+L'audit détaillé : méthode et ses
 limites, chiffres par poste, cible mobile, le **chantier d'optimisation** (§5)
 et son **bilan réalisé** (§7). Le chantier a été fait (sauf 5.14) : en
 rastérisation logicielle à 2560×1440, le décor est passé de **18,9 à 9,2 ms**

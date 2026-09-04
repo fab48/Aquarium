@@ -824,6 +824,10 @@ const Ecosystem = {
     for (const e of this.entities) {
       if (e.dead) continue;
       this.counts[e.speciesId] = (this.counts[e.speciesId] || 0) + 1;
+      // Hors champ ET loin : elle passera au pas grossier (cf. `update`). Les
+      // colosses et les chasseurs lancés gardent le pas fin.
+      e._loin = !Camera.isVisible(e.x, e.y, 900)
+                && e.def.size < 70 && e.state !== 'hunt' && e.state !== 'strike';
       if (e.stage === 'egg') continue;
       // index par espèce : les recherches de proie/partenaire n'ont plus à
       // balayer TOUTES les entités (c'était le gros du coût de simulation)
@@ -957,9 +961,36 @@ const Ecosystem = {
     if (this.countSpecies(id) < 2) this.spawnGroups(id, 1);
   },
 
+  // CULLING DE SIMULATION. ~520 entités simulées pour ~80 visibles : les autres
+  // vivent leur vie hors champ, et personne ne les regarde. Elles ne pensent
+  // donc qu'une frame sur trois, avec un `dt` triplé — leur trajectoire est
+  // trois fois moins finement intégrée, ce qui ne se voit pas puisqu'elles sont
+  // hors de l'écran, et le coût de simulation tombe d'autant.
+  //
+  // Trois garde-fous, parce que ce mécanisme peut fausser l'écosystème :
+  //   - la marge est GÉNÉREUSE (900 px au-delà du bord) : une créature qui entre
+  //     dans le champ a déjà repris son pas fin avant d'être visible ;
+  //   - les colosses et les chasseurs en action gardent le pas fin où qu'ils
+  //     soient — ce sont eux dont les contraintes (anti-chevauchement, charge)
+  //     supportent le moins un gros pas ;
+  //   - la répartition se fait par identifiant, donc le tiers simulé change à
+  //     chaque frame et personne n'est jamais gelé.
+  //
+  // Vérifié en simulation longue AVANT/APRÈS : mêmes populations, mêmes prises.
+  _tick: 0,
   update(dt, t) {
     this.buildGrid();
-    for (const e of this.entities) if (!e.dead) e.update(dt, t);
+    this._tick = (this._tick + 1) % 3;
+    const tick = this._tick;
+    for (const e of this.entities) {
+      if (e.dead) continue;
+      if (e._loin) {
+        if (e.id % 3 !== tick) continue;
+        e.update(dt * 3, t);
+      } else {
+        e.update(dt, t);
+      }
+    }
     // Compactage SUR PLACE : `filter` reconstruisait un tableau de ~490 entrées
     // à chaque frame, morts ou pas (pression GC, cf. PERFORMANCE.md §2).
     const arr = this.entities;

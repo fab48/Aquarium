@@ -90,12 +90,16 @@ const FishBody = {
   },
   // Palette + style de bouche d'une créature, dessin ou silhouette. Le dessin
   // prime : c'est lui qu'on vient de régler dans l'atelier.
+  // Objet de travail réutilisé : `visageDe` est appelée pour chaque créature de
+  // chaque frame (~690 à 51 espèces), et son résultat est consommé sur place.
+  _vis: { pal: null, style: 'standard' },
   visageDe(e) {
     const def = e.def;
     const sp = (def.sprite && typeof Sprites !== 'undefined') ? Sprites.get(def.sprite) : null;
     const v = (sp && sp.visage) || def.visage || null;
-    const st = (sp && sp.boucheStyle) || def.boucheStyle || 'standard';
-    return { pal: this.palette(v), style: st };
+    this._vis.pal = this.palette(v);
+    this._vis.style = (sp && sp.boucheStyle) || def.boucheStyle || 'standard';
+    return this._vis;
   },
 
   // --- STYLES DE BOUCHE -------------------------------------------------------

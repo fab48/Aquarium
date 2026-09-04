@@ -38,8 +38,20 @@ python dev_server.py 8642      # puis http://localhost:8642/atelier.html
 **Le rail de gauche** liste les 51 espèces — il lit `SPECIES`, donc toute espèce
 ajoutée au jeu y apparaît d'elle-même. Un 🎨 signale les 30 qui ont leur dessin
 dans la planche de design (§1 bis). Pastille verte = un dessin est actif,
-orange = brouillon non enregistré, grise = silhouette procédurale. Une seconde
-rubrique, **« dessins non rattachés »**, liste tout fichier présent dans
+orange = brouillon non enregistré, grise = silhouette procédurale.
+
+Il ne les liste plus dans l'ordre de `SPECIES`, qui ne dit rien de
+l'avancement : elles sont **rangées par état**, en cinq rubriques comptées —
+*dessin actif*, *brouillons*, *planche du design disponible*, **sans dessin de
+référence**, et *dessins non rattachés*. La quatrième est la plus utile : c'est
+la liste, tenue à jour toute seule, des espèces qui n'ont encore rien. On la
+cherchait jusqu'ici à l'œil, une espèce après l'autre.
+
+Un **filtre** coupe la liste dès qu'on sait ce qu'on cherche (nom rigolo, nom
+latin ou identifiant) : à 51 espèces réparties en cinq rubriques, taper
+« murène » coûte moins cher que de la repérer.
+
+La rubrique **« dessins non rattachés »** liste tout fichier présent dans
 `Assets/` mais lié à aucune espèce (route `GET /api/sprites`) : sans elle, un
 dessin enregistré puis désactivé devenait introuvable — il existait sur le disque
 et nulle part dans l'outil. Ouvrir un tel dessin le met à l'échelle de l'espèce
@@ -110,15 +122,10 @@ Elle **ne s'enregistre pas** dans le document : elle appartient au dépôt, elle
 est reposée toute seule à l'ouverture, et la recopier en base64 dans trente
 fichiers coûterait 1 Mo pour rien.
 
-**Six outils**, dans la barre :
+**Sept outils**, dans la barre :
 
 - **Ancres** — `center` (le point que le jeu place à la position de la créature),
   `nose`, `tail`, et surtout `eye` / `mouth` qui portent le visage commun.
-  L'ancre `eye` est un **cercle** dont on tire la poignée : son rayon donne la
-  taille de l'œil ; la bouche a le sien, qui la règle **indépendamment** —
-  elle en était déduite, ce qui va sur un visage de dessin animé standard mais
-  pas sur une gueule de requin ou un bec d'oiseau. Tant qu'on n'y touche pas
-  elle continue de suivre l'œil, pour ne pas déplacer un dessin déjà calé.
   Chaque ancre a aussi ses **coordonnées en clair** : sur une
   petite tête, `center`, `nose`, `eye` et `mouth` tiennent dans quarante pixels
   et deviennent impossibles à viser à la souris. (Le clic prend d'ailleurs la
@@ -134,6 +141,27 @@ fichiers coûterait 1 Mo pour rien.
   poisson vu de profil ; sur un crabe elles étaient fausses sur les trois points
   à la fois — bouche posée sur une pince, un seul œil, un tiers de la carapace
   qui ondulait.
+- **🙂 Visage** — tout ce qui concerne le visage commun, qui était jusqu'ici
+  éparpillé (la taille de l'œil au milieu des ancres) ou inexistant (sa forme,
+  ses couleurs). C'est pourtant le seul élément que les 51 espèces partagent.
+  Trois réglages :
+  - **taille** de l'œil et de la bouche. L'ancre `eye` est un **cercle** dont on
+    tire la poignée ; la bouche a le sien, qui la règle **indépendamment** —
+    elle en était déduite, ce qui va sur un visage de dessin animé standard mais
+    pas sur une gueule de requin ou un bec d'oiseau. Tant qu'on n'y touche pas,
+    elle continue de suivre l'œil, pour ne pas déplacer un dessin déjà calé. Les
+    deux poignées restent saisissables sur le dessin, dans cet outil comme dans
+    « Ancres ».
+  - **forme de la bouche** (`boucheStyle`) : *standard*, *grande*, *petite*,
+    *gueule à dents*, *bec*, *ventouse*. Ce que la bouche **exprime** reste
+    piloté par les émotions, communes à tout l'aquarium ; ce réglage dit à quoi
+    elle **ressemble**. Tout le monde avait la même petite bouche de dessin
+    animé, becs et gueules comprises.
+  - **couleurs du visage** (`visage`) : trait, sourcil, pupille, blanc de l'œil,
+    intérieur de bouche, langue, lèvres, dents, bec. Chacune revient à la valeur
+    commune d'un clic sur ↺. Le visage étant dessiné **par-dessus** le dessin,
+    repeindre le calque ne changeait rien : c'était la seule façon d'avoir une
+    pupille dorée ou un bec orange.
 - **Appendices** — nageoire, patte, antenne, bras. Clic dans le vide pour en
   poser un. **Deux types**, parce que ce sont deux gestes différents :
   - **nageoire** — la forme *pivote* autour de l'ancre. Le disque affiché est le
@@ -181,7 +209,7 @@ fichiers coûterait 1 Mo pour rien.
   **Les ancrages suivent la forme** qu'ils visent, sinon le disque d'influence
   reste derrière et la nageoire se déforme autour du vide.
 
-Les six outils ont un raccourci, <kbd>1</kbd> à <kbd>6</kbd> dans l'ordre de la
+Les sept outils ont un raccourci, <kbd>1</kbd> à <kbd>7</kbd> dans l'ordre de la
 barre.
 
 ### Aplatir des calques
@@ -198,21 +226,101 @@ en plusieurs couches, et pour une patte dessinée en trois pièces.
 
 Le contour du groupe est tracé en pointillés sur le dessin (plein pour le calque
 actif), et la liste indique par un `🖐n` combien d'appendices animent chaque
-forme.
+forme, plus un pictogramme par réglage d'apparence (`▨` dégradé, `◌` contour,
+`✦` luminescence, `🎲` couleur par individu).
 
-Plus, dans le panneau : un curseur d'**échelle** et un bouton **silhouette
+### L'apparence d'un calque
+
+Un calque n'était qu'un contour et **une couleur unie**. Les silhouettes
+procédurales, elles, savaient déjà faire mieux : chaque individu tire sa teinte
+dans `def.colors` (`Entity.color`), une méduse est translucide, un
+poisson-lanterne s'allume la nuit. Un dessin fait main perdait tout ça — quarante
+confettis dessinés sortaient du même moule là où le banc procédural chatoie.
+
+La section **Apparence de la forme** rend au dessin ce que la silhouette avait :
+
+| Réglage | Champ | À quoi ça sert |
+|---|---|---|
+| Remplissage · trait seul | `fill` (`null` = trait seul) | un tentacule, une antenne, une moustache |
+| Contour ouvert | `ferme: false` | ne pas refermer un trait, ce qui dessinerait une corde en travers |
+| Dégradé | `degrade` | le ventre plus clair que le dos, en un réglage plutôt qu'en deux calques |
+| Contour | `stroke` + `lineWidth` | le liseré d'une forme pleine, ou le trait seul |
+| Opacité | `alpha` | une méduse, une nageoire voile |
+| Luminescence | `lueur` | la lampe du poisson-lanterne, une tache bioluminescente |
+| Couleur par individu | `couleur` | **le banc qui chatoie** |
+
+Deux points qui ne vont pas de soi :
+
+- **Le dégradé part de la couleur de la forme**, pas d'une couleur fixe. Un
+  dégradé à deux couleurs déclarées annulerait la variation individuelle — c'est
+  précisément ce qu'on vient de gagner. Le second arrêt vaut par défaut la même
+  couleur assombrie de 35 %.
+- **La couleur par individu a cinq modes** : *fixe*, *couleur de l'individu*
+  (celle qu'il a tirée dans `def.colors` — un bouton reprend la palette de
+  l'espèce d'un clic, la recopier à la main revient à se tromper d'une nuance),
+  *sa version foncée* (`Entity.colorDark`), *tirage dans une palette propre à la
+  forme*, et *teinte décalée au hasard* de ±N°. Tous **déterministes** : la
+  couleur est tirée de l'identifiant de l'individu, donc elle ne change ni d'une
+  frame à l'autre ni au cours de sa vie, et elle est mise en cache comme
+  `Entity.color` l'est déjà.
+
+La luminescence pose le **halo en cache** de `FishBody.halo`, pas un
+`shadowBlur` : celui-ci travaille en pixels écran, il grossirait donc sur un
+petit poisson vu de loin, en plus de coûter cher. Deux corrections mesurées : le
+halo doit **déborder** de la forme (centré dessus à sa propre taille, il restait
+entièrement caché derrière elle — les silhouettes le tirent déjà à ~1,7 fois la
+taille de la créature), et il doit savoir lire une couleur `rgb(…)` et pas
+seulement `#rrggbb`, sinon une teinte tirée au sort ressort en halo **blanc**.
+
+Plus, dans le panneau : un curseur d'**échelle**, un bouton **silhouette
 d'origine**, qui superpose en gris la silhouette procédurale que le dessin
-remplace. C'est le repère pour juger d'une taille — surtout sur un dessin importé
-sans échelle déclarée, où le jeu suppose un poisson allongé.
+remplace (le repère pour juger d'une taille — surtout sur un dessin importé sans
+échelle déclarée, où le jeu suppose un poisson allongé), et un bouton **🌙 nuit**
+qui force `Main.nightAmount()` à 1 : le faux `Main` de la page répond « plein
+jour », donc sans lui une luminescence ne se voit **jamais** dans l'atelier.
+
+### Le panneau, rangé
+
+Il montrait **tout, tout le temps**, d'un seul tenant : pour changer la couleur
+d'un calque il fallait défiler devant les ancres, la queue, l'échelle et
+l'enregistrement, et rien ne disait sur quoi l'outil courant agissait. Trois
+règles :
+
+1. le haut du panneau appartient à l'**outil sélectionné**, et il l'annonce
+   (pictogramme, nom, une ligne de « ce que ça fait ») ;
+2. tout le reste est en sections **repliables** — *Formes*, *Apparence de la
+   forme*, *Taille & aperçu*, *Calque de repérage*, *Enregistrer* — qui se
+   souviennent de leur état d'une session à l'autre. Il fallait le retenir hors
+   du DOM : le panneau est reconstruit à chaque geste, une section ouverte se
+   serait refermée au premier mouvement de curseur ;
+3. les explications sont un **calque** (bouton 💡). Elles occupaient les deux
+   tiers de la colonne, ce qui est bien la première fois et jamais après.
+
+Les sections s'ouvrent par défaut selon l'outil : *Formes* et *Apparence* avec
+Calque, Points et Dessiner ; *Formes* seule avec Appendices et Queue ; aucune
+avec Ancres et Visage, où on regarde un visage.
 
 <kbd>Ctrl</kbd>+<kbd>Z</kbd> annule, partout — **la sélection fait partie de
 l'instantané**, sinon annuler une duplication laisse la forme active sur un
 indice qui a changé de sens, et on croit tirer une nageoire en en déplaçant une
 autre. Molette pour zoomer, glissé du fond pour déplacer la vue.
 
-**Le bandeau du bas** montre le dessin sous sept humeurs. Une calibration juste
-doit tenir sur toutes : `sleeping` (bouche du ronflement) et `angry` (sourcil
-lourd) sont les deux qui débordent en premier d'une tête trop petite.
+**Le bandeau du bas** a trois modes. Il n'en montrait que **7 humeurs** alors que
+`FishBody.EMOTIONS` en compte 18 : on calibrait un visage sur sept cas et le jeu
+en jouait dix-huit, la plus gênante des absentes étant `eating` — celle qui ouvre
+la bouche en grand, donc celle qui met le plus à l'épreuve l'ancre de bouche et
+son rayon, le réglage le plus délicat de tout l'atelier.
+
+- **9 humeurs clés** — `idle`, `happy`, **`eating`**, `angry`, `sleeping`,
+  `scared`, **`surprise`**, `kiss`, `disgust`. `sleeping` (bouche du ronflement)
+  et `angry` (sourcil lourd) sont les deux qui débordent en premier d'une tête
+  trop petite ; `eating` et `surprise` sont celles qui déforment le plus la
+  bouche et les yeux.
+- **les 18** — toutes, sur deux rangées. Au-delà de neuf vignettes, une seule
+  rangée les rend illisibles.
+- **6 individus** — le même dessin, la même humeur, six identifiants différents.
+  C'est le seul endroit où se juge une **couleur tirée au sort** : sur un seul
+  poisson, elle est invisible par construction.
 
 **L'enregistrement préserve les champs qu'il ne comprend pas.** L'atelier repart
 du document d'origine et ne surcharge que ce qu'il connaît. Reconstruire un objet
@@ -281,11 +389,17 @@ d'espèce reste lu : le manifeste ne fait que le compléter ou l'annuler.
 | `points.mouth` | ancre de la bouche, **honorée séparément** | bouche à sa place par défaut |
 | `points.mouth.r` | **taille de la bouche**, indépendante de celle de l'œil | la bouche suit l'œil |
 | `points.nose`, `points.tail` | repères de l'atelier | ignorés par le jeu |
+| `visage` | **palette du visage commun** : `encre`, `sourcil`, `pupille`, `blanc`, `gorge`, `langue`, `levres`, `dent`, `bec`, `joue` — surcharge **partielle** | `FishBody.VISAGE` |
+| `boucheStyle` | **forme de la bouche** : `standard`, `grande`, `petite`, `gueule`, `bec`, `ventouse` | `standard` |
 | `shapes[].points` | contour, `[[x,y], …]` | — |
 | `shapes[].fill` | couleur pleine, ou `null` pour un tracé au trait seul | gris |
-| `shapes[].stroke`, `.lineWidth` | **trait** — tentacule, antenne, patte | pas de trait |
+| `shapes[].stroke`, `.lineWidth` | **trait** — tentacule, antenne, patte — ou **liseré** d'une forme pleine | pas de trait |
 | `shapes[].ferme` | contour refermé (`false` pour un trait ouvert) | fermé |
 | `shapes[].smooth` | contour lissé plutôt qu'en ligne brisée | lignes droites |
+| `shapes[].alpha` | opacité de la forme, multipliée à l'alpha courant | 1 |
+| `shapes[].lueur` | **bioluminescence** (halo) 0→1, bridée à la nuit si l'espèce déclare `glowAtNight` | éteinte |
+| `shapes[].degrade` | `{ type: 'lineaire'\|'radial', ang, de, vers, pos }` — le premier arrêt vaut la couleur **résolue** de la forme | aplat |
+| `shapes[].couleur` | **couleur propre à l'individu** : `{ mode: 'espece'\|'especeSombre'\|'palette'\|'teinte', couleurs[], amplitude }` | la couleur du dessin |
 | `shapes[].pivot` | rotation en bloc — **repli** quand aucun `fins[]` ne vise la forme | elle ondule |
 | `shapes[].amp` | amplitude d'animation, en degrés pour une nageoire | 15 |
 | `shapes[].groupe` | nom libre : calques **aplatis** en un seul bloc animé | forme isolée |
@@ -313,6 +427,20 @@ d'espèce reste lu : le manifeste ne fait que le compléter ou l'annuler.
 | `ondes` | tentacule : nombre d'ondes sur la longueur | 1 |
 
 ### Les cinq règles du rendu
+
+0 bis. **Le visage commun est commun, sa PEINTURE ne l'est plus.** Ce que le
+   visage dessine passait par trois couleurs en dur — l'encre `#1c2733`, la
+   gorge `#5a2d3d`, la langue rose — et une seule petite bouche de dessin animé
+   pour les 51 espèces, becs et gueules comprises. Deux tables les remplacent :
+   `FishBody.VISAGE` (surchargeable partiellement) et `FishBody.BOUCHES`. Le
+   partage tient parce que ce que la bouche **exprime** reste séparé de ce à
+   quoi elle **ressemble** : `FishBody.GESTE` réduit chacune des quatorze
+   bouches du catalogue à deux nombres — combien elle est ouverte, si elle
+   sourit ou boude — et c'est avec ça qu'un bec ou une ventouse jouent les
+   dix-huit émotions sans qu'on redessine quoi que ce soit. Les mêmes deux
+   champs sont lisibles sur une **fiche d'espèce** (`def.visage`,
+   `def.boucheStyle`), donc une silhouette procédurale en profite aussi ; le
+   dessin l'emporte quand il en déclare.
 
 0. **Un œil ou deux, sans code de rendu supplémentaire.** Le second se dessine
    en reposant le MÊME visage à sa propre ancre : sourcil, joue et clignement
@@ -469,7 +597,7 @@ maintenant implémentés **en repli** de `points.eye.r`, plus direct à régler.
 ---
 ## 8. Ce qui manque encore
 
-*Revu le 4 septembre 2026, atelier ouvert et manifeste inspecté.*
+*Revu le 5 septembre 2026, atelier ouvert et manifeste inspecté.*
 
 ### Ce qui bloque tout de suite
 
@@ -483,39 +611,52 @@ maintenant implémentés **en repli** de `points.eye.r`, plus direct à régler.
     de 166 : tout ce qui est à gauche de cette ligne va onduler. C'est le
     « tiers du crabe qui tortille » déjà identifié.
 
-### Le trou le plus sérieux : la bande d'humeurs ne montre pas tout
+### Le trou le plus sérieux : les accessoires de gag
 
-L'atelier prévisualise **7 humeurs** (`idle`, `happy`, `angry`, `sleeping`,
-`scared`, `kiss`, `disgust`) alors que `FishBody.EMOTIONS` en compte **18**. On
-calibre donc un visage sur 7 cas et le jeu en joue 18. Les onze absentes :
+Une silhouette procédurale ne dessine pas qu'un corps : elle porte parfois
+l'**accessoire d'un gag**. Un dessin qui la remplace le perd, sans prévenir.
 
-`love` · `eating` · `dizzy` · `blush` · `proud` · `ashamed` · `laughing` ·
-`surprise` · `wink` · `sad` · `smug`
+C'est le même problème que la danse du Crabe Disco, réglé une fois par
+`FishBody.choregraphie()` — appliquée AUTOUR du corps, quel qu'il soit. Trois
+cas restent enfermés dans leur silhouette :
 
-La plus gênante est **`eating`** : c'est elle qui ouvre la bouche en grand,
-donc celle qui met le plus à l'épreuve l'ancre de bouche et son rayon — le
-réglage le plus délicat de tout l'atelier, et le seul qu'on ne peut pas voir.
-Viennent ensuite `dizzy` et `surprise`, qui déforment le plus les yeux.
+- la **poche du Pélican** (`drawBird`, pilotée par `_poche` et `_chew`) — c'est
+  là que se joue tout son gag ;
+- la **lampe du Poisson-lanterne** et son halo de pêche (`drawLantern`,
+  `_lureOn`) — la luminescence par calque (`lueur`) en rend une partie, mais pas
+  la tige ni le balayage ;
+- le **rocher de la Murène** (`drawEel`), calé sur la ligne de contour du fond.
+
+Aucune de ces trois espèces n'a de dessin activé aujourd'hui, donc rien n'est
+cassé — mais activer l'une d'elles sans hisser son accessoire hors de sa
+silhouette **supprimerait son gag**. Le patron à suivre est `choregraphie()`.
 
 ### Le reste
 
-- **Un dessin par espèce.** Seul le requin en a un d'activé. Les 26 autres
-  s'ouvrent dans l'atelier en un clic (« partir de la silhouette du jeu »), et
-  certaines n'en ont sans doute pas besoin.
+- **Un dessin par espèce.** Deux sont activés (requin, confetti) et un attend
+  (crabe). Les 48 autres s'ouvrent dans l'atelier en un clic (« partir de la
+  silhouette du jeu »), et certaines n'en ont sans doute pas besoin. Le rail les
+  range par état : la rubrique **« sans dessin de référence »** donne les 21
+  espèces qui n'ont même pas de vignette dans la planche du design.
 - **Trois gabarits seulement** (`Poisson`, `De face`, `Rampant`). Il en manque
-  au moins deux que le roster réclame déjà : un **oiseau** (le Fou Moustachu, et
-  les trois autres à venir) et une **méduse** — une silhouette verticale dont
-  la bouche et les yeux ne sont pas placés comme ceux d'un poisson.
+  au moins deux que le roster réclame déjà : un **oiseau** (Fou Moustachu,
+  Pélican, Goéland, Cormoran — le style de bouche `bec` existe maintenant, le
+  gabarit d'ancres non) et une **méduse**, silhouette verticale dont la bouche
+  et les yeux ne sont pas placés comme ceux d'un poisson.
 - **Le miroir.** Un dessin est fait tourné vers la droite ; le jeu le retourne
   par `scale(-1, 1)` avec le demi-tour animé. Un dessin asymétrique (une tache
   sur un seul flanc) se retrouvera donc de l'autre côté la moitié du temps.
 - **Les créatures posées au sol** (crabe, étoile, coquillage, ver, anémone,
   murène) pivotent avec la pente du fond : leur dessin doit être fait
   **horizontal**, pas incliné.
-- **Le dessin à main levée.** L'atelier retouche un contour point par point mais
-  ne remplace pas un outil de tracé : pour créer une forme de zéro, dessiner
-  ailleurs et importer le SVG.
+- **Le dessin à main levée.** L'atelier retouche un contour point par point et
+  sait tracer un polygone au clic, mais il n'a pas de poignées de Bézier : pour
+  une courbe fine, dessiner ailleurs et importer le SVG.
+- **Les taches procédurales** (`def.spots`) n'ont pas d'équivalent tiré au sort :
+  un dessin peut peindre ses taches, mais elles seront les mêmes sur tous les
+  individus. La couleur, elle, varie désormais (`shapes[].couleur`).
 - **Aucun aperçu en situation.** On voit la créature seule sur fond clair, jamais
   à sa taille réelle au milieu des autres, ni dans la couleur d'eau de sa
   profondeur. Un dessin abyssal jugé au bon contraste dans l'atelier peut se
-  révéler illisible à 3 000 px de fond.
+  révéler illisible à 3 000 px de fond. Le bouton **🌙 nuit** en règle une
+  moitié : il montre au moins ce que donne une luminescence.

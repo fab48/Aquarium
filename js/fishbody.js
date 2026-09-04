@@ -999,7 +999,11 @@ const FishBody = {
     // le brancher ici, l'attaque du Poisson-Tapis était totalement invisible —
     // la proie disparaissait sans qu'on ait vu la carpette bouger.
     const jaillit = (e.state === 'strike' || e.state === 'retract') ? (e.strikeT || 0) : 0;
-    const open = Math.max(eating ? (Math.sin(t * 8 + e.phase) * 0.5 + 0.5) * 0.6 + 0.4 : 0, jaillit);
+    // `_gueule` (GAGS.poisson_tapis) : il entrouvre déjà quand une proie
+    // approche, et ouvre EN GRAND au jaillissement. Sans cette anticipation,
+    // la gueule apparaissait d'un coup et le gag ne se lisait pas.
+    const open = Math.max(eating ? (Math.sin(t * 8 + e.phase) * 0.5 + 0.5) * 0.6 + 0.4 : 0,
+                          jaillit, e._gueule || 0);
     const breath = Math.sin(t * 1.3 + e.phase) * s * 0.06;
     // Il se cabre : le corps se soulève et se ramasse d'avant en arrière
     ctx.save();

@@ -627,8 +627,9 @@ const GAGS = {
   requin(e, dt, t) {
     if (e._edente > 0) {
       e._edente -= dt;
-      if (Math.random() < dt * 0.35) e.emote('sad', 1.8, false);
+      e.hold('sad');                          // TENUE : on doit comprendre qu'il boude
       if (e._edente <= 0) {
+        e.release();
         e.emote('happy', 2);
         Particles.sparkles(e.x + e.size * 0.6, e.y, 4);
       }
@@ -716,5 +717,20 @@ const GAGS = {
     e._ninjaCd = U.rand(35, 80);
     e._ninjaPh = 'guet'; e._ninjaT = 1.1;
     e.emote('surprise', 1.1, false);          // il vérifie que personne ne regarde
+  },
+
+  // LE POISSON-TAPIS OUVRE UNE ÉNORME BOUCHE. Il ne fait rien d'autre de la
+  // journée : il attend, confondu avec le sable. Le gag, c'est le contraste —
+  // rien, rien, rien, et d'un coup une gueule plus large que lui.
+  // `_gueule` (0 → 1) est lu par le rendu.
+  poisson_tapis(e, dt, t) {
+    const cible = (e.state === 'strike' || e._chew > 0) ? 1
+                : (e._traque && !e._traque.dead ? 0.35 : 0);
+    e._gueule = U.lerp(e._gueule ?? 0, cible, Math.min(1, dt * (cible > 0.5 ? 14 : 3)));
+    if (cible > 0.5 && !e._gueuleOuverte) {
+      e._gueuleOuverte = true;
+      e.emote('eating', 1.6, false);
+    }
+    if (cible < 0.2) e._gueuleOuverte = false;
   },
 };

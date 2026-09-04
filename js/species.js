@@ -346,6 +346,8 @@ const SPECIES = {
     colors: ['#a0785a'],
     render: 'worm', sizeVar: 0.16,
     lifespan: [700, 1000],
+    // Plus de câlin : il embusque et ouvre une énorme bouche (gags.js).
+    gag: (e, dt, t) => GAGS.poisson_tapis(e, dt, t),
   },
 
   poisson_lune: {

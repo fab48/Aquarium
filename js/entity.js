@@ -71,6 +71,30 @@ class Entity {
     this.wet = 0;              // def.aerial : "mouillé" après un plongeon raté
     this.jumpState = 'water';  // def.jumps : 'water' | 'air'
     this._refugeAnchored = false; // œuf/alevin ancré à une anémone (Ecosystem.layEgg)
+    // Accumulateur d'accélération des méthodes de steering (steerVers/tetherVers) :
+    // les fermetures locales qu'elles remplacent étaient recréées à chaque move()
+    // (~1000 par frame). Déclaré ici pour figer la forme de l'objet.
+    this._axAcc = 0; this._ayAcc = 0;
+  }
+
+  // Steering "vitesse désirée" : vise droit sur la cible au lieu d'accélérer
+  // vers elle (ce qui faisait orbiter en cercles). Écrit dans _axAcc/_ayAcc,
+  // que move() reverse dans son accélération locale.
+  steerVers(tx, ty, sp, k = 3) {
+    const dx = tx - this.x, dy = ty - this.y, d = Math.hypot(dx, dy) || 1;
+    this._axAcc += (dx / d * sp - this.vx) * k;
+    this._ayAcc += (dy / d * sp - this.vy) * k;
+  }
+
+  // Ancrage à RAYON DE CONFORT : le rappel ne s'exerce qu'au-delà du rayon,
+  // sinon tout le monde converge sur le même point et s'empile autour de
+  // l'anémone. À l'intérieur, chacun vaque librement.
+  tetherVers(r, k) {
+    const dx = this.anchorX - this.x, dy = this.anchorY - this.y;
+    const d = Math.hypot(dx, dy);
+    if (d <= r) return;
+    const over = (d - r) / d;
+    this._axAcc += dx * over * k; this._ayAcc += dy * over * k;
   }
 
   // Taille affichée = gabarit de l'espèce x maturité (`growth`) x gabarit
@@ -86,9 +110,13 @@ class Entity {
   get color() { return this._color ?? (this._color = U.pick(this.def.colors)); }
   get colorDark() { return this._cd ?? (this._cd = U.mixColor(this.color.startsWith('#') ? this.color : '#888888', '#102030', 0.35)); }
   colorAlpha(a) {
-    const c = this.color;
-    const r = parseInt(c.slice(1, 3), 16), g = parseInt(c.slice(3, 5), 16), b = parseInt(c.slice(5, 7), 16);
-    return `rgba(${r},${g},${b},${a})`;
+    // Le préfixe "r,g,b" est figé (la couleur d'un individu ne change jamais) :
+    // on ne le redécoupe pas à chaque appel (74/frame mesurés).
+    if (!this._rgbPrefix) {
+      const c = U.hexRGB(this.color);
+      this._rgbPrefix = `rgba(${c[0]},${c[1]},${c[2]},`;
+    }
+    return this._rgbPrefix + a + ')';
   }
 
   setExpression(expr, dur = 1.5) { this.emote(expr, dur); }
@@ -615,7 +643,10 @@ class Entity {
   // FOND tombe dans sa bande de profondeur. Calculée une fois — le relief ne
   // change pas. Le crabe ([0, 99999]) obtient tout le monde, comme avant.
   bornesReptation() {
-    if (this._bornesRep) return this._bornesRep;
+    // Mémoïsé sur la FICHE D'ESPÈCE : le résultat ne dépend que de def
+    // (depthBand) et le relief ne change pas — le cache par individu refaisait
+    // le même balayage pour chacun des ~490 animaux.
+    if (this.def._bornesRep) return this.def._bornesRep;
     const [dMin, dMax] = this.def.depthBand;
     let xMin = null, xMax = null;
     for (let x = World.shoreX; x < CONFIG.WORLD_WIDTH - 50; x += CONFIG.DEPTH_COLUMN_WIDTH / 2) {
@@ -626,14 +657,16 @@ class Entity {
     }
     // Bande introuvable (relief modifié) : on ne l'enferme pas, il rampe partout.
     if (xMin === null) { xMin = World.shoreX; xMax = CONFIG.WORLD_WIDTH - 50; }
-    return (this._bornesRep = [Math.max(xMin, World.shoreX + 60), Math.min(xMax, CONFIG.WORLD_WIDTH - 60)]);
+    return (this.def._bornesRep = [Math.max(xMin, World.shoreX + 60), Math.min(xMax, CONFIG.WORLD_WIDTH - 60)]);
   }
 
   // Le x le plus près de la côte où un colosse a encore assez d'eau sous la
   // quille (avec une marge : on ne veut pas le voir raser le fond). Calculé une
   // fois — le relief ne change pas.
   limiteLarge() {
-    if (this._limiteLarge != null) return this._limiteLarge;
+    // Mémoïsé sur la FICHE D'ESPÈCE (ne dépend que de def.offshore/def.size et
+    // du relief, qui ne change pas) : ~490 balayages du relief → 27.
+    if (this.def._limiteLarge != null) return this.def._limiteLarge;
     // Les colosses gardent une marge confortable ; pour les autres, il suffit
     // qu'ils tiennent dans la colonne d'eau sans racler ni dépasser. Une espèce
     // peut exiger davantage (`offshore`) : les petits nageurs de surface tiennent
@@ -643,7 +676,7 @@ class Entity {
     let x = World.shoreX;
     const pas = CONFIG.DEPTH_COLUMN_WIDTH / 2;
     while (x < CONFIG.WORLD_WIDTH && World.floorY(x) - CONFIG.SURFACE_Y < besoin) x += pas;
-    return (this._limiteLarge = Math.min(x, CONFIG.WORLD_WIDTH * 0.5));
+    return (this.def._limiteLarge = Math.min(x, CONFIG.WORLD_WIDTH * 0.5));
   }
 
   // Qui peut gonfler ? Pas le décor vivant : une anémone à 3,6x n'est plus
@@ -766,8 +799,8 @@ class Entity {
   // est proche, plus la pupille se tourne vers elle. C'est le détail qui donne
   // l'impression que les poissons vous remarquent.
   updateEyeLook() {
-    const [mx, my] = Camera.toWorld(Input.mx, Input.my);
-    const dx = mx - this.x, dy = my - this.y;
+    // Position monde du curseur : calculée une fois par frame dans Main.frame
+    const dx = Input.wmx - this.x, dy = Input.wmy - this.y;
     const d = Math.hypot(dx, dy);
     const PORTEE = 420;
     if (d > PORTEE || d < 1 || !Input.inWindow) {
@@ -1097,18 +1130,9 @@ class Entity {
     // bousculer par des dizaines de petits poissons les faisait tourner sur
     // eux-mêmes, et un filtreur DOIT pouvoir chevaucher le banc qu'il avale.
     // Percuter de plein fouet un gros placide (baleine, poisson-lune, cachalot) :
-    // on rebondit et on voit les étoiles.
-    if (this.speedNow > 280 && this.size < 45 && this.state !== 'dizzy') {
-      for (const o of Ecosystem.neighbors(this.x, this.y)) {
-        if (o === this || o.dead || o.size < 45) continue;
-        const contact = o.size * 0.85 + this.size;
-        if (U.dist2(this.x, this.y, o.x, o.y) < contact * contact) {
-          this.assomme();
-          o.emote('surprise', 1.8);
-          break;
-        }
-      }
-    }
+    // on rebondit et on voit les étoiles. Le test vit dans la MÊME passe de
+    // voisinage que l'anti-chevauchement ci-dessous (une seule itération de la
+    // liste au lieu de deux, cf. PERFORMANCE.md §5.2).
 
     // Les colosses s'ignorent tous SAUF entre eux : deux baleines qui se
     // traversent, ça se voit tout de suite. Elles se cognent, se repoussent
@@ -1164,10 +1188,24 @@ class Entity {
     }
     if (this._bumpCd > 0) this._bumpCd -= dt;
 
+    // UNE SEULE passe de voisinage pour deux tests : le choc contre un gros
+    // (ex-boucle dédiée) et l'anti-chevauchement. Deux parcours de la même
+    // liste coûtaient ~18 000 itérations de plus par frame.
     let crowd = 0;
-    if (!def.filterFeeder && def.size < 70) {
+    let choc = this.speedNow > 280 && this.size < 45 && this.state !== 'dizzy';
+    const poussable = !def.filterFeeder && def.size < 70;
+    if (choc || poussable) {
     for (const o of Ecosystem.neighbors(this.x, this.y)) {
       if (o === this || o.dead) continue;
+      if (choc && o.size >= 45) {
+        const contact = o.size * 0.85 + this.size;
+        if (U.dist2(this.x, this.y, o.x, o.y) < contact * contact) {
+          this.assomme();
+          o.emote('surprise', 1.8);
+          choc = false;                     // un seul choc, comme l'ancien break
+        }
+      }
+      if (!poussable) continue;
       if (o.def.size >= 70 || o.def.filterFeeder) continue;   // on ne pousse pas un colosse
       // Un DORMEUR ne se fait pas pousser : c'est celui qui passe qui contourne.
       // Sans ça, le moindre thon traversant un banc endormi le dispersait, et
@@ -1187,7 +1225,7 @@ class Entity {
       }
     }
     // Trop serré : on cherche activement de l'espace plutôt que de vibrer sur place
-    if (crowd >= 3) { ax *= 1.4; ay *= 1.4; maxSpeed = Math.max(maxSpeed, def.speed * 1.5); }
+    if (crowd >= 3 && poussable) { ax *= 1.4; ay *= 1.4; maxSpeed = Math.max(maxSpeed, def.speed * 1.5); }
     }
 
     // Errance — amplitude réduite pour les colosses, qui doivent glisser droit
@@ -1213,53 +1251,51 @@ class Entity {
       maxSpeed = def.speed;
     }
 
-    // Objectifs d'état — steering "vitesse désirée" : vise droit sur la cible
-    // au lieu d'accélérer vers elle (ce qui faisait orbiter en cercles).
-    const steer = (txx, tyy, sp, k = 3) => {
-      const dx = txx - this.x, dy = tyy - this.y, d = Math.hypot(dx, dy) || 1;
-      ax += (dx / d * sp - this.vx) * k;
-      ay += (dy / d * sp - this.vy) * k;
-    };
+    // Objectifs d'état — steering "vitesse désirée" (steerVers/tetherVers, en
+    // méthodes de prototype : les fermetures locales coûtaient ~1000
+    // allocations par frame). L'accumulateur est reversé dans ax/ay plus bas.
+    this._axAcc = 0; this._ayAcc = 0;
     if (this._lureT > 0 && this.state !== 'flee') {
       // HYPNOTISÉE par une lampe de poisson-lanterne : elle avance droit sur la
       // lumière, sans plus rien voir. Une vraie peur la réveille quand même —
       // c'est le seul état qui prime, sinon la crevette se laisse manger deux
       // fois de suite par des prédateurs différents.
       maxSpeed = def.speed * 0.75;
-      steer(this._lureX, this._lureY, maxSpeed, 2.5);
+      this.steerVers(this._lureX, this._lureY, maxSpeed, 2.5);
     } else if (this.state === 'seekFood' && this.targetFood) {
       maxSpeed = def.speed * 1.4;
-      steer(this.targetFood.x, this.targetFood.y, maxSpeed);
+      this.steerVers(this.targetFood.x, this.targetFood.y, maxSpeed);
     } else if (this.state === 'hunt' && this.target) {
       maxSpeed = def.sprintSpeed || def.speed * 1.8;
-      steer(this.target.x, this.target.y, maxSpeed, 4);
+      this.steerVers(this.target.x, this.target.y, maxSpeed, 4);
       if (def.sprintSpeed && Math.random() < dt * 2) Particles.wake(this.x - this.size, this.y);
     } else if (this.state === 'flee' && this.target) {
       maxSpeed = def.speed * 2;
-      steer(this.x * 2 - this.target.x, this.y * 2 - this.target.y, maxSpeed, 4);
+      this.steerVers(this.x * 2 - this.target.x, this.y * 2 - this.target.y, maxSpeed, 4);
     } else if (this.state === 'court' && this.target) {
       maxSpeed = def.speed * 1.5;
-      steer(this.target.x, this.target.y, maxSpeed, 3);
+      this.steerVers(this.target.x, this.target.y, maxSpeed, 3);
     } else if (this._tickleTarget && !this._tickleTarget.dead) {
       // Le Poisson-clown vise le POINT DE BISOU (tangent au flanc), pas le centre
       // de sa victime : c'est ce qui le colle contre elle au lieu de la traverser.
       maxSpeed = def.speed * 1.8;
-      steer(this._kissX ?? this._tickleTarget.x, this._kissY ?? this._tickleTarget.y, maxSpeed, 4);
+      this.steerVers(this._kissX ?? this._tickleTarget.x, this._kissY ?? this._tickleTarget.y, maxSpeed, 4);
     } else if (this._farceX != null) {
       // Dauphin en pleine farce : approche discrète puis jaillissement
       const fonce = this._farcePh === 'bouh';
       maxSpeed = fonce ? (def.sprintSpeed || def.speed * 2) : def.speed * 0.5;
-      steer(this._farceX, this._farceY, maxSpeed, fonce ? 5 : 2);
+      this.steerVers(this._farceX, this._farceY, maxSpeed, fonce ? 5 : 2);
     } else if (this.state === 'migrate' && this._nursery) {
       maxSpeed = def.speed * 1.35;   // en route vers la frayère
-      steer(this._nursery.x, this._nursery.y, maxSpeed, 2.2);
+      this.steerVers(this._nursery.x, this._nursery.y, maxSpeed, 2.2);
     } else if (this.state === 'sleep') {
       maxSpeed = def.speed * 0.05;
     }
 
-    // Fuite du curseur rapide (remous)
+    // Fuite du curseur rapide (remous). Position monde du curseur : calculée
+    // une fois par frame dans Main.frame, plus par chaque petit poisson.
     if (Input.inWindow && def.size < 26) {
-      const [mx, my] = Camera.toWorld(Input.mx, Input.my);
+      const mx = Input.wmx, my = Input.wmy;
       const d2 = U.dist2(this.x, this.y, mx, my);
       // Le curseul rapide fend le banc ; même lent, il crée un léger halo d'évitement.
       const portee = Input.mouseSpeed > 700 ? 230 : 110;
@@ -1272,9 +1308,12 @@ class Entity {
       }
     }
 
-    // Contraintes de liberté (GDD §5)
+    // Contraintes de liberté (GDD §5). La hauteur du fond sous l'animal est
+    // lue UNE fois pour toutes les contraintes qui suivent (bande, tirant
+    // d'eau, garde au sol) : elle était recalculée 3 à 4 fois par move().
+    const fondY = World.floorY(this.x);
     const dMin = CONFIG.SURFACE_Y + def.depthBand[0];
-    const dMax = Math.min(CONFIG.SURFACE_Y + def.depthBand[1], World.floorY(this.x) - this.size);
+    const dMax = Math.min(CONFIG.SURFACE_Y + def.depthBand[1], fondY - this.size);
     // En pleine chasse, un prédateur peut déborder de sa bande pour aller
     // chercher sa proie : le rappel vertical est assoupli.
     // Assoupli en chasse ET en migration : aller frayer, c'est justement quitter
@@ -1287,18 +1326,13 @@ class Entity {
     // Ancrage à RAYON DE CONFORT : le rappel ne s'exerce qu'au-delà du rayon,
     // sinon tout le monde converge sur le même point et s'empile autour de
     // l'anémone. À l'intérieur, chacun vaque librement.
-    const tether = (r, k) => {
-      const dx = this.anchorX - this.x, dy = this.anchorY - this.y;
-      const d = Math.hypot(dx, dy);
-      if (d <= r) return;
-      const over = (d - r) / d;
-      ax += dx * over * k; ay += dy * over * k;
-    };
     // Le rappel vers l'anémone est suspendu pendant une chatouille : sinon le
     // clown est retenu en laisse et n'atteint jamais sa victime.
-    if (def.movement === 'anchored' && !this._tickleTarget) tether(def.homeRadius ?? 120, 2.2);
+    if (def.movement === 'anchored' && !this._tickleTarget) this.tetherVers(def.homeRadius ?? 120, 2.2);
     // Alevin né près d'une anémone (GDD §9) : reste à proximité de son refuge
-    if (this._refugeAnchored && this.stage === 'fry') tether(190, 1.4);
+    if (this._refugeAnchored && this.stage === 'fry') this.tetherVers(190, 1.4);
+    // Reversement des contributions steerVers/tetherVers accumulées plus haut
+    ax += this._axAcc; ay += this._ayAcc;
     // Cible verticale ponctuelle générique (ex. cycle de plongée du Cachalot via
     // def.gag). Suspendue en chasse : sinon le Cachalot est tiré vers les abysses
     // pendant qu'il poursuit un poulpe et ne l'attrape jamais.
@@ -1309,7 +1343,7 @@ class Entity {
     // Tirant d'eau : une créature ne va pas là où la colonne d'eau est plus
     // basse qu'elle. Sans ça les baleines venaient s'échouer sur le haut-fond.
     const tirant = this.size * 2.2;
-    const colonne = World.floorY(this.x) - CONFIG.SURFACE_Y;
+    const colonne = fondY - CONFIG.SURFACE_Y;
     if (colonne < tirant) {
       const versLeLarge = World.floorY(this.x + 60) > World.floorY(this.x - 60) ? 1 : -1;
       ax += versLeLarge * (tirant - colonne) * 1.6;
@@ -1319,7 +1353,7 @@ class Entity {
     // demi-longueur d'eau sous le ventre — sauf en remontee pour respirer,
     // ou seule la surface compte.
     if (def.size >= 70 && !this._surfacing) {
-      const garde = World.floorY(this.x) - this.size * 1.5;
+      const garde = fondY - this.size * 1.5;
       if (this.y > garde) { ay += (garde - this.y) * 3; this.vy = Math.min(this.vy, 0); }
     }
 
@@ -1451,7 +1485,7 @@ class Entity {
   }
 
   draw(ctx, t) {
-    const [sx, sy] = Camera.toScreen(this.x, this.y);
+    const sx = Camera.sx(this.x), sy = Camera.sy(this.y);
     ctx.save();
     ctx.translate(sx, sy);
 

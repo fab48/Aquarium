@@ -12,11 +12,20 @@ const U = {
     while (d < -Math.PI) d += Math.PI * 2;
     return a + d * t;
   },
-  // Interpolation de couleurs hex "#rrggbb"
+  // Interpolation de couleurs hex "#rrggbb". Le découpage des chaînes hex est
+  // mis en cache : les couleurs sources viennent des palettes, il y en a peu,
+  // et mixColor tourne >100 fois par frame dans le décor.
+  _hexRGB: {},
+  hexRGB(c) {
+    let v = U._hexRGB[c];
+    if (!v) v = U._hexRGB[c] = [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
+    return v;
+  },
   mixColor(c1, c2, t) {
-    const p = c => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
-    const [r1, g1, b1] = p(c1), [r2, g2, b2] = p(c2);
-    const r = Math.round(U.lerp(r1, r2, t)), g = Math.round(U.lerp(g1, g2, t)), b = Math.round(U.lerp(b1, b2, t));
+    const a = U.hexRGB(c1), b2 = U.hexRGB(c2);
+    const r = Math.round(a[0] + (b2[0] - a[0]) * t),
+          g = Math.round(a[1] + (b2[1] - a[1]) * t),
+          b = Math.round(a[2] + (b2[2] - a[2]) * t);
     return `rgb(${r},${g},${b})`;
   },
 };

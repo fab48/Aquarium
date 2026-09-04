@@ -218,16 +218,28 @@ const Particles = {
       else if (p.type === 'zzz') { p.x += p.vx * dt + Math.sin(p.age * 3.5) * 16 * dt; p.y += p.vy * dt; }
       else if (p.type === 'chunk') { p.vy += 150 * dt; p.vx *= 0.965; p.vy *= 0.975; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.spin * dt; }
     }
-    this.list = this.list.filter(p => p.age < p.life);
+    // Compactage SUR PLACE : deux `filter` reconstruisaient des tableaux
+    // complets à chaque frame (pression GC, cf. PERFORMANCE.md §5.5).
+    let w = 0;
+    for (let i = 0; i < this.list.length; i++) {
+      const p = this.list[i];
+      if (p.age < p.life) this.list[w++] = p;
+    }
+    this.list.length = w;
 
     for (const b of this.actionBubbles) { b.age += dt; b.y -= 22 * dt; }
-    this.actionBubbles = this.actionBubbles.filter(b => b.age < b.life);
+    w = 0;
+    for (let i = 0; i < this.actionBubbles.length; i++) {
+      const b = this.actionBubbles[i];
+      if (b.age < b.life) this.actionBubbles[w++] = b;
+    }
+    this.actionBubbles.length = w;
   },
 
   draw(ctx) {
     for (const p of this.list) {
       if (!Camera.isVisible(p.x, p.y)) continue;
-      const [sx, sy] = Camera.toScreen(p.x, p.y);
+      const sx = Camera.sx(p.x), sy = Camera.sy(p.y);
       const t = p.age / p.life;
       ctx.globalAlpha = 1 - t;
       if (p.type === 'ripple') {
@@ -383,7 +395,7 @@ const Particles = {
     // Bulles d'action comiques (langage BD partagé)
     for (const b of this.actionBubbles) {
       if (!Camera.isVisible(b.x, b.y)) continue;
-      const [sx, sy] = Camera.toScreen(b.x, b.y);
+      const sx = Camera.sx(b.x), sy = Camera.sy(b.y);
       const t = b.age / b.life;
       // "pop" élastique : la bulle dépasse sa taille puis se stabilise
       const g = Math.min(1, b.age * 6);

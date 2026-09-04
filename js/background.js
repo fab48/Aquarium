@@ -96,14 +96,25 @@ const Background = {
     return [];
   },
 
-  // Couleur de l'eau selon profondeur (px sous la surface) et nuit
+  // Couleur de l'eau selon profondeur (px sous la surface) et nuit.
+  // MÉMOÏSÉE en quantifiant profondeur (pas de 16 px) et nuit (1/40) : la
+  // fonction faisait jusqu'à quatre mixColor par appel, pour des couleurs qui
+  // ne dépendent que de la tranche d'eau et de l'heure. Les pas sont invisibles.
+  _waterCache: new Map(),
   waterColor(depth, night) {
+    const d = Math.max(0, Math.round(depth / 16) * 16);
+    const ni = Math.round(night * 40);
+    const key = d * 64 + ni;
+    const hit = this._waterCache.get(key);
+    if (hit) return hit;
+    const nq = ni / 40;
     let c;
-    if (depth < 120) c = U.mixColor('#8fd8f5', '#5db8e8', depth / 120);
-    else if (depth < 700) c = U.mixColor('#5db8e8', '#2a6b9e', (depth - 120) / 580);
-    else if (depth < 1700) c = U.mixColor('#2a6b9e', '#123452', (depth - 700) / 1000);
-    else c = U.mixColor('#123452', '#040a14', Math.min(1, (depth - 1700) / 900));
-    if (night > 0) c = U.mixColor(c.startsWith('rgb') ? this.rgbToHex(c) : c, '#020812', night * 0.7);
+    if (d < 120) c = U.mixColor('#8fd8f5', '#5db8e8', d / 120);
+    else if (d < 700) c = U.mixColor('#5db8e8', '#2a6b9e', (d - 120) / 580);
+    else if (d < 1700) c = U.mixColor('#2a6b9e', '#123452', (d - 700) / 1000);
+    else c = U.mixColor('#123452', '#040a14', Math.min(1, (d - 1700) / 900));
+    if (nq > 0) c = U.mixColor(c.startsWith('rgb') ? this.rgbToHex(c) : c, '#020812', nq * 0.7);
+    this._waterCache.set(key, c);
     return c;
   },
 
@@ -313,43 +324,81 @@ const Background = {
     { t: 1.00, haut: '#3a3f78', bas: '#f3a463' },   // boucle sur l'aube
   ],
 
+  // Mémoïsé PAR FRAME : appelée une dizaine de fois par frame (dégradés,
+  // nuages, phases de lune) pour un résultat qui ne dépend que de l'heure.
   skyColor(top = false) {
+    if (this._skyMemoT !== Main.time) { this._skyMemoT = Main.time; this._skyHaut = null; this._skyBas = null; }
+    if (top && this._skyHaut) return this._skyHaut;
+    if (!top && this._skyBas) return this._skyBas;
     const P = this.CIEL, tt = Main.dayT();
     let i = 0;
     while (i < P.length - 2 && tt > P[i + 1].t) i++;
     const k = U.clamp((tt - P[i].t) / (P[i + 1].t - P[i].t), 0, 1);
     const cle = top ? 'haut' : 'bas';
-    return this.melange(P[i][cle], P[i + 1][cle], k);
+    const c = this.melange(P[i][cle], P[i + 1][cle], k);
+    if (top) this._skyHaut = c; else this._skyBas = c;
+    return c;
+  },
+
+  // --- Dégradés plein écran PRÉ-RENDUS (PERFORMANCE.md §5.7) -----------------
+  // Rasteriser un dégradé plein écran coûte 16 fois un aplat (8 ms mesurés en
+  // rendu logiciel pour la seule colonne d'eau). Le dégradé est donc peint dans
+  // une bande hors écran de 1 px de large puis ÉTIRÉ au drawImage : un
+  // étirement de texture est un remplissage plat. La bande est refaite à
+  // chaque frame (512 px, gratuit), donc aucun retard sur l'heure ni la
+  // profondeur visible.
+  _strips: {},
+  stripFill(ctx, id, stops, x, y, w, h) {
+    let s = this._strips[id];
+    if (!s) {
+      s = this._strips[id] = document.createElement('canvas');
+      s.width = 1; s.height = 512;
+      // willReadFrequently : la bande vit CÔTÉ CPU. Sans ça elle est
+      // accélérée GPU, et sur une machine dont le canvas PRINCIPAL est en
+      // rendu logiciel chaque drawImage force une relecture GPU→CPU de la
+      // bande (mesuré : décor à 29 ms au lieu de 9). Sur une machine
+      // accélérée, l'envoi CPU→GPU d'une bande de 1×512 est négligeable.
+      // (Le garde-fou de PERFORMANCE.md — jamais willReadFrequently sur le
+      // canvas principal — reste vrai : ici c'est un canvas hors écran.)
+      s._ctx = s.getContext('2d', { willReadFrequently: true });
+    }
+    const g = s._ctx.createLinearGradient(0, 0, 0, 512);
+    for (let i = 0; i < stops.length; i++) g.addColorStop(stops[i][0], stops[i][1]);
+    s._ctx.fillStyle = g;
+    s._ctx.fillRect(0, 0, 1, 512);
+    ctx.drawImage(s, x, y, w, h);
   },
 
   draw(ctx, t) {
     const night = Main.nightAmount();
     const W = Camera.w, H = Camera.h;
 
-    // --- Colonne d'eau : dégradé vertical selon la profondeur visible ---
+    // --- Colonne d'eau : dégradé vertical selon la profondeur visible,
+    // pré-rendu dans une bande étroite puis étiré (§5.7) ---
     const dTop = Camera.y - CONFIG.SURFACE_Y;
     const dBot = Camera.y + H - CONFIG.SURFACE_Y;
-    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    const stops = [];
     for (let i = 0; i <= 4; i++) {
       const d = U.lerp(dTop, dBot, i / 4);
-      grad.addColorStop(i / 4, d < 0 ? this.skyColor() : this.waterColor(d, night));
+      stops.push([i / 4, d < 0 ? this.skyColor() : this.waterColor(d, night)]);
     }
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, W, H);
+    this.stripFill(ctx, 'eau', stops, 0, 0, W, H);
 
     // --- Ciel et ligne de surface ---
-    const [, surfSy] = Camera.toScreen(0, CONFIG.SURFACE_Y);
+    const surfSy = Camera.sy(CONFIG.SURFACE_Y);
     if (surfSy > 0) {
       // Le ciel occupe TOUTE la hauteur visible au-dessus de l'eau, mais son
       // dégradé est calé sur une hauteur de ciel de référence : sinon, dès
       // qu'on remonte la caméra, le dégradé s'étire et le bas du ciel devient
       // uniformément pâle.
       const cielH = Math.max(240, Math.min(surfSy, H));
-      const sky = ctx.createLinearGradient(0, surfSy - cielH, 0, surfSy);
-      sky.addColorStop(0, this.skyColor(true));
-      sky.addColorStop(1, this.skyColor());
-      ctx.fillStyle = sky;
-      ctx.fillRect(0, 0, W, Math.min(surfSy, H));
+      const y0 = surfSy - cielH;
+      // au-dessus du dégradé (caméra très haut) : la couleur du sommet du ciel
+      if (y0 > 0) { ctx.fillStyle = this.skyColor(true); ctx.fillRect(0, 0, W, y0); }
+      // hauteur pleine : le canvas rogne ce qui dépasse sous l'écran — réduire
+      // la hauteur COMPRIMERAIT le dégradé au lieu de le rogner
+      this.stripFill(ctx, 'ciel', [[0, this.skyColor(true)], [1, this.skyColor()]],
+        0, y0, W, cielH);
       this.ciel(ctx, t, surfSy, cielH, W, H, night);
       // vagues
       ctx.strokeStyle = `rgba(255,255,255,${0.5 - night * 0.3})`;
@@ -364,6 +413,11 @@ const Background = {
     }
 
     // --- God rays (atténués avec la profondeur, GDD §2) ---
+    // NB (§5.11, tenté puis ABANDONNÉ) : un rayon pré-rendu posé au drawImage
+    // coûte 15 ms en rendu logiciel — un drawImage étiré n'est un remplissage
+    // plat que s'il est OPAQUE ; avec de l'alpha (et en 'lighter'), Chrome
+    // repasse par un blend par pixel bien plus cher que le dégradé d'origine
+    // (1 ms). On garde donc les dégradés.
     const rayStrength = U.clamp(1 - dTop / 800, 0, 1) * (1 - night * 0.85);
     if (rayStrength > 0.02 && surfSy < H) {
       ctx.save();
@@ -415,7 +469,7 @@ const Background = {
       if (px < -250 || px > W + 250) continue;
       const wx = px + Camera.x;                       // x monde effectivement montré
       const floorWY = World.floorY(wx);
-      const [, py] = Camera.toScreen(0, floorWY + r.h * r.bury);
+      const py = Camera.sy(floorWY + r.h * r.bury);
       if (py < -200 || py > H + 200) continue;
       const depth = floorWY - CONFIG.SURFACE_Y;
       const light = U.clamp(1 - depth / 2600, 0.2, 1) * (1 - night * 0.55);
@@ -451,54 +505,62 @@ const Background = {
     }
 
     // --- Fond sableux (dégradé selon la profondeur : clair en haut, sombre au fond) ---
-    const sandGrad = ctx.createLinearGradient(0, 0, 0, H);
+    // Le CONTOUR du fond est échantillonné UNE seule fois par frame (§5.8) :
+    // le remplissage, les trois passes de modelé et les cinq rides le
+    // reparcouraient neuf fois (1 121 lineTo, autant de floorY + toScreen).
+    const PAS = 24;
+    const nC = Math.floor((W + 60) / PAS) + 1;
+    let cfy = this._contourY;
+    if (!cfy || cfy.length < nC) cfy = this._contourY = new Float32Array(nC + 8);
+    for (let i = 0; i < nC; i++) cfy[i] = World.floorY(-30 + i * PAS + Camera.x) - Camera.y;
+
+    ctx.beginPath();
+    ctx.moveTo(-30, cfy[0]);
+    for (let i = 1; i < nC; i++) ctx.lineTo(-30 + i * PAS, cfy[i]);
+    ctx.lineTo(W + 30, H + 20); ctx.lineTo(-30, H + 20);
+    ctx.closePath();
+    ctx.save();
+    ctx.clip();
+    // Dégradé de sable pré-rendu et étiré, comme la colonne d'eau (§5.7) —
+    // le clip le limite à la zone de sable.
+    const sandStops = [];
     for (let i = 0; i <= 4; i++) {
       const d = U.lerp(dTop, dBot, i / 4);
-      sandGrad.addColorStop(i / 4, U.mixColor('#e0cb98', '#3a3428',
-        U.clamp(Math.max(0, d) / 3000 + night * 0.35, 0, 0.9)));
+      sandStops.push([i / 4, U.mixColor('#e0cb98', '#3a3428',
+        U.clamp(Math.max(0, d) / 3000 + night * 0.35, 0, 0.9))]);
     }
-    ctx.fillStyle = sandGrad;
-    ctx.beginPath();
-    let started = false;
-    for (let sx = -20; sx <= W + 20; sx += 25) {
-      const wx = sx + Camera.x;
-      const [, fy] = Camera.toScreen(0, World.floorY(wx));
-      if (!started) { ctx.moveTo(sx, fy); started = true; } else ctx.lineTo(sx, fy);
-    }
-    ctx.lineTo(W + 20, H + 20); ctx.lineTo(-20, H + 20);
-    ctx.closePath();
-    ctx.fill();
+    this.stripFill(ctx, 'sable', sandStops, 0, 0, W, H);
 
     // Modelé du sable : une bande sombre au contact de l'eau (ombre portée du
     // relief) puis un éclaircissement vers le bas. Sans ça le sable est un
     // aplat mort qui écrase la lecture de la profondeur.
-    ctx.save();
-    ctx.clip();
-    ctx.lineCap = 'butt'; ctx.lineJoin = 'round';
     // Le modelé SUIT le contour du fond (traits épais superposés) : des bandes
     // verticales colonne par colonne laissaient des rayures visibles.
+    // NB (§5.10, tenté puis ABANDONNÉ) : les peindre au quart de résolution
+    // dans un canvas hors écran coûtait 15 ms — le drawImage d'upscale AVEC
+    // alpha repasse par un blend par pixel en rendu logiciel, plus cher que
+    // les trois traits eux-mêmes. Ils restent donc dessinés en direct, mais
+    // sur le contour partagé (§5.8).
+    ctx.lineCap = 'butt'; ctx.lineJoin = 'round';
     const contour = (offset) => {
       ctx.beginPath();
-      for (let sx = -30; sx <= W + 30; sx += 24) {
-        const wx = sx + Camera.x;
-        const [, fy] = Camera.toScreen(0, World.floorY(wx));
-        sx === -30 ? ctx.moveTo(sx, fy + offset) : ctx.lineTo(sx, fy + offset);
-      }
+      ctx.moveTo(-30, cfy[0] + offset);
+      for (let i = 1; i < nC; i++) ctx.lineTo(-30 + i * PAS, cfy[i] + offset);
       ctx.stroke();
     };
     ctx.strokeStyle = 'rgba(38,50,64,0.06)'; ctx.lineWidth = 300; contour(150);
     ctx.strokeStyle = 'rgba(38,50,64,0.09)'; ctx.lineWidth = 90;  contour(45);
     ctx.strokeStyle = 'rgba(38,50,64,0.13)'; ctx.lineWidth = 26;  contour(13);
-    // ondulations de sable, très discrètes
+    // ondulations de sable, très discrètes (fines : elles restent en pleine
+    // résolution, leur coût est négligeable)
     ctx.strokeStyle = 'rgba(120,100,66,0.09)';
     ctx.lineWidth = 2;
     for (let k = 0; k < 5; k++) {
       ctx.beginPath();
-      for (let sx = -30; sx <= W + 30; sx += 30) {
-        const wx = sx + Camera.x;
-        const [, fy] = Camera.toScreen(0, World.floorY(wx));
-        const yy = fy + 70 + k * 95 + Math.sin(wx / 130 + k) * 16;
-        sx === -30 ? ctx.moveTo(sx, yy) : ctx.lineTo(sx, yy);
+      for (let i = 0; i < nC; i++) {
+        const sx = -30 + i * PAS;
+        const yy = cfy[i] + 70 + k * 95 + Math.sin((sx + Camera.x) / 130 + k) * 16;
+        i === 0 ? ctx.moveTo(sx, yy) : ctx.lineTo(sx, yy);
       }
       ctx.stroke();
     }
@@ -523,7 +585,7 @@ const Background = {
             const wy = CONFIG.SURFACE_Y
               + Math.sin(wx / 60 + t * 1.8) * 4 + Math.sin(wx / 23 - t * 2.6) * 2
               + Math.sin(t * 2.2 + k * 0.6) * 1.5;
-            const [ex, ey] = Camera.toScreen(wx, wy);
+            const ex = Camera.sx(wx), ey = Camera.sy(wy);
             k === 0 ? ctx.moveTo(ex, ey) : ctx.lineTo(ex, ey);
           }
           ctx.stroke();
@@ -537,7 +599,7 @@ const Background = {
       if (px < -120 || px > W + 120) continue;
       const wx = px + Camera.x;
       const floorWY = World.floorY(wx);
-      const [, py] = Camera.toScreen(0, floorWY - 2);
+      const py = Camera.sy(floorWY - 2);
       if (py < -260 || py > H + 60) continue;
       const depth = floorWY - CONFIG.SURFACE_Y;
       const light = U.clamp(1 - depth / 2400, 0.22, 1) * (1 - night * 0.6);
@@ -582,7 +644,7 @@ const Background = {
       const wx = 4600 + i * 380;
       const floorWY = World.floorY(wx);
       if (floorWY - CONFIG.SURFACE_Y < 1700) continue;
-      const [sx, sy] = Camera.toScreen(wx, floorWY);
+      const sx = Camera.sx(wx), sy = Camera.sy(floorWY);
       if (sx < -140 || sx > W + 140) continue;
       const hgt = 70 + ((i * 37) % 60);
       ctx.save();
@@ -610,7 +672,7 @@ const Background = {
     ctx.fillStyle = `rgba(255,255,240,${0.25 - night * 0.1})`;
     for (const p of this.plankton) {
       if (!Camera.isVisible(p.x, p.y, 20)) continue;
-      const [sx, sy] = Camera.toScreen(p.x, p.y + Math.sin(t * 0.5 + p.ph) * 8);
+      const sx = Camera.sx(p.x), sy = Camera.sy(p.y + Math.sin(t * 0.5 + p.ph) * 8);
       ctx.beginPath(); ctx.arc(sx, sy, p.r, 0, Math.PI * 2); ctx.fill();
     }
   },

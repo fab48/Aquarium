@@ -56,6 +56,10 @@ const Camera = {
 
   // Monde -> "écran monde" (le contexte est déjà scalé par zoom au rendu)
   toScreen(wx, wy) { return [wx - this.x, wy - this.y]; },
+  // Accesseurs scalaires pour les boucles chaudes : toScreen alloue un tableau
+  // à chaque appel (739 par frame mesurés), ceux-ci n'allouent rien.
+  sx(wx) { return wx - this.x; },
+  sy(wy) { return wy - this.y; },
   // Écran CSS -> monde
   toWorld(sx, sy) { return [sx / this.zoom + this.x, sy / this.zoom + this.y]; },
   isVisible(wx, wy, margin = 100) {

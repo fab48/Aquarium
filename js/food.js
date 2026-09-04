@@ -55,9 +55,14 @@ const Food = {
       // il fume un peu en se dissolvant
       if (p.age > 22 && Math.random() < dt * 0.6) Particles.burst(p.x, p.y, '#8a6a3a', 1);
     }
-    // dissolution des arêtes après un délai (GDD §7)
-    this.bones = this.bones.filter(b => b.age < 45);
-    this.poops = this.poops.filter(p => p.age < 30);
+    // dissolution des arêtes après un délai (GDD §7) — compactage sur place,
+    // pas de tableau neuf à chaque frame
+    let w = 0;
+    for (let i = 0; i < this.bones.length; i++) if (this.bones[i].age < 45) this.bones[w++] = this.bones[i];
+    this.bones.length = w;
+    w = 0;
+    for (let i = 0; i < this.poops.length; i++) if (this.poops[i].age < 30) this.poops[w++] = this.poops[i];
+    this.poops.length = w;
   },
 
   // Nourriture la plus proche dans un rayon
@@ -102,7 +107,7 @@ const Food = {
   drawGraines(ctx) {
     for (const f of this.items) {
       if (!Camera.isVisible(f.x, f.y)) continue;
-      const [sx, sy] = Camera.toScreen(f.x, f.y);
+      const sx = Camera.sx(f.x), sy = Camera.sy(f.y);
       const def = FOOD_TYPES[f.type];
       ctx.fillStyle = def.color;
       ctx.beginPath(); ctx.arc(sx, sy, def.size, 0, Math.PI * 2); ctx.fill();
@@ -115,7 +120,7 @@ const Food = {
     // de loin pour tromper un poisson affamé, reconnaissable de près.
     for (const p of this.poops) {
       if (!Camera.isVisible(p.x, p.y)) continue;
-      const [sx, sy] = Camera.toScreen(p.x, p.y);
+      const sx = Camera.sx(p.x), sy = Camera.sy(p.y);
       ctx.globalAlpha = U.clamp(1 - (p.age - 24) / 6, 0, 1);
       const r = p.r, tour = p.settled ? 0 : Math.sin(p.age * 2 + p.seed) * 0.35;
       ctx.save();
@@ -137,7 +142,7 @@ const Food = {
 
     for (const b of this.bones) {
       if (!Camera.isVisible(b.x, b.y)) continue;
-      const [sx, sy] = Camera.toScreen(b.x, b.y);
+      const sx = Camera.sx(b.x), sy = Camera.sy(b.y);
       ctx.globalAlpha = U.clamp(1 - (b.age - 35) / 10, 0, 1);
       // colonne vertébrale + arêtes
       ctx.strokeStyle = '#e8e4d8'; ctx.lineWidth = 2; ctx.lineCap = 'round';

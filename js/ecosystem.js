@@ -248,6 +248,7 @@ const Ecosystem = {
           e.anchorX = e.x; e.anchorY = e.y;
         }
         this.entities.push(e);
+        this.counts[speciesId] = (this.counts[speciesId] || 0) + 1;
       }
     }
   },
@@ -338,8 +339,12 @@ const Ecosystem = {
     return this.byGroup[e.groupId] || [];
   },
 
+  // Servi par l'index reconstruit à chaque buildGrid — balayer les ~490
+  // entités à chaque ponte était du gâchis. Les pushes en cours de frame
+  // (spawnGroups, layEgg) incrémentent counts eux-mêmes pour que les plafonds
+  // de population restent exacts à l'intérieur d'une même frame.
   countSpecies(speciesId) {
-    return this.entities.filter(e => e.speciesId === speciesId && !e.dead).length;
+    return this.counts[speciesId] || 0;
   },
 
   // Proie la plus proche pour un prédateur (à portée de détection).
@@ -575,6 +580,7 @@ const Ecosystem = {
       egg.y = World.floorY(spot) - parent.def.size * 0.4;
       egg.anchorX = egg.x; egg.anchorY = egg.y;
       this.entities.push(egg);
+      this.counts[egg.speciesId] = (this.counts[egg.speciesId] || 0) + 1;
       return;
     }
     // Espèces à HABITAT (hippocampe dans les herbiers, étoile sur les rochers) :
@@ -590,6 +596,7 @@ const Ecosystem = {
       // On la voit partir : quelques bulles emportées par le courant
       for (let i = 0; i < 4; i++) Particles.bubble(ox + U.rand(-12, 12), oy + U.rand(-12, 12), U.rand(1.5, 3.5));
       this.entities.push(egg);
+      this.counts[egg.speciesId] = (this.counts[egg.speciesId] || 0) + 1;
       return;
     }
 
@@ -610,6 +617,7 @@ const Ecosystem = {
       egg.y = World.floorY(egg.x) - 8;
     }
     this.entities.push(egg);
+    this.counts[egg.speciesId] = (this.counts[egg.speciesId] || 0) + 1;
   },
 
   // --- Grille spatiale (reconstruite chaque frame) : voisinage O(1) pour la
@@ -624,6 +632,7 @@ const Ecosystem = {
 
   buildGrid() {
     this.grid.clear();
+    this._nbCache.clear();
     this.counts = {};
     this.bySpecies = {};
     this.byGroup = {};
@@ -667,14 +676,27 @@ const Ecosystem = {
     return Math.max(4, Math.round(this.popCap(SPECIES[speciesId]) * 0.22));
   },
 
-  // Voisins dans les 9 cellules autour de (x, y)
+  // Voisins dans les 9 cellules autour de (x, y).
+  // MÉMOÏSÉ PAR CELLULE : le résultat ne dépend que de la cellule, or une même
+  // entité l'appelle jusqu'à trois fois par frame et toutes les entités d'une
+  // cellule obtiennent la même liste — 459 appels/frame pour ~60 cellules
+  // distinctes. Mesuré : −36 % sur la simulation. Le cache est vidé dans
+  // buildGrid. Les appelants ne font qu'ITÉRER la liste (et testent .dead) :
+  // ne jamais la modifier.
+  _nbCache: new Map(),
   neighbors(x, y) {
     const cs = this.GRID, cx = (x / cs) | 0, cy = (y / cs) | 0;
+    const key = cx * 100000 + cy;
+    const hit = this._nbCache.get(key);
+    if (hit) return hit;
     const out = [];
     for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
       const cell = this.grid.get((cx + i) * 100000 + (cy + j));
-      if (cell) out.push(...cell);
+      // boucle indexée : `out.push(...cell)` construisait une liste d'arguments
+      // (une allocation) à chaque cellule
+      if (cell) for (let k = 0; k < cell.length; k++) out.push(cell[k]);
     }
+    this._nbCache.set(key, out);
     return out;
   },
 
@@ -735,20 +757,28 @@ const Ecosystem = {
   update(dt, t) {
     this.buildGrid();
     for (const e of this.entities) if (!e.dead) e.update(dt, t);
-    this.entities = this.entities.filter(e => !e.dead);
+    // Compactage SUR PLACE : `filter` reconstruisait un tableau de ~490 entrées
+    // à chaque frame, morts ou pas (pression GC, cf. PERFORMANCE.md §2).
+    const arr = this.entities;
+    let w = 0;
+    for (let i = 0; i < arr.length; i++) if (!arr[i].dead) arr[w++] = arr[i];
+    arr.length = w;
     this.regroupeBancs(dt);
     this.decayBoom(dt);
     this.immigration(dt);
   },
 
+  _visibles: [],
   draw(ctx, t) {
     // Pseudo-ordre de profondeur : les gros derriere, ET les creatures de fond
     // triees par leur avancee dans la bande de sable. Sans ce second critere,
     // une etoile « loin » se dessinait par-dessus une etoile « proche » — le
     // decalage se lisait alors comme un bug d'empilement.
-    const visible = this.entities.filter(e => Camera.isVisible(e.x, e.y, 150));
-    const clef = (e) => e.size + (e._sable || 0) * 3;
-    visible.sort((a, b) => clef(b) - clef(a));
+    // Tableau persistant réutilisé d'une frame à l'autre (zéro allocation).
+    const visible = this._visibles;
+    visible.length = 0;
+    for (const e of this.entities) if (Camera.isVisible(e.x, e.y, 150)) visible.push(e);
+    visible.sort((a, b) => (b.size + (b._sable || 0) * 3) - (a.size + (a._sable || 0) * 3));
     for (const e of visible) e.draw(ctx, t);
   },
 };

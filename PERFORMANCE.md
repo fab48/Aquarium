@@ -207,6 +207,11 @@ Il manque par ailleurs des choses **fonctionnelles**, pas des performances :
 
 ## 5. Chantier d'optimisation
 
+> **RÉALISÉ le 2026-09-04** — tout sauf 5.14 (volontairement écarté : il change
+> le comportement de l'écosystème). Résultats mesurés, pièges découverts en
+> route et deux abandons documentés en **§7**. Les entrées ci-dessous sont
+> conservées comme trace du raisonnement d'origine.
+
 Classé par gain mesuré. Les cinq premiers ne changent **aucun comportement de
 jeu** : ce sont des économies pures, vérifiables en comparant des simulations
 longues avant/après.
@@ -356,3 +361,60 @@ par espèce à 16 min), sinon on rejoue tous les réglages d'équilibre.
 - **`World.depthAt`** : 2 500 appels/frame, mais la fonction est une
   interpolation sur deux cases de tableau. Le nombre d'appels est le symptôme
   (§5.8), pas la cause.
+
+---
+
+## 7. Chantier réalisé — résultats mesurés (2026-09-04)
+
+Tout le §5 a été implémenté sauf 5.14. Mesures avant/après **sur la même
+machine, le même jour**, en A/B contre un worktree à HEAD (les chiffres absolus
+du §2-§3 venaient d'une session plus calme et ne sont pas directement
+comparables).
+
+| Poste (rendu logiciel, 2560×1440) | avant | après |
+|---|---:|---:|
+| `Background.draw` | 18,9 ms | **9,2 ms** |
+| Frame complète (décor + créatures + particules) | 23,2 ms | **15,0 ms** |
+| Simulation (~450 entités, boucle serrée) | ~3,1 ms | **~2,8 ms** |
+
+Soit **43 → 66 fps** en rastérisation logicielle — la cible « vieux PC sans
+accélération / petit mobile » passe de « tout juste 30 fps » à confortable.
+Le gain de simulation est réel mais plus modeste que le −36 % espéré en §5.1 :
+sur cette machine (chargée par plusieurs sessions), la variance entre deux
+mesures dépasse l'écart. Contrôle d'équilibre : 12 minutes de simulation
+accélérée après le chantier, les 27 espèces sont toujours présentes,
+population totale stable (~400).
+
+### Les deux pièges découverts (à ne pas réintroduire)
+
+- **Un drawImage étiré n'est un remplissage plat que s'il est OPAQUE.** Les
+  god rays pré-rendus (§5.11) et le modelé à quart de résolution (§5.10)
+  coûtaient **15 ms chacun** : un drawImage avec alpha (a fortiori en
+  `lighter`) repasse par un blend par pixel plus cher que les dégradés qu'il
+  remplaçait (1 et 2,7 ms). **Les deux ont été abandonnés** — le code garde
+  les dégradés d'origine, avec un commentaire sur place. Le modelé profite
+  quand même du contour partagé (§5.8).
+- **Un canvas hors écran redessiné chaque frame doit être créé avec
+  `willReadFrequently: true`** quand il est destiné à un canvas principal
+  potentiellement en rendu logiciel. Sans ça la bande de dégradé (§5.7) vit
+  côté GPU et chaque drawImage force une relecture GPU→CPU : décor à
+  **29 ms** au lieu de 9. Le garde-fou du §1 (jamais sur le canvas principal)
+  reste vrai — ici c'est l'inverse, un canvas source.
+
+### En plus du chantier
+
+- **5.15 — Résolution adaptative** (`Main.adaptResolution`) : si la frame
+  moyenne dépasse 40 ms sur ~3 s, le dpr baisse par paliers de 0,25 jusqu'à 1
+  (4× moins de pixels), sans jamais remonter tout seul (anti-pompage). C'est
+  le filet de sécurité pour les machines vraiment faibles.
+- Caches de couleurs : `U.mixColor` (parse hex mémoïsé), `Background.waterColor`
+  (quantifiée 16 px / 1-40ᵉ de nuit), `Background.skyColor` (par frame),
+  `Entity.colorAlpha` (préfixe rgb figé par individu).
+- `FishBody.halo()` remplace les quatre `shadowBlur` (lanterne, calamar,
+  crevette, méduse) par un disque radial pré-rendu par couleur (§5.9).
+
+Reste au chantier : **5.14** (cadence réduite hors champ, sous contrôle d'une
+simulation longue) — toujours le plus gros gain potentiel de simulation, et
+toujours le plus risqué. Et côté mobile, le fonctionnel du §4 (pinch-to-zoom,
+`touch-action`, équivalents tactiles) n'est pas de la performance mais reste à
+faire.

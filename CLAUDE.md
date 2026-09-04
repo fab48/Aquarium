@@ -504,10 +504,17 @@ Baleine, cachalot, orque demandent des règles à part, apprises en corrigeant l
 ## Performance (mesurée, pas supposée)
 
 **[PERFORMANCE.md](PERFORMANCE.md) est l'audit complet** : méthode et ses
-limites, chiffres par poste, cible mobile, et un **chantier d'optimisation
-classé par gain mesuré** (§5). À ~490 créatures : **simulation
-4,8 ms** (dont 61 % dans `Entity.move`, en recherches de voisinage), **décor
-18,6 ms** et **créatures 2,5 ms** en rastérisation logicielle à 2560×1440.
+limites, chiffres par poste, cible mobile, le **chantier d'optimisation** (§5)
+et son **bilan réalisé** (§7). Le chantier a été fait (sauf 5.14) : en
+rastérisation logicielle à 2560×1440, le décor est passé de **18,9 à 9,2 ms**
+(dégradés plein écran pré-rendus dans une bande 1 px étirée, contour du fond
+échantillonné une fois) et la frame complète de 23 à 15 ms. Deux pièges à ne
+pas réintroduire, mesurés : un **drawImage étiré avec alpha** coûte plus cher
+que le dégradé qu'il remplace (15 ms — god rays et modelé restent en dégradés),
+et une bande hors écran redessinée chaque frame doit être créée avec
+**`willReadFrequently: true`**, sinon chaque drawImage force une relecture
+GPU→CPU sur les machines en rendu logiciel. `Main.adaptResolution` baisse en
+plus le dpr par paliers si la frame moyenne dépasse 40 ms (vieux PC, mobiles).
 
 Deux corrections aux chiffres qui figuraient ici : le décor coûte **trois fois**
 les créatures (trois `fillRect` plein écran en dégradé — un dégradé coûte 16 fois

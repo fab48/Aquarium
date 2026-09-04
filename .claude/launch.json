@@ -6,6 +6,12 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["dev_server.py", "8642"],
       "port": 8642
+    },
+    {
+      "name": "aquarium-perf",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["dev_server.py", "8653"],
+      "port": 8653
     }
   ]
 }

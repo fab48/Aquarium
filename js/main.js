@@ -41,7 +41,7 @@ const Main = {
   },
 
   resize() {
-    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.dpr = Math.min(window.devicePixelRatio || 1, this.dprCap ?? 2);
     this.canvas.width = window.innerWidth * this.dpr;
     this.canvas.height = window.innerHeight * this.dpr;
     Camera.resize(window.innerWidth, window.innerHeight);
@@ -59,6 +59,11 @@ const Main = {
 
     Input.update(dt);
     Camera.update(dt);
+    // Position MONDE du curseur, calculée une seule fois par frame : chaque
+    // petit poisson la recalculait (en allouant un tableau) dans move(), et
+    // chaque créature au repos dans updateEyeLook().
+    Input.wmx = Input.mx / Camera.zoom + Camera.x;
+    Input.wmy = Input.my / Camera.zoom + Camera.y;
     Food.update(dt);
     Ecosystem.update(dt, t);
     Particles.update(dt);
@@ -100,7 +105,30 @@ const Main = {
     }
 
     this.updateHUD();
+    this.adaptResolution(ts);
     requestAnimationFrame(ts2 => this.frame(ts2));
+  },
+
+  // Résolution ADAPTATIVE pour les machines faibles (vieux PC sans accélération
+  // canvas, mobiles d'entrée de gamme) : le décor coûte en PIXELS, pas en
+  // objets (cf. PERFORMANCE.md §3). Si la frame moyenne dépasse ~40 ms sur
+  // plusieurs secondes, on baisse le dpr par paliers de 0,25 jusqu'à 1 — on ne
+  // remonte jamais tout seul, pour éviter le pompage. À dpr 1 au lieu de 2,
+  // c'est 4x moins de pixels à peindre.
+  _perfAcc: 0, _perfN: 0, _perfLast: 0,
+  adaptResolution(ts) {
+    const raw = ts - this._perfLast;
+    this._perfLast = ts;
+    if (raw <= 0 || raw > 250) return;      // reprise d'onglet : on ignore le saut
+    this._perfAcc += raw; this._perfN++;
+    if (this._perfAcc < 3000) return;       // on juge sur ~3 s, pas sur une frame
+    const avg = this._perfAcc / this._perfN;
+    this._perfAcc = 0; this._perfN = 0;
+    if (avg > 40 && this.dpr > 1) {
+      this.dprCap = Math.max(1, (this.dprCap ?? this.dpr) - 0.25);
+      this.resize();
+      console.info(`[perf] frame moyenne ${avg.toFixed(0)} ms : résolution abaissée (dpr ${this.dpr})`);
+    }
   },
 
   updateHUD() {

@@ -54,6 +54,9 @@ const IdCard = {
   _draw(ctx, e, eviter, epinglee, K) {
     const def = e.def;
     const pad = 12, W = 264, LH = 17;
+    // La phrase est repliée à la largeur de la fiche AVANT de calculer sa
+    // hauteur : sinon elle déborde du cadre sur les espèces bavardes.
+    const phrase = def.phrase ? this.replier(ctx, def.phrase, W - pad * 2, '12.5px') : [];
     const VW = Camera.vw / K, VH = Camera.vh / K;   // l'écran vu du repère réduit
 
     const rows = [
@@ -70,7 +73,8 @@ const IdCard = {
     // divisée par K pour rester exacte dans le repère réduit)
     const cx = (e.x - Camera.x) * Camera.zoom / K;
     const cy = (e.y - Camera.y) * Camera.zoom / K;
-    const H = pad * 2 + 36 + rows.length * LH + 14;
+    const H = pad * 2 + 36 + rows.length * LH + 14
+            + (phrase.length ? 10 + phrase.length * 15 : 0);
     let bx = cx + 26, by = cy - H / 2;
     if (bx + W > VW - 8) bx = cx - W - 26;
     // Bornée dans les DEUX axes : une créature près du bord gauche (ou hors
@@ -113,10 +117,17 @@ const IdCard = {
       ctx.fillText('🎯', bx + W - pad, by + pad);
       ctx.textAlign = 'left';
     }
-    // Vraie espèce, en sous-titre
+    // Vraie espèce, en sous-titre — suivie du faux nom latin, qui glisse la
+    // vraie information sous la blague (« Scarus petomanus »).
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.font = 'italic 11.5px "Segoe UI", system-ui, sans-serif';
-    ctx.fillText(def.realName || '', bx + pad, by + pad + 19);
+    const sousTitre = def.realName || '';
+    ctx.fillText(sousTitre, bx + pad, by + pad + 19);
+    if (def.latin) {
+      ctx.fillStyle = 'rgba(143,216,245,0.6)';
+      this.fitText(ctx, '· ' + def.latin, bx + pad + ctx.measureText(sousTitre).width + 7,
+                   by + pad + 19, W - pad * 2 - ctx.measureText(sousTitre).width - 7);
+    }
 
     // Lignes
     let y = by + pad + 40;
@@ -135,6 +146,16 @@ const IdCard = {
     this.roundRect(ctx, bx + pad, gy, gw, 6, 3); ctx.fill();
     ctx.fillStyle = e.hunger > 0.7 ? '#ff7a6b' : (e.hunger > 0.4 ? '#ffc75e' : '#7fe08a');
     this.roundRect(ctx, bx + pad, gy, gw * (1 - e.hunger), 6, 3); ctx.fill();
+
+    // La phrase, tout en bas : c'est le seul endroit où elle apparaît. Jamais
+    // en bulle — l'aquarium raconte par le visage, et le budget de bulles est
+    // déjà tenu à ~250/min.
+    if (phrase.length) {
+      let py = gy + 16;
+      ctx.fillStyle = 'rgba(255,215,94,0.9)';
+      ctx.font = 'italic 12.5px "Segoe UI", system-ui, sans-serif';
+      for (const ligne of phrase) { ctx.fillText(ligne, bx + pad, py); py += 15; }
+    }
 
     return { x: bx, y: by, w: W, h: H };
   },
@@ -159,6 +180,23 @@ const IdCard = {
       t += '…';
     }
     ctx.fillText(t, x, y);
+  },
+
+  // Replie un texte sur plusieurs lignes, sans couper les mots. Sert à la
+  // phrase, qui est la seule ligne de la fiche à ne pas tenir sur une seule.
+  replier(ctx, txt, max, police) {
+    const avant = ctx.font;
+    ctx.font = 'italic ' + police + ' "Segoe UI", system-ui, sans-serif';
+    const lignes = [];
+    let ligne = '';
+    for (const mot of String(txt).split(' ')) {
+      const essai = ligne ? ligne + ' ' + mot : mot;
+      if (ligne && ctx.measureText(essai).width > max) { lignes.push(ligne); ligne = mot; }
+      else ligne = essai;
+    }
+    if (ligne) lignes.push(ligne);
+    ctx.font = avant;
+    return lignes;
   },
 
   roundRect(ctx, x, y, w, h, r) {

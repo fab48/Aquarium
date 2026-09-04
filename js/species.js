@@ -41,6 +41,7 @@ const SPECIES = {
     colors: ['#ff6b8a', '#ffb84d', '#5ecfff', '#a3e64c', '#c78aff'],
     bodyRatio: 0.62, tail: 'fan', sizeVar: 0.26,   // un banc de confettis, ça dépareille
     lifespan: [180, 300],
+    gag: (e, dt, t) => GAGS.confetti(e, dt, t),
   },
 
   bulle_fofolle: {
@@ -68,6 +69,7 @@ const SPECIES = {
     colors: ['#e8b3ff', '#b3d9ff'],
     render: 'jelly', glowAtNight: true,
     lifespan: [200, 350],
+    gag: (e, dt, t) => GAGS.meduse(e, dt, t),
   },
 
   thon: {
@@ -81,6 +83,7 @@ const SPECIES = {
     colors: ['#4a7fb5'],
     bodyRatio: 0.4, tail: 'lunate',
     lifespan: [280, 420],
+    gag: (e, dt, t) => GAGS.thon(e, dt, t),
   },
 
   requin: {
@@ -103,6 +106,7 @@ const SPECIES = {
     sprite: 'SharkSVG',
     lifespan: [750, 1050],   // les grands prédateurs vivent longtemps : sinon ils
                              // meurent de vieillesse avant d'avoir pu se reproduire
+    gag: (e, dt, t) => GAGS.requin(e, dt, t),
   },
 
   crabe: {
@@ -126,6 +130,7 @@ const SPECIES = {
     colors: ['#f2c9a0', '#e8a8b8'],
     render: 'shell',
     lifespan: [600, 900],
+    gag: (e, dt, t) => GAGS.coquillage(e, dt, t),
   },
 
   gros_dodo: {
@@ -139,12 +144,13 @@ const SPECIES = {
     colors: ['#5b7fa6'],
     bodyRatio: 0.5, tail: 'whale', sleeps: true, snores: true,
     lifespan: [2000, 3000],
+    gag: (e, dt, t) => GAGS.gros_dodo(e, dt, t),
   },
 
   // --- Extension du roster (GDD §14, 24 espèces) ---------------------------
 
   etoile: {
-    name: 'Étoile de Mer Câline', realName: 'Étoile de mer', trophic: 1, movement: 'fixed',
+    name: 'Étoile de Mer Ventouse', realName: 'Étoile de mer', trophic: 1, movement: 'fixed',
     habitat: 'rock',   // se pose sur les rochers
     nursery: 'reef',
     depthBand: [0, 1000], size: 10, speed: 0,
@@ -154,11 +160,11 @@ const SPECIES = {
     render: 'star',
     lifespan: [500, 800],
     // Câlin (GDD §12) : referme ses bras sur qui la TOUCHE vraiment — un seul
-    gag: (e, dt, t) => GAGS.etoile(e, dt, t),
+    gag: (e, dt, t) => GAGS.etoile_ventouse(e, dt, t),
   },
 
   anemone: {
-    name: 'Anémone', realName: 'Anémone de mer', trophic: 1, movement: 'fixed',
+    name: 'Anémone Câline', realName: 'Anémone de mer', trophic: 1, movement: 'fixed',
     nursery: 'reef',
     depthBand: [120, 1150], size: 18, speed: 0,
     schooling: false, groupSize: [1, 2],
@@ -166,6 +172,7 @@ const SPECIES = {
     colors: ['#ff7eb6', '#c78aff', '#8affc1'],
     render: 'anemone', refuge: true,   // pas un poisson : refuge pour la ponte et les alevins
     lifespan: [1000, 1600],
+    gag: (e, dt, t) => GAGS.anemone(e, dt, t),
   },
 
   volant: {
@@ -178,6 +185,7 @@ const SPECIES = {
     colors: ['#5ecfff', '#9be8ff'],
     bodyRatio: 0.6, tail: 'fan', jumps: true,
     lifespan: [180, 300],
+    gag: (e, dt, t) => GAGS.volant(e, dt, t),
   },
 
   moustachu: {
@@ -186,10 +194,11 @@ const SPECIES = {
     depthBand: [0, 0],   // ignoré (aerial) — bande gérée en y monde dans Entity.move
     size: 22, speed: 110, sprintSpeed: 320,
     schooling: false, groupSize: [1, 2],
-    prey: ['volant', 'bulle_fofolle'], missChance: 0.4,
+    prey: ['volant', 'bulle_fofolle'], missChance: 0.4, grazes: true,
     colors: ['#e8e8e8', '#3a4a5a'],
     render: 'bird',
     lifespan: [550, 800],
+    gag: (e, dt, t) => GAGS.moustachu(e, dt, t),
   },
 
   clown: {
@@ -208,7 +217,7 @@ const SPECIES = {
   },
 
   hippocampe: {
-    name: 'Hippocampe Timide', realName: 'Hippocampe', trophic: 2, movement: 'anchored', homeRadius: 22,   // il s'accroche vraiment a son herbe
+    name: 'Hippocampe Zen', realName: 'Hippocampe', trophic: 2, movement: 'anchored', homeRadius: 22,   // il s'accroche vraiment a son herbe
     habitat: 'weed',   // s'accroche dans les herbiers
     nursery: 'reef',
     depthBand: [200, 1000], size: 13, speed: 25,
@@ -280,6 +289,7 @@ const SPECIES = {
     colors: ['#7a8a6a'],
     render: 'eel',
     lifespan: [700, 1000],
+    gag: (e, dt, t) => GAGS.murene(e, dt, t),
   },
 
   raie: {
@@ -296,7 +306,7 @@ const SPECIES = {
   },
 
   lanterne: {
-    name: 'Poisson-lanterne Allumeur', realName: 'Poisson-lanterne (baudroie abyssale)', trophic: 2, movement: 'strata',
+    name: 'Baudroie-lanterne Allumeur', realName: 'Poisson-lanterne (baudroie abyssale)', trophic: 2, movement: 'strata',
     nursery: 'deep',
     depthBand: [1800, 3000], size: 16, speed: 40,
     // Abysse : le plancton y est plus rare, il faut donc vivre plus longtemps
@@ -312,12 +322,13 @@ const SPECIES = {
     colors: ['#4a5a8a', '#ffd75e'],
     render: 'lantern', glowAtNight: true, nocturnal: true, sizeVar: 0.18,
     lifespan: [500, 750],
+    gag: (e, dt, t) => GAGS.lanterne(e, dt, t),
   },
 
   poisson_tapis: {
     // C'est un REQUIN-TAPIS (wobbegong) : une carpette à dents posée sur le sable,
     // pas un ver. L'ancien nom (« Ver-Tapis ») ne disait rien de ce qu'il fait.
-    name: 'Poisson-Tapis Câlin', realName: 'Requin-tapis (wobbegong)', trophic: 4, movement: 'crawl',
+    name: 'Poisson-Tapis Grande-Bouche', realName: 'Requin-tapis (wobbegong)', trophic: 4, movement: 'crawl',
     flatGround: true,   // se pose à plat : cherche une terrasse sableuse
     nursery: 'deep',
     // IL RAMPE (`crawl`). Immobile (`fixed`) au fond des abysses, il ne croisait
@@ -335,7 +346,7 @@ const SPECIES = {
   },
 
   poisson_lune: {
-    name: 'Poisson-lune Zen', realName: 'Môle / poisson-lune', trophic: 3, movement: 'free',
+    name: 'Poisson-lune Bada-boum', realName: 'Môle / poisson-lune', trophic: 3, movement: 'free',
     nursery: 'shallow',
     depthBand: [200, 1600], size: 50, speed: 18, sprintSpeed: 65,
     // Géant placide : métabolisme lent, il ne meurt pas de faim entre deux méduses
@@ -344,10 +355,11 @@ const SPECIES = {
     colors: ['#e0d8c8'],
     render: 'sunfish', sleeps: true,
     lifespan: [800, 1100],
+    gag: (e, dt, t) => GAGS.poisson_lune(e, dt, t),
   },
 
   orque: {
-    name: 'Orque Blagueuse', realName: 'Orque', trophic: 4, movement: 'wideband',
+    name: 'Orque Echo', realName: 'Orque', trophic: 4, movement: 'wideband',
     breathes: true,   // remonte souffler en surface
     nursery: 'shallow',
     depthBand: [450, 1500], size: 70, speed: 90, sprintSpeed: 340,
@@ -361,6 +373,7 @@ const SPECIES = {
     colors: ['#1c2733'],
     bodyRatio: 0.42, tail: 'whale',
     lifespan: [850, 1150],
+    gag: (e, dt, t) => GAGS.orque(e, dt, t),
   },
 
   cachalot: {
@@ -404,10 +417,11 @@ const SPECIES = {
     // partageant la ponte) et l'espèce passait de 70 à 2 en huit minutes,
     // entraînant le Calamar avec elle. Il lui faut trois à quatre pontes.
     lifespan: [420, 640],
+    gag: (e, dt, t) => GAGS.crevette(e, dt, t),
   },
 
   calamar: {
-    name: 'Calamar Fusée', realName: 'Calmar (encornet)', trophic: 3, movement: 'wideband',
+    name: 'Calmar Violette', realName: 'Calmar (encornet)', trophic: 3, movement: 'wideband',
     nursery: 'deep',
     depthBand: [1200, 3400], size: 19, speed: 55, sprintSpeed: 230,
     schooling: true, groupSize: [3, 5], popCap: 24,
@@ -420,6 +434,7 @@ const SPECIES = {
     colors: ['#c76a8a', '#9a5a7a'],
     render: 'squid', glowAtNight: true, sizeVar: 0.18,
     lifespan: [280, 430],
+    gag: (e, dt, t) => GAGS.calamar(e, dt, t),
   },
 
   calamar_geant: {
@@ -437,4 +452,105 @@ const SPECIES = {
     // Timide (GDD §12) : il se recroqueville dès qu'on l'approche de trop près.
     gag: (e, dt, t) => GAGS.calamar_geant(e, dt, t),
   },
+
+  // --- Le Fugu : personne ne le mange, et c'est bien le problème des autres.
+  // Il gonfle quand on approche (`gonflable`) puis pique au contact
+  // (`piquant`), ce qui inflige un malaise — jamais mortel (GDD §9).
+  fugu: {
+    name: 'Fugu Gonflé', realName: 'Poisson-globe', trophic: 2, movement: 'strata',
+    nursery: 'reef',
+    depthBand: [150, 900], size: 15, speed: 38,
+    schooling: false, groupSize: [2, 3], popCap: 10,
+    favoriteFood: 'plancton_dore', eatsFood: true,
+    piquant: { range: 70 }, gonflable: true,
+    colors: ['#e8c85a', '#f6e6a8'],
+    bodyRatio: 0.92, tail: 'fan', sizeVar: 0.18,
+    lifespan: [320, 500],
+    gag: (e, dt, t) => GAGS.fugu(e, dt, t),
+  },
+
+  // --- Le Pélican : il cueille les poissons volants EN PLEIN VOL, et n'entre
+  // jamais dans l'eau. C'est le contraire exact du Fou Moustachu, qui plonge
+  // dedans — et ça donne enfin une raison d'être aux sauts des exocets.
+  pelican: {
+    name: 'Pélican Attrape-Tout', realName: 'Pélican', trophic: 4, movement: 'free', aerial: true,
+    nursery: 'beach',
+    depthBand: [0, 0],   // ignoré (aerial)
+    size: 27, speed: 95, sprintSpeed: 300,
+    schooling: false, groupSize: [1, 2], popCap: 4, senseRange: 1400,
+    // `snatch` : ne vise QUE les proies en phase aérienne. Sa fenêtre de tir
+    // est donc bien plus étroite que celle du Fou, ce qui l'empêche de vider
+    // les bancs de surface qu'ils se partagent. `missChance` volontairement
+    // modéré pour la raison inverse : fenêtre rare ET raté fréquent, c'est le
+    // prédateur qui meurt de faim (la leçon de la murène).
+    prey: ['volant', 'bulle_fofolle'], snatch: true, missChance: 0.3, grazes: true,
+    colors: ['#f2ede2', '#8d99a8'],
+    render: 'bird', pouch: true, sizeVar: 0.1,
+    lifespan: [600, 850],
+    gag: (e, dt, t) => GAGS.pelican(e, dt, t),
+  },
+
+  // --- L'Anguille : la première créature qui TUE SANS MANGER. Elle électrocute
+  // tout son voisinage ; les touchés sont sonnés, les alevins n'y survivent pas.
+  anguille: {
+    name: 'Anguille Coup-de-Jus', realName: 'Anguille électrique', trophic: 3, movement: 'strata',
+    nursery: 'deep',
+    depthBand: [900, 2200], size: 26, speed: 34,
+    schooling: false, groupSize: [1, 2], popCap: 6, metabolism: 0.7,
+    grazes: true,                      // elle ne chasse pas : elle assomme et broute
+    shock: { range: 150, cooldown: 9 },
+    piquant: { range: 60 },            // même à l'arrêt, on ne la touche pas impunément
+    colors: ['#6f7fa8', '#b9d4f0'],
+    render: 'eel', sizeVar: 0.15, glowAtNight: true,
+    lifespan: [600, 900],
+    gag: (e, dt, t) => GAGS.anguille(e, dt, t),
+  },
 };
+
+// ===========================================================================
+// FICHES : phrase et faux nom latin.
+//
+// La phrase n'apparaît QUE dans la fiche d'identité (la loupe), jamais en
+// bulle : le budget de bulles est déjà tenu à ~250/min pour tout l'aquarium, et
+// l'aquarium raconte ses histoires par le visage, pas par le texte.
+//
+// Le faux nom latin est la blague qui rend la fiche amusante à ouvrir, et il
+// glisse la vraie information au passage : « Scarus petomanus » apprend
+// « Scarus » sans en avoir l'air.
+//
+// Bloc séparé pour que les fiches d'espèces au-dessus restent des données de
+// simulation lisibles. Voir FICHES.md.
+// ===========================================================================
+const FICHES = {
+  confetti:      { latin: 'Confettius multicolorus', phrase: 'On est nombreux, mais on est PAS pareils !' },
+  bulle_fofolle: { latin: 'Sardina bullabulla',      phrase: 'Glou glou glou ! Oh, encore une bulle !' },
+  meduse:        { latin: 'Gelatinus sanstetus',     phrase: 'Pas de tête, pas de souci.' },
+  thon:          { latin: 'Thunnus vroumvroum',      phrase: 'Poussez-vous, je suis pressé !' },
+  requin:        { latin: 'Carcharodon dentimollis', phrase: 'Grrr… aïe, mes dents.' },
+  crabe:         { latin: 'Cancer discotecus',       phrase: 'Ça pince ET ça danse !' },
+  coquillage:    { latin: 'Bivalvus hilarius',       phrase: 'Hi hi hi ! …hi.' },
+  gros_dodo:     { latin: 'Balaena roupillonus',     phrase: 'Encore cinq minutes…' },
+  etoile:        { latin: 'Asterias ventousa',       phrase: 'Viens là, toi ! Plok !' },
+  anemone:       { latin: 'Anemonia calinus',        phrase: 'Entrez, entrez, c’est chauffé !' },
+  volant:        { latin: 'Exocetus cascadeurus',    phrase: 'Regardez-moi ça ! Et… HOP !' },
+  moustachu:     { latin: 'Sula moustachus',         phrase: 'Repéré ! …plouf.' },
+  clown:         { latin: 'Amphiprion guiliguili',   phrase: 'Guili-guili !' },
+  hippocampe:    { latin: 'Hippocampus rougissimus', phrase: 'Ne me regardez pas…' },
+  perroquet:     { latin: 'Scarus petomanus',        phrase: 'C’est pas moi !' },
+  dauphin:       { latin: 'Delphinus blagueurus',    phrase: 'BOUH ! …hihihi !' },
+  poulpe:        { latin: 'Octopus ninjaticus',      phrase: 'Vous ne m’avez jamais vu.' },
+  murene:        { latin: 'Muraena monrocherus',     phrase: 'C’est MON rocher.' },
+  raie:          { latin: 'Manta ronronus',          phrase: 'Rrrrron…' },
+  lanterne:      { latin: 'Melanocetus allumus',     phrase: 'Par ici la lumière, mes petits…' },
+  poisson_tapis: { latin: 'Orectolobus grandebouche',phrase: '…………… (il attend)' },
+  poisson_lune:  { latin: 'Mola badaboum',           phrase: 'Tout est calme… tout est… BADA-BOUM.' },
+  orque:         { latin: 'Orcinus echoechoecho',    phrase: 'Attends, attends, j’en ai une bonne.' },
+  cachalot:      { latin: 'Physeter profundissimus', phrase: 'Je descends chercher le goûter.' },
+  crevette:      { latin: 'Caridina guirlandus',     phrase: 'On clignote tous ensemble ? À trois !' },
+  calamar:       { latin: 'Loligo violetta',         phrase: 'Trois, deux, un… PSCHIT !' },
+  calamar_geant: { latin: 'Architeuthis timidissimus',phrase: '…vous m’avez vu ? Zut.' },
+  pelican:       { latin: 'Pelecanus attrapatoutus', phrase: 'J’ai de la place pour tout le monde !' },
+  anguille:      { latin: 'Electrophorus zzzap',     phrase: 'Touche pas, ça pique fort !' },
+  fugu:          { latin: 'Tetraodon ballonus',      phrase: 'N’approche pas… je gonfle !' },
+};
+for (const id in FICHES) if (SPECIES[id]) Object.assign(SPECIES[id], FICHES[id]);

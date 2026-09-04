@@ -185,6 +185,25 @@ const Particles = {
   // ENCRE (poulpe, calamars) : un vrai rideau qui masque la fuite. Il faut
   // qu'il soit assez large et assez opaque pour qu'on perde la creature des
   // yeux — sinon on ne comprend pas pourquoi son poursuivant abandonne.
+  // Éclairs de l'Anguille Coup-de-Jus : des zigzags qui partent d'elle dans
+  // toutes les directions. Le tracé est figé à la naissance (`pts`) — recalculé
+  // à chaque frame, l'éclair grouillait au lieu de claquer.
+  eclairs(x, y, portee, n = 5) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const L = portee * U.rand(0.55, 1);
+      const pts = [];
+      const segs = 5;
+      for (let k = 0; k <= segs; k++) {
+        const d = L * (k / segs);
+        const ecart = k === 0 || k === segs ? 0 : U.rand(-1, 1) * portee * 0.16;
+        pts.push({ x: Math.cos(a) * d - Math.sin(a) * ecart,
+                   y: Math.sin(a) * d + Math.cos(a) * ecart });
+      }
+      this.spawn({ type: 'eclair', x, y, pts, r: portee * 0.06, life: U.rand(0.18, 0.32) });
+    }
+  },
+
   ink(x, y, size) {
     const n = Math.round(U.clamp(size * 0.6, 10, 34));
     for (let i = 0; i < n; i++) {
@@ -294,6 +313,22 @@ const Particles = {
         ctx.beginPath();
         ctx.ellipse(sx, sy, p.r, p.r * 0.34, 0, p.age * 9, p.age * 9 + Math.PI * 1.5);
         ctx.stroke();
+      } else if (p.type === 'eclair') {
+        // Deux passes : un halo large et bleuté, puis le trait blanc au milieu.
+        // Un seul trait se perdait dans l'eau sombre des abysses.
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        for (let pass = 0; pass < 2; pass++) {
+          ctx.strokeStyle = pass
+            ? `rgba(255,255,255,${0.95 * (1 - t)})`
+            : `rgba(150,220,255,${0.5 * (1 - t)})`;
+          ctx.lineWidth = pass ? p.r * 0.5 : p.r * 1.8;
+          ctx.beginPath();
+          for (let k = 0; k < p.pts.length; k++) {
+            const px = sx + p.pts[k].x, py = sy + p.pts[k].y;
+            k === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+        }
       } else if (p.type === 'stink') {
         ctx.fillStyle = `rgba(150,190,110,${0.35 * (1 - t)})`;
         ctx.beginPath(); ctx.arc(sx, sy, p.r, 0, Math.PI * 2); ctx.fill();

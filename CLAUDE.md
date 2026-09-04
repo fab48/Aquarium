@@ -46,7 +46,7 @@ qu'elle bougeait.
 
 - `config.js` — constantes monde, zones écologiques, types de nourriture. 1 m = 40 px, surface à y=300.
 - `utils.js` — helpers math/couleur (`U`).
-- `species.js` — **espèces 100 % data-driven**. Chaque fiche a un `name` rigolo **contenant la vraie espèce** ("Baleine Gros Dodo", "Poisson Confetti") et un `realName` affiché en sous-titre de la fiche d'identité. Ajouter une espèce = ajouter une entrée `SPECIES` (mouvement, bande de profondeur, proies, nourriture favorite, silhouette). **Roster complet : 27 espèces + anémones-refuges.** Flags génériques documentés en tête du fichier (`refuge`, `anchorToRefuge`, `ambush`, `lure`, `ink`, `aerial`, `jumps`, `stealthy`, `trickster`, `nocturnal`, `sizeVar`, `spanRatio`, `offshore`, `gag(e,dt,t)`).
+- `species.js` — **espèces 100 % data-driven**. Chaque fiche a un `name` rigolo **contenant la vraie espèce** ("Baleine Gros Dodo", "Poisson Confetti") et un `realName` affiché en sous-titre de la fiche d'identité. Ajouter une espèce = ajouter une entrée `SPECIES` (mouvement, bande de profondeur, proies, nourriture favorite, silhouette). **Roster complet : 30 espèces + anémones-refuges.** Chaque fiche porte aussi une **`phrase`** et un **faux nom `latin`**, affichés uniquement dans la fiche d'identité (bloc `FICHES` en fin de fichier, séparé pour que les données de simulation restent lisibles). Flags génériques documentés en tête du fichier (`refuge`, `anchorToRefuge`, `ambush`, `lure`, `ink`, `aerial`, `jumps`, `stealthy`, `trickster`, `nocturnal`, `sizeVar`, `spanRatio`, `offshore`, `piquant`, `gonflable`, `snatch`, `shock`, `pouch`, `gag(e,dt,t)`).
 - `world.js` — triangle de profondeur en grille "profondeur max par colonne" (reco GDD §14), zones, fond sableux.
 - `camera.js` — scroll bi-axial borné par le triangle (impossible d'atteindre les abysses près de la plage).
 - `particles.js` — socle feedback réutilisable : splash, nuage de sable, bulles, sillage, **bulles d'action comiques** (`Particles.comic/hearts/stars`).
@@ -122,6 +122,31 @@ Six mécanismes le rendent stable **sans réglage espèce par espèce**. Les tou
 3. **Recherche de partenaire** (`Entity.tryMate` + état `court`) — sans elle, les espèces rares ne se croisent jamais dans un monde de 8000 px. Les espèces qui **ne migrent pas** (`Ecosystem.migre` : les fixes, mais aussi les trop lentes) pondent **en diffusion** faute de voisin — sans ça la Méduse, qui dérive à 12 px/s, ne pondait que 2 fois en 18 min et passait de 35 individus à 4.
 4. **Immigration** (`Ecosystem.immigration`) — filet de sécurité : une espèce localement éteinte revient du large. Le joueur ne peut pas perdre une espèce définitivement.
 5. **Boom provoqué par le joueur** (`Ecosystem.boom` / `feedBoost`) — nourrir une espèce fait monter son plafond jusqu'au double. Les prédateurs se reportent alors sur elle (`nearestPreyFor` pondère par l'abondance), ce qui ramène tout à l'équilibre sans jamais punir le joueur (GDD §9). Le boom décroît vite : il faut nourrir **en continu** pour le maintenir.
+
+### Trois mécaniques de défense et de chasse (2026-09-04)
+
+- **`piquant: {range}`** — « tous ceux qui pic-pic rendent malade ». Au contact,
+  la victime prend un `malaise()` (jamais mortel, GDD §9) et détale. Un cooldown
+  **par victime** (`o._piqueCd`), sinon un poisson coincé contre un oursin repart
+  en malaise à chaque frame. `gonflable: true` y ajoute l'avertissement : l'animal
+  se **gonfle** à l'approche (réutilise `_gonfle`, déjà dessiné et déjà
+  tremblotant), pour que la piqûre ne sorte pas de nulle part.
+- **`snatch: true`** — le Pélican ne vise QUE les proies en phase aérienne
+  (`jumpState === 'air'`) et ne descend jamais sous la surface. Trois points :
+  filtre dans `nearestPreyFor`, abandon dès que la cible retombe à l'eau, et
+  seuil « trop profond » ramené à la surface. Ça donne enfin une raison d'être
+  aux sauts des exocets, que **personne n'attendait en l'air**.
+- **`shock: {range, cooldown}`** — l'Anguille électrocute **tout** son voisinage
+  d'un coup : les touchés sont `assomme()` (vrille + étoiles, qui existait déjà),
+  les œufs et alevins meurent. C'est la **première mécanique qui tue sans
+  manger** : elle échappe donc au report de prédation et aux plafonds, qui ne
+  comptent que la prédation. D'où le cooldown franc, et la décharge qui ne part
+  que si quelqu'un est assez près pour la justifier.
+
+Piège trouvé en les branchant : **un oiseau ne peut pas brouter**. `planktonAt`
+renvoie 0 au-dessus de la ligne d'eau, or un aérien y passe sa vie — le Pélican
+mourait de faim malgré son `grazes` (3 morts en 6 min). Les aériens broutent
+donc la **surface**, pas leur propre position.
 
 ### Trop-plein : caca, malaise, explosion
 

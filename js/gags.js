@@ -309,4 +309,336 @@ const GAGS = {
     e._timideCd = 999;                       // repris à la fin du repli
   },
 
+
+  // LE FUGU SE GONFLE. Tout est déjà fait par `Entity.piquer` (gonflement
+  // amorti, piqûre au contact) : le gag n'ajoute que le SOUFFLE — il se remplit
+  // en avalant de l'eau, donc des bulles partent de sa bouche pendant qu'il
+  // enfle. Sans ça il grossit sans qu'on comprenne comment.
+  fugu(e, dt, t) {
+    const g = e._piquantGonfle ?? 0;
+    if (g > 0.25 && Math.random() < dt * g * 5) {
+      Particles.bubble(e.x + e.size * 0.7, e.y - e.size * 0.1, U.rand(2, 4.5));
+    }
+    // Une fois dégonflé, il souffle un grand coup, soulagé.
+    if (e._etaitGonfle && g < 0.12) {
+      e._etaitGonfle = false;
+      e.emote('happy', 1.4);
+      Particles.bubble(e.x + e.size * 0.7, e.y, 6);
+    }
+    if (g > 0.6) e._etaitGonfle = true;
+  },
+
+  // LE PÉLICAN RATE, ET ÇA SE VOIT DANS SA POCHE. Le succès se raconte tout
+  // seul (il l'avale) ; c'est le raté qui vaut la scène : il referme le bec, la
+  // poche se remplit… et le poisson en ressort par le haut.
+  // `_poche` (0→1) est lu par `FishBody.drawBird`.
+  pelican(e, dt, t) {
+    if (e._poche > 0) {
+      e._poche = Math.max(0, e._poche - dt * 1.6);
+      if (e._poche <= 0) e.emote('ashamed', 1.8);       // « bon. » — pas de bulle
+    }
+    // Il plane bras écartés quand il a repéré quelqu'un en l'air : c'est
+    // l'anticipation, sans elle la capture sort de nulle part.
+    if (e.state === 'hunt' && e.target && e.exprTimer <= 0) e.emote('angry', 1.2, false);
+  },
+
+  // L'ANGUILLE PRÉVIENT AVANT DE FRAPPER. La décharge elle-même est dans
+  // `Entity.decharge` ; ici c'est la CHARGE : à l'approche du déclenchement,
+  // de petites étincelles courent le long d'elle. Un éclair qui part sans
+  // préavis se lit comme un bug d'affichage.
+  anguille(e, dt, t) {
+    const cd = e._shockCd ?? 99;
+    if (cd < 1.2 && Math.random() < dt * (1.2 - cd) * 9) {
+      Particles.burst(e.x + U.rand(-1, 1) * e.size * 0.8,
+                      e.y + U.rand(-1, 1) * e.size * 0.3, '#bfe4ff', 2);
+    }
+  },
+
+  // LE THON EST PRESSÉ. Un bruit de moteur quand il passe à fond — c'est le
+  // seul cas où du texte est justifié : c'est un BRUIT, pas une réplique.
+  // Émis une seule fois par accélération (`_vroum`), jamais par frame.
+  thon(e, dt, t) {
+    const vite = e.speedNow > e.def.speed * 1.6;
+    if (vite && !e._vroum) {
+      e._vroum = true;
+      Particles.shout(e.x, e.y - e.size * 1.2, 'VROUUUM', '#8fd8f5', e.size * 1.4);
+      Particles.wake(e.x - e.size, e.y);
+    }
+    if (!vite) e._vroum = false;
+  },
+
+  // LE COQUILLAGE FABRIQUE UNE PERLE. Il s'ouvre en grand, la perle brille, il
+  // se referme d'un coup dès qu'on la regarde de trop près.
+  coquillage(e, dt, t) {
+    e._perleCd = (e._perleCd ?? U.rand(8, 40)) - dt;
+    if (e._perleCd > 0) { if (e._perle > 0) e._perle = Math.max(0, e._perle - dt * 0.7); return; }
+    if (!e._perle) {
+      e._perle = 1;
+      e.emote('proud', 3);
+      Particles.sparkles(e.x, e.y - e.size * 0.8, 6);
+    }
+    e._perleCd = U.rand(25, 60);
+  },
+
+  // LA BALEINE RONFLE SI FORT QUE ÇA SOUFFLE LES PETITS. Le ronflement existait
+  // (`snores`) sans rien faire à personne : maintenant chaque expiration pousse
+  // ce qui est devant elle.
+  gros_dodo(e, dt, t) {
+    if (e.state !== 'sleep') return;
+    e._ronfle = (e._ronfle ?? 0) + dt;
+    if (e._ronfle < 2.6) return;
+    e._ronfle = 0;
+    Particles.zzz(e.x, e.y - e.size * 0.6);
+    const devant = e._facing >= 0 ? 1 : -1;
+    for (const o of Ecosystem.neighbors(e.x, e.y)) {
+      if (o === e || o.dead || o.def.size >= 70) continue;
+      const dx = o.x - e.x;
+      if (dx * devant < 0 || Math.abs(dx) > e.size * 2.4) continue;
+      if (Math.abs(o.y - e.y) > e.size * 0.9) continue;
+      o.vx += devant * 190; o.vy += U.rand(-40, 40);
+      if (Math.random() < 0.25) o.emote('surprise', 1.2);
+    }
+  },
+
+  // LA MÉDUSE PART EN LOOPING. Elle n'a pas de tête : le courant la retourne,
+  // et elle en ressort avec les yeux qui tournent.
+  meduse(e, dt, t) {
+    e._loopCd = (e._loopCd ?? U.rand(10, 30)) - dt;
+    if (e._loopCd > 0) return;
+    e._loopCd = U.rand(20, 50);
+    e.emote('dizzy', 2.6);
+    e.vy -= 60; e.vx += U.rand(-1, 1) * 50;
+  },
+
+  // LE POISSON-LUNE S'ENDORT EN PLEINE NAGE ET COULE. C'est littéralement ce
+  // que « Bada-boum » raconte : il descend tout doucement, touche le fond, et
+  // se réveille en sursaut.
+  poisson_lune(e, dt, t) {
+    if (e.state === 'sleep') {
+      e.vy += 26 * dt;                          // il coule
+      const sol = World.floorY(e.x) - e.size * 0.6;
+      if (e.y >= sol) {
+        e.y = sol;
+        e.state = 'wander'; e.stateTimer = 6;
+        e.emote('surprise', 2.4);
+        Particles.sandCloud(e.x, sol + e.size * 0.4, true);
+        Particles.comic(e.x, e.y - e.size, '❗');
+      }
+    }
+  },
+
+  // L'ORQUE LANCE SES ÉCHOS LA NUIT, ET ÇA RÉVEILLE LES PROFONDEURS.
+  // Enfin une raison au nom « Echo ».
+  orque(e, dt, t) {
+    if (Main.nightAmount() < 0.5) return;
+    e._echoCd = (e._echoCd ?? U.rand(6, 18)) - dt;
+    if (e._echoCd > 0) return;
+    e._echoCd = U.rand(14, 30);
+    Particles.spin(e.x, e.y, e.size * 2.2);
+    Particles.comic(e.x, e.y - e.size * 1.2, '♪');
+    let reveilles = 0;
+    for (const o of Ecosystem.neighbors(e.x, e.y)) {
+      if (o === e || o.dead || o.state !== 'sleep') continue;
+      o.state = 'wander'; o.stateTimer = 4;
+      if (reveilles++ < 3) o.emote('surprise', 1.6);   // pas vingt bulles d'un coup
+    }
+  },
+
+  // LA BAUDROIE DISPARAÎT DANS LE NOIR : la nuit, on ne voit plus que sa
+  // lanterne. Elle réapparaît quand elle mange. `_fondu` est lu par le rendu.
+  lanterne(e, dt, t) {
+    const nuit = Main.nightAmount();
+    const visible = e._chew > 0 ? 1 : 0;
+    const cible = U.lerp(1, visible, nuit * 0.9);
+    e._fondu = U.lerp(e._fondu ?? 1, cible, Math.min(1, dt * 2.5));
+  },
+
+  // LA CREVETTE CLIGNOTE EN RYTHME AVEC TOUT L'ESSAIM — et il y en a toujours
+  // une à contretemps. Le décalage vient de l'identifiant, donc c'est TOUJOURS
+  // la même qui est à côté de la plaque.
+  crevette(e, dt, t) {
+    const contretemps = (e.id % 7) === 0;
+    e._clignote = 0.5 + 0.5 * Math.sin(t * 3 + (contretemps ? 2.1 : 0));
+  },
+
+  // LE CALMAR DÉCOLLE : 3, 2, 1… et il file en marche arrière, trop fort.
+  calamar(e, dt, t) {
+    if (e._fusee > 0) {
+      e._fusee -= dt;
+      if (e._fusee <= 0) {
+        const dir = e._facing >= 0 ? -1 : 1;      // il part À RECULONS
+        e.vx += dir * 260; e.vy -= 90;
+        Particles.bubble(e.x - dir * e.size, e.y, 6);
+        Particles.burst(e.x - dir * e.size, e.y, '#cfd8ff', 7);
+        e.emote('surprise', 1.6);
+      }
+      return;
+    }
+    e._fuseeCd = (e._fuseeCd ?? U.rand(14, 40)) - dt;
+    if (e._fuseeCd > 0) return;
+    e._fuseeCd = U.rand(25, 60);
+    e._fusee = 0.9;                               // le décompte
+    e._freeze = 0.9;
+    Particles.comic(e.x, e.y - e.size * 1.2, '3');
+  },
+
+  // LA MURÈNE BÂILLE. Un jaillissement pour rien, qui fait détaler tout le
+  // récif — c'est le seul moment où on la voit en entier.
+  murene(e, dt, t) {
+    e._bailleCd = (e._bailleCd ?? U.rand(12, 35)) - dt;
+    if (e._bailleCd > 0) return;
+    e._bailleCd = U.rand(30, 70);
+    e.emote('eating', 2.2, false);                // la gueule grande ouverte
+    let fuyards = 0;
+    for (const o of Ecosystem.neighbors(e.x, e.y)) {
+      if (o === e || o.dead || o.def.size > 40) continue;
+      if (U.dist2(e.x, e.y, o.x, o.y) > 220 * 220) continue;
+      o.state = 'flee'; o.target = e; o.stateTimer = 1.4;
+      if (fuyards++ < 3) o.emote('scared', 1.4);
+    }
+  },
+
+  // LE FOU MOUSTACHU REMONTE AVEC UNE ALGUE. Le raté existait déjà (il ressort
+  // trempé) : on lui ajoute le trophée ridicule.
+  moustachu(e, dt, t) {
+    if (e.wet > 2.4 && !e._algue) {
+      e._algue = 2.6;
+      Particles.comic(e.x, e.y - e.size * 1.3, '🌿');
+    }
+    if (e._algue > 0) e._algue -= dt;
+  },
+
+  // LE POISSON VOLANT RATE SON SAUT et fait comme si c'était voulu.
+  volant(e, dt, t) {
+    if (e.jumpState === 'air' && !e._frime) {
+      e._frime = true;
+      if (Math.random() < 0.25) e.emote('proud', 1.8);
+    }
+    if (e.jumpState !== 'air') e._frime = false;
+  },
+
+  // LE BANC DE CONFETTIS DESSINE UNE FORME, puis se disperse, gêné d'avoir été
+  // vu. La forme est portée par le GROUPE : chaque poisson reçoit sa place sur
+  // le contour, et y va. Trois figures — cœur, rond, carré.
+  confetti(e, dt, t) {
+    if (e.groupId == null) return;
+    const membres = Ecosystem.byGroup[e.groupId];
+    if (!membres || membres.length < 8) return;
+    // Un seul individu du banc pilote la scène : celui d'identifiant le plus
+    // petit. Sans ce chef, chacun démarrait sa propre figure.
+    const chef = membres[0];
+    if (e !== chef) return;
+
+    if (e._figT > 0) {
+      e._figT -= dt;
+      const k = 1 - Math.abs(e._figT / 2.6 - 0.5) * 2;   // 0 → 1 → 0
+      const R = 120 + membres.length * 2;
+      membres.forEach((m, i) => {
+        const u = i / membres.length;
+        const p = GAGS._figure(e._figure, u, R);
+        m._figX = e.x + p.x * k; m._figY = e.y + p.y * k;
+      });
+      if (e._figT <= 0) {
+        for (const m of membres) { m._figX = null; m._figY = null; m.emote('blush', 1.6, false); }
+      }
+      return;
+    }
+    e._figCd = (e._figCd ?? U.rand(20, 50)) - dt;
+    if (e._figCd > 0) return;
+    e._figCd = U.rand(45, 100);
+    e._figT = 2.6;
+    e._figure = U.pick(['coeur', 'rond', 'carre']);
+  },
+
+  // Le contour d'une figure, paramétré de 0 à 1.
+  _figure(quoi, u, R) {
+    if (quoi === 'rond') {
+      const a = u * Math.PI * 2;
+      return { x: Math.cos(a) * R, y: Math.sin(a) * R };
+    }
+    if (quoi === 'carre') {
+      const c = u * 4, k = c % 1, cote = Math.floor(c);
+      const s = R * 0.9, v = -s + k * 2 * s;
+      return [{ x: v, y: -s }, { x: s, y: v }, { x: -v, y: s }, { x: -s, y: -v }][cote];
+    }
+    // cœur
+    const a = u * Math.PI * 2;
+    const x = 16 * Math.pow(Math.sin(a), 3);
+    const y = -(13 * Math.cos(a) - 5 * Math.cos(2 * a) - 2 * Math.cos(3 * a) - Math.cos(4 * a));
+    return { x: x * R / 17, y: y * R / 17 };
+  },
+
+  // L'ÉTOILE SE COLLE À UN PASSANT et se fait transporter en rigolant. Au bout
+  // d'un moment elle se décroche. (Son ancien câlin est passé à l'Anémone.)
+  etoile_ventouse(e, dt, t) {
+    if (e._monte && !e._monte.dead) {
+      e._ventouseT -= dt;
+      e.x = e._monte.x; e.y = e._monte.y - e._monte.size * 0.7;
+      if (Math.random() < dt * 0.5) e.emote('happy', 1.5, false);
+      if (e._ventouseT <= 0) {
+        e._monte = null;
+        e.emote('surprise', 1.5);
+      }
+      return;
+    }
+    e._monte = null;
+    e._ventouseCd = (e._ventouseCd ?? U.rand(15, 45)) - dt;
+    if (e._ventouseCd > 0) return;
+    for (const o of Ecosystem.neighbors(e.x, e.y)) {
+      if (o === e || o.dead || o.def.movement === 'fixed' || o.def.size < 16) continue;
+      if (U.dist2(e.x, e.y, o.x, o.y) > 90 * 90) continue;
+      e._monte = o; e._ventouseT = U.rand(6, 14);
+      e._ventouseCd = U.rand(40, 90);
+      e.emote('happy', 2);
+      o.emote('surprise', 1.6);
+      Particles.comic(e.x, e.y - 18, '🎢');
+      return;
+    }
+    e._ventouseCd = 4;
+  },
+
+  // L'ANÉMONE BALANCE SES BRAS EN MUSIQUE, et fait le câlin dont l'étoile a
+  // hérité jusqu'ici. Deux gestes, un seul cooldown pour ne pas saturer.
+  anemone(e, dt, t) {
+    e._danse = 0.5 + 0.5 * Math.sin(t * 1.6 + e.phase);
+    if (Math.random() < dt * 0.06) Particles.notes(e.x, e.y - e.size);
+    e._calinCd = (e._calinCd ?? U.rand(20, 50)) - dt;
+    if (e._calinCd > 0) return;
+    for (const o of Ecosystem.neighbors(e.x, e.y)) {
+      if (o === e || o.dead || o.def.movement === 'fixed') continue;
+      if (o.speedNow < 12) continue;                  // ceux qui PASSENT
+      if (U.dist2(e.x, e.y, o.x, o.y) > 80 * 80) continue;
+      e._calinCd = U.rand(35, 70);
+      e.emote('happy', 2.2);
+      o.emote('blush', 1.8);
+      return;
+    }
+    e._calinCd = 3;
+  },
+
+  // LE REQUIN PERD SES DENTS EN MANGEANT. Édenté, il ne peut plus attraper
+  // personne — il doit attendre qu'elles repoussent. GARDE-FOU : la repousse
+  // est automatique et bornée dans le temps, sinon il meurt de faim, exactement
+  // comme la murène quand deux modes d'échec se cumulaient.
+  requin(e, dt, t) {
+    if (e._edente > 0) {
+      e._edente -= dt;
+      if (Math.random() < dt * 0.35) e.emote('sad', 1.8, false);
+      if (e._edente <= 0) {
+        e.emote('happy', 2);
+        Particles.sparkles(e.x + e.size * 0.6, e.y, 4);
+      }
+      return;
+    }
+    // Il vient de croquer : une dent se décroche et tombe.
+    if (e._chew > 0 && !e._dentTombee) {
+      e._dentTombee = true;
+      if (Math.random() < 0.55) {
+        e._edente = U.rand(12, 22);
+        Particles.comic(e.x + e.size * 0.5, e.y, '🦷');
+        e.emote('surprise', 2);
+      }
+    }
+    if (e._chew <= 0) e._dentTombee = false;
+  },
 };

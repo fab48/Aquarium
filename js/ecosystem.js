@@ -46,6 +46,11 @@ const Ecosystem = {
     // seul ne peut pas se reproduire et sa lignée s'éteint.
     this.spawnGroups('gros_dodo', 2);
     this.spawnGroups('cachalot', 2);
+    // Les trois dernières arrivées : le Fugu qui pique, le Pélican qui cueille
+    // les volants en plein vol, l'Anguille qui électrocute.
+    this.spawnGroups('fugu', 3);
+    this.spawnGroups('pelican', 2);
+    this.spawnGroups('anguille', 3);
 
   },
 
@@ -276,6 +281,13 @@ const Ecosystem = {
       const r = list[e.id % list.length];
       return { x: r.x, y: r.y - 40, kind };
     }
+    // Les OISEAUX pondent sur la plage : la première frayère hors de l'eau.
+    // Elle se place sur le sable ÉMERGÉ, du côté terre du rivage, et assez haut
+    // pour que l'œuf ne soit pas repris par le ressac.
+    if (kind === 'beach') {
+      const x = U.clamp(World.shoreX - 260 - (e.id % 5) * 90, 60, World.shoreX - 60);
+      return { x, y: World.floorY(x) - 30, kind };
+    }
     if (kind === 'shallow') {
       // Nurseries de pleine eau : SIX sites répartis sur toute la largeur du
       // monde, dans la couche éclairée. Un site unique près du rivage attirait
@@ -381,6 +393,10 @@ const Ecosystem = {
       const a = attrait[p];
       for (const e of this.bySpecies[p] || []) {
         if (e.dead) continue;
+        // `snatch` : le Pélican ne cueille qu'EN PLEIN VOL. Une proie retombée
+        // à l'eau ne l'intéresse pas — c'est tout ce qui le distingue du Fou
+        // Moustachu, qui plonge dedans.
+        if (def.snatch && e.jumpState !== 'air') continue;
         if (e.y < yMin || e.y > yMax) continue;
         const d = U.dist2(pred.x, pred.y, e.x, e.y);
         if (d > r2) continue;

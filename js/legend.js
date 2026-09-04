@@ -22,6 +22,15 @@ const Legend = {
     ['!', 'a peur'],
     ['💡', 'le Poisson-lanterne Allumeur a allumé sa lampe : ce qui passe vient droit dessus'],
     ['🖤', 'nuage d’encre : le poulpe ou le calamar vient de semer son poursuivant'],
+    ['⚡', 'l’Anguille Coup-de-Jus lâche sa décharge : tout le voisinage est sonné'],
+    ['🦷', 'le Requin Dents-Molles vient de perdre une dent — il ne peut plus manger'],
+    ['VROUUUM', 'le Thon Speedy passe à fond'],
+    ['🎢', 'l’Étoile de Mer Ventouse s’est collée à un passant et se fait transporter'],
+    ['3', 'le Calmar Violette fait son décompte avant de décoller à reculons'],
+    ['🌿', 'le Fou Moustachu est remonté avec une algue au lieu d’un poisson'],
+    ['un banc en forme de cœur', 'les Poissons Confetti prennent la pose, puis se dispersent, gênés'],
+    ['un poisson tout rond', 'le Fugu Gonflé se gonfle : ne le touchez pas, ça rend malade'],
+    ['une poche qui gigote', 'le Pélican a raté : le poisson ressort par le haut'],
   ],
 
   // Chaque action du jeu a son émotion attitrée. Tenir cette table à jour :

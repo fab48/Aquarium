@@ -232,7 +232,10 @@ class Entity {
     // provoquait une par le haut : Orque éteinte et Requin à 1 en 18 min.
     const disette = !broute && Ecosystem.disette(this.def);
     if (broute || disette) {
-      const dens = World.planktonAt(this.y);
+      // Un OISEAU broute la surface, pas l'air : sa position en y est
+      // au-dessus de la ligne d'eau, où `planktonAt` renvoie 0. Le Pélican
+      // mourait donc de faim malgré son `grazes` (3 morts en 6 min).
+      const dens = World.planktonAt(this.def.aerial ? CONFIG.SURFACE_Y + 40 : this.y);
       const k = disette ? 0.5 : 1;                 // un requin ne vit pas de plancton
       const cap = 1 - 0.45 * dens * k;
       if (this.hunger > cap) this.hunger = Math.max(cap, this.hunger - dt * 0.03 * k);
@@ -300,6 +303,8 @@ class Entity {
     // tout le reste parce que le Poulpe est un charognard : le moteur ne le
     // fait jamais « fuir », il n'avait donc aucune porte de sortie.
     if (def.ink) this.encre(dt);
+    if (def.piquant) this.piquer(dt);
+    if (def.shock) this.decharge(dt);
 
     if (this.state === 'dizzy') {
       this.hold('dizzy');
@@ -447,7 +452,15 @@ class Entity {
         const nearRefuge = Ecosystem.isNearRefuge(p.x, p.y);
         // Contact ! Raté comique éventuel (Requin Dents-Molles…) ou proie réfugiée près d'une anémone
         if (nearRefuge || (def.missChance && Math.random() < def.missChance)) {
-          if (def.aerial) {
+          if (def.snatch) {
+            // LE PÉLICAN RATE : il referme le bec, sa poche se remplit… et le
+            // poisson en ressort par le haut. Toute la scène est là.
+            this._poche = 1;
+            this.state = 'wander';
+            p.emote('scared', 2);
+            p.vy -= 160; p.vx += U.rand(-1, 1) * 90;
+            Particles.burst(this.x + this.size, this.y, '#cfe8ff', 6);
+          } else if (def.aerial) {
             // Le Moustachu Volant ressort mouillé plutôt que sonné
             this.wet = 3; this.state = 'wander';
             this.emote('sad', 2.5);          // trempé et dépité
@@ -544,6 +557,90 @@ class Entity {
           return;
         }
       }
+    }
+  }
+
+  // ===========================================================================
+  // PIQUANT (`piquant: true`) — Fugu, Oursin, Rascasse.
+  // ===========================================================================
+  // « Tous ceux qui pic-pic rendent malade. » C'est la contrepartie de leur
+  // immunité : personne ne les mange, et c'est pour ça. Deux temps, pour que
+  // la piqûre ne sorte pas de nulle part :
+  //   1. l'avertissement — un gros s'approche, l'animal se GONFLE (`_gonfle`,
+  //      déjà utilisé par le gavage, donc déjà dessiné et déjà tremblotant) ;
+  //   2. le contact — la victime prend un `malaise()` (jamais mortel, GDD §9)
+  //      et détale.
+  // Un cooldown PAR VICTIME, sinon un poisson coincé contre un oursin repart
+  // en malaise à chaque frame.
+  piquer(dt) {
+    const menace = this.def.piquant.range ?? this.size * 4;
+    let proche = 0;
+    for (const o of Ecosystem.neighbors(this.x, this.y)) {
+      if (o === this || o.dead || o.stage === 'egg') continue;
+      if (o.speciesId === this.speciesId) continue;      // entre eux, ça ne pique pas
+      const d2 = U.dist2(this.x, this.y, o.x, o.y);
+      if (d2 > menace * menace) continue;
+      proche = Math.max(proche, 1 - Math.sqrt(d2) / menace);
+
+      // Contact : les épines entrent
+      const touche = (this.size * this._piquantK() + o.size) * 0.9;
+      if (d2 > touche * touche) continue;
+      o._piqueCd = (o._piqueCd ?? 0) - dt;
+      if (o._piqueCd > 0) continue;
+      o._piqueCd = 4;
+      o.malaise(0.8, this.x, this.y);
+      o.state = 'flee'; o.target = this; o.stateTimer = 2;
+      Particles.burst(o.x, o.y, '#ffe08a', 5);
+      this.emote('smug', 1.6, false);                    // « bien fait »
+    }
+    // Gonflement : plein au contact, nul quand personne n'approche. Amorti,
+    // sinon il claque d'un coup dès qu'un poisson passe à la limite.
+    this._piquantGonfle = U.lerp(this._piquantGonfle ?? 0, proche, Math.min(1, dt * 4));
+    if (this.def.gonflable) {
+      this._gonfle = this._piquantGonfle;
+      if (proche > 0.7 && this.exprTimer <= 0 && Math.random() < dt * 1.2) this.emote('angry', 1.2);
+    }
+  }
+
+  // Facteur de taille appliqué par le rendu quand l'animal est gonflé.
+  _piquantK() { return 1 + (this._piquantGonfle ?? 0) * (this.def.gonflable ? 0.55 : 0); }
+
+  // ===========================================================================
+  // DÉCHARGE (`shock: {range, cooldown}`) — l'Anguille Coup-de-Jus.
+  // ===========================================================================
+  // Elle électrocute TOUT ce qui traîne autour, pas un seul individu : c'est
+  // une décharge, pas une morsure. Les touchés sont SONNÉS (`assomme`, qui
+  // existe déjà et se lit déjà : vrille, étoiles, hébétude) ; seuls les très
+  // faibles en meurent — les alevins et les œufs.
+  //
+  // C'est la première mécanique du jeu qui TUE SANS MANGER : elle échappe donc
+  // au report de prédation et aux plafonds, qui ne comptent que la prédation.
+  // D'où deux brides : un cooldown franc (sans lui elle vide son voisinage en
+  // quelques secondes, la leçon de la murène « ping-pong »), et une décharge
+  // qui ne part QUE si quelqu'un est assez près pour la justifier.
+  decharge(dt) {
+    const S = this.def.shock;
+    this._shockCd = (this._shockCd ?? U.rand(0, S.cooldown)) - dt;
+    if (this._shockCd > 0) return;
+
+    const portee = S.range;
+    const cibles = [];
+    for (const o of Ecosystem.neighbors(this.x, this.y)) {
+      if (o === this || o.dead) continue;
+      if (o.speciesId === this.speciesId) continue;      // elle ne s'électrocute pas elle-même
+      if (U.dist2(this.x, this.y, o.x, o.y) < portee * portee) cibles.push(o);
+    }
+    if (!cibles.length) return;                          // rien à zapper : on garde le jus
+
+    this._shockCd = U.rand(S.cooldown, S.cooldown * 1.8);
+    Particles.eclairs(this.x, this.y, portee, 6);
+    this.emote('smug', 1.8, false);
+    for (const o of cibles) {
+      // Les très faibles n'y survivent pas : œufs et alevins.
+      if (o.stage === 'egg' || o.stage === 'fry') { o.die(); continue; }
+      o.assomme();
+      const dx = o.x - this.x, dy = o.y - this.y, d = Math.hypot(dx, dy) || 1;
+      o.vx += dx / d * 140; o.vy += dy / d * 140;
     }
   }
 
@@ -1011,8 +1108,16 @@ class Entity {
         const d = Math.hypot(dx, dy) || 1;
         ax2 += (dx / d * maxSpeed2 - this.vx) * 3;
         ay2 += (dy / d * maxSpeed2 - this.vy) * 3;
-        // Trop profond : abandonne et remonte, trempé et vexé
-        if (this.y > CONFIG.SURFACE_Y + 130) {
+        // Le happeur (`snatch`) lâche l'affaire dès que sa cible RETOMBE à
+        // l'eau : sans ça le Pélican la suivrait dans la mer, ce qui est
+        // exactement ce qu'il ne fait jamais.
+        if (def.snatch && this.target.jumpState !== 'air') {
+          this.state = 'wander'; this.target = null;
+          this.emote('sad', 1.6);
+        }
+        // Trop profond : abandonne et remonte, trempé et vexé. Le happeur ne
+        // touche jamais l'eau : sa limite est la surface elle-même.
+        if (this.y > CONFIG.SURFACE_Y + (def.snatch ? 4 : 130)) {
           this.state = 'wander'; this.target = null; this.wet = 3;
           Particles.splash(this.x);
         }
@@ -1273,7 +1378,14 @@ class Entity {
     // méthodes de prototype : les fermetures locales coûtaient ~1000
     // allocations par frame). L'accumulateur est reversé dans ax/ay plus bas.
     this._axAcc = 0; this._ayAcc = 0;
-    if (this._lureT > 0 && this.state !== 'flee') {
+    // FIGURE DU BANC : chaque confetti a reçu sa place sur le contour d'un
+    // cœur, d'un rond ou d'un carré (cf. GAGS.confetti). Elle prime sur tout,
+    // sauf sur la peur — un banc qui garde la pose pendant qu'un thon fonce
+    // dedans, ça ne va pas.
+    if (this._figX != null && this.state !== 'flee') {
+      maxSpeed = def.speed * 1.6;
+      this.steerVers(this._figX, this._figY, maxSpeed, 5);
+    } else if (this._lureT > 0 && this.state !== 'flee') {
       // HYPNOTISÉE par une lampe de poisson-lanterne : elle avance droit sur la
       // lumière, sans plus rien voir. Une vraie peur la réveille quand même —
       // c'est le seul état qui prime, sinon la crevette se laisse manger deux

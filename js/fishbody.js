@@ -1135,6 +1135,30 @@ const FishBody = {
     // Visage commun
     this.drawFace(ctx, s, expr, t + e.phase, e.emoteK());
 
+    // Le PÉLICAN a une poche à la place de la moustache. Elle se remplit quand
+    // il vient d'attraper quelque chose (`_chew`) et quand il rate (`_poche`),
+    // et le poisson s'y agite : c'est là que se joue tout son gag.
+    if (e.def.pouch) {
+      const bourre = Math.max(e._chew > 0 ? 1 : 0, e._poche ?? 0);
+      const gonf = 1 + bourre * 1.5;
+      const remue = bourre > 0 ? Math.sin(t * 26 + e.phase) * s * 0.09 * bourre : 0;
+      ctx.fillStyle = '#f0a54a';
+      ctx.beginPath();
+      ctx.moveTo(s * 0.82, s * 0.02);
+      ctx.quadraticCurveTo(s * (1.25 + bourre * 0.1), s * (0.35 * gonf) + remue,
+                           s * 1.58, s * 0.14);
+      ctx.quadraticCurveTo(s * 1.2, s * (0.18 * gonf), s * 0.86, s * 0.24);
+      ctx.closePath(); ctx.fill();
+      // La bosse du poisson dedans, quand il y en a un
+      if (bourre > 0.15) {
+        ctx.fillStyle = 'rgba(190,110,40,0.55)';
+        ctx.beginPath();
+        ctx.ellipse(s * 1.15, s * (0.2 + 0.16 * bourre) + remue,
+                    s * 0.22 * bourre, s * 0.13 * bourre, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else {
+
     // GROSSE moustache noire sous le bec
     ctx.fillStyle = '#1c2733';
     ctx.beginPath();
@@ -1148,6 +1172,8 @@ const FishBody = {
     ctx.quadraticCurveTo(s * 1.25, s * 0.15, s * 1.35, s * 0.45);
     ctx.quadraticCurveTo(s * 1.05, s * 0.35, s * 0.92, s * 0.42);
     ctx.closePath(); ctx.fill();
+
+    }
 
     if (wet) {
       // Sourcil vexé au-dessus de l'œil + gouttes qui perlent
@@ -1170,6 +1196,10 @@ const FishBody = {
   // s'allume que la nuit (Main.nightAmount() > 0.5) et clignote en faux morse.
   drawLantern(ctx, e, t) {
     const s = e.size;
+    // LA NUIT, ON NE VOIT PLUS QUE SA LANTERNE. `_fondu` (piloté par
+    // GAGS.lanterne) fait disparaitre le CORPS en fondu ; le fanal, lui, est
+    // dessine hors de ce voile. Elle reapparait quand elle mange.
+    const fondu = e._fondu != null ? e._fondu : 1;
     const night = (typeof Main !== 'undefined' && Main.nightAmount) ? Main.nightAmount() : 0;
     // faux morse : superposition de deux carrés d'onde de périodes premières
     const k = t * 2.2 + e.phase;
@@ -1181,6 +1211,10 @@ const FishBody = {
     const peche = !!e._lureOn;
     const lit = peche ? 1 : (night > 0.5 ? morse : 0);
     const eclat = peche ? 1 : Math.min(1, night);
+
+    // Le CORPS s'efface la nuit (`fondu`), pas le fanal : c'est tout le gag.
+    const alphaAvant = ctx.globalAlpha;
+    ctx.globalAlpha = alphaAvant * fondu;
 
     // Antenne (part du front, s'arque vers l'avant)
     ctx.strokeStyle = e.colorDark;
@@ -1211,7 +1245,9 @@ const FishBody = {
       ctx.closePath(); ctx.fill();
     }
 
-    // Lampe
+    // Lampe — TOUJOURS pleinement visible : c'est le seul repère qui reste
+    // quand le corps a disparu dans le noir.
+    ctx.globalAlpha = alphaAvant;
     ctx.save();
     if (lit) {
       // aura de la lampe : halo pré-rendu (§5.9), à la place de shadowBlur
@@ -1234,8 +1270,10 @@ const FishBody = {
     }
     ctx.restore();
 
+    ctx.globalAlpha = alphaAvant * fondu;
     this.drawSpots(ctx, e);
     this.face(ctx, s, e, t);
+    ctx.globalAlpha = alphaAvant;
   },
 
   // CALAMAR (et Calamar Géant) : manteau en cône pointé vers l'arrière, deux
@@ -1366,7 +1404,10 @@ const FishBody = {
 
     // bioluminescence : halo pré-rendu (§5.9), à la place de shadowBlur —
     // crucial ici : les crevettes sont l'espèce la plus nombreuse des abysses
-    if (glow > 0.1) this.halo(ctx, 0, 0, s * 1.5 + 14 * glow, e.color, 0.55 * glow);
+    // Clignotement d'essaim (GAGS.crevette) : tout le monde en rythme, sauf
+    // une sur sept qui est toujours a contretemps.
+    const cli = e._clignote != null ? (0.45 + 0.55 * e._clignote) : 1;
+    if (glow > 0.1) this.halo(ctx, 0, 0, s * (1.5 + 0.35 * cli) + 14 * glow, e.color, 0.55 * glow * cli);
 
     // Antennes (vers l'avant, très longues)
     ctx.strokeStyle = e.colorDark; ctx.lineWidth = Math.max(0.8, s * 0.09); ctx.lineCap = 'round';
@@ -1546,7 +1587,9 @@ const FishBody = {
     // Endormi, il reste ENTROUVERT : referme, on ne verrait pas ses yeux clos
     // et le sommeil ne se lirait pas du tout sur lui.
     const dort = e.expression === 'sleeping' && (e.emoteK ? e.emoteK() : 1) > 0.5;
-    const open = e.expression === 'eating'
+    // LA PERLE : quand il en fabrique une, il s'ouvre en GRAND et elle brille.
+    const perle = e._perle || 0;
+    const open = perle > 0.1 ? 0.55 + perle * 0.35 : e.expression === 'eating'
       ? Math.abs(Math.sin(t * 10)) * 0.7 + 0.2
       : (dort ? 0.32 + Math.sin(t * 1.5 + e.phase) * 0.05
               : Math.max(0, Math.sin(t * 1.2 + e.phase)) * 0.35);

@@ -214,8 +214,10 @@ avalait tout le geste (try/catch) ; un doigt perdu sans `pointerup` ni
 `pointercancel` (geste système) restait dans la Map et transformait le contact
 suivant en pincement fantôme — d'où le nettoyage sur `lostpointercapture`.
 
-Reste dimensionné pour le bureau : la fiche d'identité elle-même (lisible mais
-petite) et l'atelier (`atelier.html`, outil de dev, hors sujet mobile).
+La fiche d'identité est agrandie de 35 % en mode tactile (`IdCard.draw`
+dessine dans un repère réduit puis met le contexte à l'échelle — aucun chiffre
+de mise en page ne change). Reste dimensionné pour le bureau : l'atelier
+(`atelier.html`, outil de dev, hors sujet mobile).
 
 ---
 

@@ -37,9 +37,24 @@ const IdCard = {
   // `epinglee` : fiche de la créature SUIVIE (double-clic) — liseré doré, comme
   // le cerceau qui l'entoure, pour qu'on comprenne pourquoi elle ne bouge pas.
   // Renvoie son propre rectangle, pour que l'appelant l'enchaîne.
+  // Au doigt (Input.touchMode), la fiche entière est agrandie d'un facteur :
+  // dessinée à l'échelle souris, elle est illisible sur un téléphone. Tout le
+  // dessin se fait dans un repère réduit puis le contexte est mis à l'échelle —
+  // aucun autre chiffre de mise en page ne change.
   draw(ctx, e, eviter = null, epinglee = false) {
+    const K = Input.touchMode ? 1.35 : 1;
+    if (K === 1) return this._draw(ctx, e, eviter, epinglee, 1);
+    ctx.save(); ctx.scale(K, K);
+    const ev2 = eviter && { x: eviter.x / K, y: eviter.y / K, w: eviter.w / K, h: eviter.h / K };
+    const r = this._draw(ctx, e, ev2, epinglee, K);
+    ctx.restore();
+    return { x: r.x * K, y: r.y * K, w: r.w * K, h: r.h * K };
+  },
+
+  _draw(ctx, e, eviter, epinglee, K) {
     const def = e.def;
     const pad = 12, W = 264, LH = 17;
+    const VW = Camera.vw / K, VH = Camera.vh / K;   // l'écran vu du repère réduit
 
     const rows = [
       ['Zone', World.zoneAt(e.y).label + ` · ${Math.round((e.y - CONFIG.SURFACE_Y) / CONFIG.PX_PER_METER)} m`],
@@ -51,23 +66,24 @@ const IdCard = {
       ['État', this.stateLabel(e)],
     ];
 
-    // Position écran de la créature (le contexte HUD est en px CSS, pas zoomé)
-    const cx = (e.x - Camera.x) * Camera.zoom;
-    const cy = (e.y - Camera.y) * Camera.zoom;
+    // Position écran de la créature (le contexte HUD est en px CSS, pas zoomé —
+    // divisée par K pour rester exacte dans le repère réduit)
+    const cx = (e.x - Camera.x) * Camera.zoom / K;
+    const cy = (e.y - Camera.y) * Camera.zoom / K;
     const H = pad * 2 + 36 + rows.length * LH + 14;
     let bx = cx + 26, by = cy - H / 2;
-    if (bx + W > Camera.vw - 8) bx = cx - W - 26;
+    if (bx + W > VW - 8) bx = cx - W - 26;
     // Bornée dans les DEUX axes : une créature près du bord gauche (ou hors
     // champ, cas de la fiche épinglée quand la caméra n'a pas fini de la
     // rattraper) envoyait sa fiche à un x négatif, donc invisible.
-    bx = U.clamp(bx, 8, Math.max(8, Camera.vw - W - 8));
-    by = U.clamp(by, 8, Camera.vh - H - 8);
+    bx = U.clamp(bx, 8, Math.max(8, VW - W - 8));
+    by = U.clamp(by, 8, VH - H - 8);
     // Deux fiches à l'écran (l'épinglée + le survol) : la seconde se décale
     // au-dessus ou en dessous de la première plutôt que de la recouvrir.
     if (eviter && bx < eviter.x + eviter.w && bx + W > eviter.x
         && by < eviter.y + eviter.h && by + H > eviter.y) {
       const dessous = eviter.y + eviter.h + 10;
-      by = dessous + H <= Camera.vh - 8 ? dessous : Math.max(8, eviter.y - H - 10);
+      by = dessous + H <= VH - 8 ? dessous : Math.max(8, eviter.y - H - 10);
     }
 
     // Trait de rattachement à la créature

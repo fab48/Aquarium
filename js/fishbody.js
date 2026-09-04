@@ -747,6 +747,13 @@ const FishBody = {
     const stealth = e.stealth || 0;
     ctx.save();
     if (stealth > 0) ctx.globalAlpha = U.lerp(1, 0.2, Math.min(1, stealth));
+    // TOUR DE NINJA (GAGS.poulpe) : pendant le poof il s'efface COMPLÈTEMENT,
+    // pour ressortir ailleurs. La furtivité passive, elle, ne va qu'à 0,2 —
+    // sans ce zéro franc, la disparition ne se lisait pas comme voulue.
+    if (e._invisible > 0) {
+      ctx.globalAlpha *= Math.max(0, 1 - e._invisible);
+      if (ctx.globalAlpha < 0.02) { ctx.restore(); return; }
+    }
 
     // Tentacules (derrière la tête), déployés vers l'arrière
     ctx.strokeStyle = e.colorDark;

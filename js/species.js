@@ -272,6 +272,8 @@ const SPECIES = {
     colors: ['#8a5ea8', '#6a4a8a'],
     render: 'octopus', sizeVar: 0.2,
     lifespan: [300, 500],
+    // Le ninja se MET EN SCÈNE : guet, poof, il ressort ailleurs (gags.js).
+    gag: (e, dt, t) => GAGS.poulpe(e, dt, t),
   },
 
   murene: {

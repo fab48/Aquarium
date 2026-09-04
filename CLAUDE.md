@@ -96,7 +96,22 @@ Pièges de mise en scène déjà rencontrés :
 - Secouer une victime en `vy` la met la tête en bas : préférer un frisson **horizontal** et brider son inclinaison.
 - Un gag qui modifie une émotion doit passer `vfx: false` s'il a déjà son propre effet, sinon les deux se cumulent.
 
-Garde-fou : le total de bulles était monté à ~930/min et saturait l'écran. Cible tenue : **~250/min** pour tout l'aquarium. Ne jamais émettre une bulle à chaque frame d'une scène (`Math.random() < dt * k`) — l'émettre une fois au démarrage (`if (e._xxxT < dt * 2)`).
+Garde-fou : le total de bulles était monté à ~930/min et saturait l'écran. Cible : **~250/min** pour tout l'aquarium.
+
+**État au 4 septembre 2026 : ~508/min, soit le double de la cible.** Le roster
+est passé de 10 gags sur 27 espèces à 29 sur 30, donc une hausse était
+inévitable ; le double ne l'est pas. Trois coupables ont déjà été bridés
+(1284 → 508) et la méthode pour trouver les suivants est de compter par
+**ligne d'appel** : envelopper `Particles.comic/shout/stars/…` et lire
+`new Error().stack` pour attribuer chaque bulle à son émetteur réel — compter
+par espèce ne suffit pas, l'essentiel part de `emoteVFX`, pas des gags.
+
+Deux règles en sont sorties, toutes deux générales :
+- **`dizzy` est devenu une réaction de GROUPE** (au même titre que `scared` et
+  `eating`) depuis l'Anguille : une décharge assomme cinq poissons d'un coup.
+- **Une scène qui touche tout un banc ne doit émettre que sur une poignée.**
+  La figure des Confettis faisait rougir ses 40 membres d'un coup, soit
+  125 gouttes de sueur par minute à elle seule. Ne jamais émettre une bulle à chaque frame d'une scène (`Math.random() < dt * k`) — l'émettre une fois au démarrage (`if (e._xxxT < dt * 2)`).
 
 Les VFX sont throttlés par individu (`_vfxCd`) et les réactions de groupe (peur, régal) ne s'affichent que sur ~25 % des individus : sans ça un banc entier affiche vingt bulles d'un coup.
 - `entity.js` — créature : boids contraints par type de liberté, faim, chasse avec ratés comiques (`missChance`), fuite, sommeil, cycle œuf→alevin→adulte→arête. **Reproduction (`tryMate`)** : deux adultes de la même espèce, tous deux `wellFed >= 1`, qui se croisent forment un couple (`_matingWith`) — ils **s'arrêtent, se font face et s'embrassent** (~1,6 s) avant que 1 à 3 œufs apparaissent selon leur forme. Seul celui dont l'`id` est le plus petit pond, sinon la portée est doublée. Manger ne pond jamais tout seul.

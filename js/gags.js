@@ -358,9 +358,10 @@ const GAGS = {
   // seul cas où du texte est justifié : c'est un BRUIT, pas une réplique.
   // Émis une seule fois par accélération (`_vroum`), jamais par frame.
   thon(e, dt, t) {
+    e._vroumCd = (e._vroumCd ?? 0) - dt;
     const vite = e.speedNow > e.def.speed * 1.6;
-    if (vite && !e._vroum) {
-      e._vroum = true;
+    if (vite && !e._vroum && e._vroumCd <= 0) {
+      e._vroum = true; e._vroumCd = U.rand(18, 40);
       Particles.shout(e.x, e.y - e.size * 1.2, 'VROUUUM', '#8fd8f5', e.size * 1.4);
       Particles.wake(e.x - e.size, e.y);
     }
@@ -405,8 +406,8 @@ const GAGS = {
   meduse(e, dt, t) {
     e._loopCd = (e._loopCd ?? U.rand(10, 30)) - dt;
     if (e._loopCd > 0) return;
-    e._loopCd = U.rand(20, 50);
-    e.emote('dizzy', 2.6);
+    e._loopCd = U.rand(55, 120);
+    e.emote('dizzy', 2.6, Math.random() < 0.2);
     e.vy -= 60; e.vx += U.rand(-1, 1) * 50;
   },
 
@@ -476,10 +477,10 @@ const GAGS = {
     }
     e._fuseeCd = (e._fuseeCd ?? U.rand(14, 40)) - dt;
     if (e._fuseeCd > 0) return;
-    e._fuseeCd = U.rand(25, 60);
+    e._fuseeCd = U.rand(60, 140);
     e._fusee = 0.9;                               // le décompte
     e._freeze = 0.9;
-    Particles.comic(e.x, e.y - e.size * 1.2, '3');
+    if (Math.random() < 0.4) Particles.comic(e.x, e.y - e.size * 1.2, '3');
   },
 
   // LA MURÈNE BÂILLE. Un jaillissement pour rien, qui fait détaler tout le
@@ -539,7 +540,10 @@ const GAGS = {
         m._figX = e.x + p.x * k; m._figY = e.y + p.y * k;
       });
       if (e._figT <= 0) {
-        for (const m of membres) { m._figX = null; m._figY = null; m.emote('blush', 1.6, false); }
+        // La gêne se lit sur le visage de TOUS, mais la goutte de sueur ne
+        // sort que sur quelques-uns : un banc de 40 confettis en faisait 40
+        // d'un coup (125 gouttes/min à lui seul).
+        for (const m of membres) { m._figX = null; m._figY = null; m.emote('blush', 1.6, Math.random() < 0.12); }
       }
       return;
     }
@@ -601,7 +605,7 @@ const GAGS = {
   // hérité jusqu'ici. Deux gestes, un seul cooldown pour ne pas saturer.
   anemone(e, dt, t) {
     e._danse = 0.5 + 0.5 * Math.sin(t * 1.6 + e.phase);
-    if (Math.random() < dt * 0.06) Particles.notes(e.x, e.y - e.size);
+    if (Math.random() < dt * 0.012) Particles.notes(e.x, e.y - e.size);
     e._calinCd = (e._calinCd ?? U.rand(20, 50)) - dt;
     if (e._calinCd > 0) return;
     for (const o of Ecosystem.neighbors(e.x, e.y)) {
@@ -640,5 +644,77 @@ const GAGS = {
       }
     }
     if (e._chew <= 0) e._dentTombee = false;
+  },
+
+  // LE POULPE NINJA, EN QUATRE TEMPS. Son « ninja » ne se voyait pas : il avait
+  // un flag `ink` et une furtivité passive, mais aucune scène. Une disparition
+  // qui n'est pas mise en scène se lit comme un bug d'affichage — d'où les
+  // phases, chacune visible :
+  //   1. `guet`    — il se fige et regarde autour de lui, l'air de rien ;
+  //   2. `poof`    — nuage d'encre, il devient invisible ;
+  //   3. `ailleurs`— il ressort à 250-450 px de là, toujours invisible ;
+  //   4. `retour`  — il réapparaît en fondu, très fier de lui.
+  // Une seule bulle sur toute la scène, au moment du poof.
+  poulpe(e, dt, t) {
+    // Le rot d'encre : quand l'encre part (Entity.encre), il l'annonce. Une
+    // inspiration, puis LE ROT — c'est ce qui manquait pour que le nuage soit
+    // drôle au lieu d'être discret.
+    if (e._inkCd > 12.5 && !e._rot) {
+      e._rot = true;
+      e.emote('surprise', 1.2);
+      Particles.shout(e.x, e.y - e.size * 1.3, 'BUUURP', '#b8a0e8', e.size * 1.3);
+      Particles.bubble(e.x + e.size * 0.5, e.y, 7);
+    }
+    if ((e._inkCd ?? 0) < 1) e._rot = false;
+
+    if (e._ninjaPh) {
+      e._ninjaT -= dt;
+
+      if (e._ninjaPh === 'guet') {
+        e._freeze = 0.3;
+        if (e._ninjaT <= 0) {
+          e._ninjaPh = 'poof'; e._ninjaT = 0.45;
+          Particles.ink(e.x, e.y, e.size * 1.2);
+          Particles.comic(e.x, e.y - e.size, '💨');
+        }
+        return;
+      }
+
+      if (e._ninjaPh === 'poof') {
+        e._invisible = Math.min(1, (e._invisible ?? 0) + dt * 4);
+        e._freeze = 0.3;
+        if (e._ninjaT <= 0) {
+          // Il ressort ailleurs — mais toujours dans son eau : la bande de
+          // profondeur et la barrière de rivage valent aussi pour un ninja.
+          const d = U.rand(250, 450) * (Math.random() < 0.5 ? -1 : 1);
+          const nx = U.clamp(e.x + d, e.limiteLarge(), CONFIG.WORLD_WIDTH - 120);
+          const ny = U.clamp(e.y + U.rand(-120, 120),
+                             CONFIG.SURFACE_Y + e.def.depthBand[0],
+                             Math.min(CONFIG.SURFACE_Y + e.def.depthBand[1],
+                                      World.floorY(nx) - e.size));
+          e.x = nx; e.y = ny; e.vx = 0; e.vy = 0;
+          e._ninjaPh = 'retour'; e._ninjaT = 0.9;
+        }
+        return;
+      }
+
+      if (e._ninjaPh === 'retour') {
+        e._invisible = Math.max(0, (e._invisible ?? 1) - dt * 1.4);
+        if (e._ninjaT <= 0) {
+          e._ninjaPh = null;
+          e._invisible = 0;
+          e.emote('smug', 2.2);              // « vous ne m'avez jamais vu »
+        }
+        return;
+      }
+    }
+
+    // Déclenchement : rarement, et jamais en fuite ni en chasse — un ninja
+    // choisit son moment.
+    e._ninjaCd = (e._ninjaCd ?? U.rand(20, 50)) - dt;
+    if (e._ninjaCd > 0 || e.state === 'flee' || e.state === 'hunt') return;
+    e._ninjaCd = U.rand(35, 80);
+    e._ninjaPh = 'guet'; e._ninjaT = 1.1;
+    e.emote('surprise', 1.1, false);          // il vérifie que personne ne regarde
   },
 };

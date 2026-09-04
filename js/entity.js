@@ -160,7 +160,10 @@ class Entity {
   emoteVFX(expr) {
     if ((this._vfxCd ?? 0) > 0) return;
     // les réactions de groupe (peur, régal) ne s'affichent que sur quelques individus
-    if ((expr === 'scared' || expr === 'eating') && Math.random() > 0.1) return;
+    // `dizzy` a rejoint la liste : depuis l'Anguille Coup-de-Jus, se faire
+    // sonner est un événement de GROUPE — une décharge assomme cinq poissons
+    // d'un coup, et cinq gerbes d'étoiles simultanées saturaient l'écran.
+    if ((expr === 'scared' || expr === 'eating' || expr === 'dizzy') && Math.random() > 0.1) return;
     this._vfxCd = U.rand(2.5, 5);
     const x = this.x, y = this.y - this.size * 1.1, s = this.size;
     switch (expr) {
@@ -414,7 +417,7 @@ class Entity {
     const threat = Ecosystem.nearestPredatorOf(this);
     if (threat) {
       this.state = 'flee'; this.target = threat; this.stateTimer = 1.5;
-      this.emote('scared', 1.6);
+      this.emote('scared', 1.6, Math.random() < 0.25);
     } else if (this.state === 'flee') {
       if (this.stateTimer <= 0) { this.state = 'wander'; this.target = null; } // laisse le temps à une fausse alerte (gag) de se voir
     }
@@ -432,7 +435,9 @@ class Entity {
       const prey = Ecosystem.nearestPreyFor(this);
       if (prey) {
         this.state = 'hunt'; this.target = prey; this.stateTimer = 8;
-        this.emote('angry', 2.5);   // sourcils froncés + veine : on voit qu'il chasse
+        // Expression toujours, bulle une fois sur quatre : c'est le visage qui
+        // raconte la chasse, et un banc de thons lancés saturait l'écran.
+        this.emote('angry', 2.5, Math.random() < 0.25);
       }
     }
     if (this.state === 'hunt') {
@@ -646,7 +651,7 @@ class Entity {
     for (const o of cibles) {
       // Les très faibles n'y survivent pas : œufs et alevins.
       if (o.stage === 'egg' || o.stage === 'fry') { o.die(); continue; }
-      o.assomme();
+      o.assomme(null, Math.random() < 0.25);
       const dx = o.x - this.x, dy = o.y - this.y, d = Math.hypot(dx, dy) || 1;
       o.vx += dx / d * 140; o.vy += dy / d * 140;
     }
@@ -905,11 +910,11 @@ class Entity {
   }
 
   // Choc : il part en vrille, voit des étoiles et reste sonné un moment.
-  assomme(solY = null) {
+  assomme(solY = null, vfx = true) {
     if (this.state === 'dizzy') return;
     this.state = 'dizzy'; this.stateTimer = U.rand(2.5, 4);
     this.target = null; this._faceAt = null;
-    this.emote('dizzy', 3);
+    this.emote('dizzy', 3, vfx);
     this.vx *= -0.25; this.vy = -Math.abs(this.vy) * 0.3;
     Particles.burst(this.x, this.y, '#ffe8a8', 8);
     if (solY !== null) Particles.sandCloud(this.x, solY - 4, true);

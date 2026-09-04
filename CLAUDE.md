@@ -403,6 +403,12 @@ Quatre règles :
   (`size * 2 * spanRatio`), pas à une constante. Mis à `size * 2`, le requin
   sortait 22 % plus petit que la silhouette qu'il remplaçait (77 px mesurés
   contre 99) et paraissait rabougri à côté des autres.
+- **Un calque écarté décale les indices.** `Sprites.preparer` filtre les formes
+  trop pauvres pour être tracées ; sans table de correspondance, un appendice
+  qui visait la forme 5 animait la 4. Même raison côté atelier :
+  `decalerCalques()` répercute toute renumérotation sur ce qui vise les calques
+  (appendices **et** `queueCalques`), au lieu des trois corrections à la main
+  qui ne portaient que sur `layerIndex`.
 - **Le chargement est asynchrone et ne bloque aucune frame** : tant que le
   fichier n'est pas là (ou s'il est illisible), la silhouette procédurale
   continue d'être dessinée.
@@ -412,6 +418,34 @@ Quatre règles :
   L'amplitude suit **l'effort** et pas seulement la fréquence : à l'amplitude
   nue de l'éditeur, le bout de la queue ne parcourait que 5,5 px sur une
   silhouette de 48.
+- **Toute créature n'a pas une queue de poisson.** Trois ajouts génériques, nés
+  du crabe et de la murène, tous réglables dans l'atelier :
+  `sansQueue` (un crabe, une étoile, un coquillage n'ont rien à faire onduler —
+  la valeur par défaut de `tailBlend` faisait tortiller un tiers du crabe) ;
+  `tailOndes`, qui fait **courir** l'onde vers le bout au lieu de battre d'un
+  seul tenant (murène, anguille : le corps entier est un tentacule) ;
+  `queueCalques`, qui laisse une carapace **rigide** pendant que le reste ondule.
+- **Un appendice n'est pas forcément une nageoire.** `fins[].type` vaut
+  `nageoire` (rotation autour de l'ancre, pondérée par la distance) ou
+  `tentacule` (**onde progressive** le long d'un axe : base fixe, bout qui
+  parcourt toute l'amplitude). Une patte de crabe ou un bras de poulpe animés
+  par une rotation sont raides, articulés sur une seule charnière.
+  Chaque appendice a son `phase` et sa `vitesse` : sans eux les huit pattes d'un
+  crabe battent **toutes ensemble**, ce qui se lit comme un tressaillement et
+  pas comme une marche. Et `fins[].calques` en vise **plusieurs** — une patte
+  dessinée en trois pièces bat alors d'un seul geste, sans déchirure au raccord.
+  C'est ce que l'atelier appelle « aplatir » : les calques ne sont pas fondus
+  (un corps et sa rayure n'ont pas la même couleur), ils forment un **bloc
+  animé** qui se déplace, tourne et bat d'un seul tenant.
+- **La fréquence de battement est bridée, et calée sur le gabarit.** Deux
+  brides, toutes deux mesurées. Le relevé de départ sur 12 espèces montait à
+  **13,4 rad/s** (période 0,47 s) et, pire, ne dépendait pas du tout de la
+  taille : la Baleine Gros Dodo (190) battait à 12,6 rad/s de moyenne, autant
+  qu'un thon lancé. La fréquence décroît maintenant en `(30 / size)^0,45` et
+  passe par un plafond dur à 8,5 rad/s — `speedNow` est relevé **avant**
+  écrêtage dans `Entity.move`, le rapport à la vitesse nominale montait à 4,5 et
+  l'allure saturait en permanence. Mesuré après : gros_dodo 2,2 rad/s au
+  maximum (période 2,9 s), cachalot 4,8, petits poissons 8,5 (0,74 s).
 
 Contrôle non visuel : rendre la silhouette hors écran et mesurer l'emprise de
 l'encre (`FishBody.draw` sur un canvas détaché), avec et sans `sprite`.
@@ -535,13 +569,23 @@ Le rendu procédural n'est donc **pas** le goulot — passer à des sprites opti
 
 ## Reste à faire (extension du GDD)
 
-**[IDEES.md](IDEES.md)** rassemble ce qui n'est pas encore implémenté : les
-idées des enfants (poisson ballon piquant, barracuda, poisson police, crabe
-magicien, poisson dentiste, rot d'encre du poulpe, canne à pêche), une série de
-gags dans l'esprit **parc à thème** (spectacle de dauphins, poisson-balayeur,
-maître nageur, photo souvenir), et la conception de la couche **économique** —
-acheter des poissons, être payé aux naissances, sanctionné aux extinctions et
-aux espèces envahissantes.
+**[IDEES.md](IDEES.md)** rassemble tout ce qui n'est pas encore implémenté, en
+sept sections : la **liste des 25 poissons manquants** (§1, la référence — les
+idées des enfants, la liste de souhaits et les trous de la chaîne alimentaire y
+sont fusionnés et dédoublonnés), les gags dans l'esprit **parc à thème** (§2),
+les corrections sur l'existant (§3), la canne à pêche (§4), la couche
+**économique** — acheter des poissons, être payé aux naissances, sanctionné aux
+extinctions et aux espèces envahissantes (§5), le **roster des 27 espèces
+codées** avec sa répartition par zone et par niveau trophique (§6), et les
+contraintes à respecter en ajoutant une espèce (§7).
+
+**[FICHES.md](FICHES.md)** en est le pendant espèce par espèce : une fiche par
+créature (phrase, faux nom latin, action rigolote, nourriture, frayère, qui la
+mange), ce qui est codé et ce qui ne l'est pas. Trois décisions générales y
+sont arrêtées : la **phrase n'apparaît que dans la fiche d'identité** (jamais
+en bulle), les **oiseaux frayent sur la plage** (frayère `beach`, la première
+hors de l'eau), et **tous les piquants rendent malade** (`piquant: true` →
+`Entity.malaise`), aux côtés du caca et du prout déjà codés.
 
 - Migration verticale au crépuscule, événements aléatoires (§11 : bloom, mutant, hoquet, poisson malade)
 - DA : l'utilisateur générera des sprites ; garder le système yeux/bouche commun (`FishBody.drawFace`) par-dessus

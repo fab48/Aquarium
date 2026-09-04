@@ -105,6 +105,16 @@
                margin-right: 4px; vertical-align: middle; }
   kbd { background: #eef2f6; border: 1px solid var(--bord); border-bottom-width: 2px;
         border-radius: 4px; padding: 0 4px; font: 11px monospace; }
+  .forme input[type=checkbox] { margin: 0; flex: none; }
+  .forme .grp { font-size: 10px; background: #e6eef6; color: #14507f; border-radius: 3px;
+                padding: 0 4px; flex: none; }
+  .calques { border: 1px solid var(--bord); border-radius: 6px; max-height: 132px;
+             overflow-y: auto; padding: 3px 5px; }
+  .calques label { display: flex; align-items: center; gap: 6px; margin: 2px 0;
+                   font-weight: 400; font-size: 12px; cursor: pointer; }
+  .calques input { flex: none; margin: 0; }
+  .sep { border: 0; border-top: 1px solid var(--bord); margin: 0 4px; height: 18px; align-self: center; }
+  #barre .grp2 { display: flex; gap: 4px; }
 </style>
 </head>
 <body>
@@ -119,12 +129,12 @@
 
 <div id="scene">
   <div id="barre">
-    <button id="tOutils" class="on" data-outil="ancres">Ancres</button>
-    <button data-outil="nageoires">Nageoires</button>
-    <button data-outil="queue">Queue</button>
-    <button data-outil="points">Points</button>
-    <button data-outil="forme">Forme</button>
-    <button data-outil="dessiner">✏️ Dessiner</button>
+    <button id="tOutils" class="on" data-outil="ancres" title="Repères du visage (1)">📍 Ancres</button>
+    <button data-outil="nageoires" title="Nageoires, pattes, tentacules (2)">🖐 Appendices</button>
+    <button data-outil="queue" title="Ondulation du corps (3)">〰 Queue</button>
+    <button data-outil="forme" title="Déplacer / tourner un calque (4)">⬛ Calque</button>
+    <button data-outil="points" title="Retoucher le contour (5)">◻ Points</button>
+    <button data-outil="dessiner" title="Tracer un nouveau calque (6)">✏️ Dessiner</button>
     <span style="flex:1"></span>
     <button id="btnNeuf">Nouveau dessin</button>
     <button id="btnFond">Image de repérage…</button>
@@ -183,6 +193,7 @@ let manifeste = {};     // espèce -> nom de fichier sprite
 let fichiers = [];      // tous les dessins présents dans Assets/
 const brouillons = {};  // espèce -> doc pas encore enregistré
 let fichierOuvert = null;   // dessin libre en cours d'édition, s'il y en a un
+let coches = new Set();     // formes cochées, pour les gestes de groupe
 let trace = null;           // polygone en cours de tracé (mode Dessiner)
 let couleurTrace = '#5b8fb5';
 let lisseTrace = true;
@@ -199,6 +210,36 @@ const COUL = { center: '#0a8f3c', nose: '#8a5ea8', eye: '#e0322f', eye2: '#e0322
                mouth: '#1560d8', tail: '#c98a1b' };
 function ancres() { return CLE_ANCRES.filter(c => doc && doc.points[c]); }
 
+// --- Groupes de calques -----------------------------------------------------
+// « Aplatir » ne fusionne PAS les tracés : un corps et sa rayure n'ont pas la
+// même couleur, les souder ferait perdre le dessin. Aplatir, ici, c'est déclarer
+// que plusieurs calques n'en font plus qu'un DU POINT DE VUE DE L'ANIMATION et
+// des gestes : ils se déplacent ensemble, tournent ensemble, et un seul
+// appendice les entraîne tous. C'est ce qu'il faut pour un corps peint en
+// quatre couches, et pour une patte dessinée en trois pièces.
+function groupeDe(i) {
+  const sh = doc && doc.shapes[i];
+  if (!sh || !sh.groupe) return [i];
+  const l = [];
+  doc.shapes.forEach((o, j) => { if (o.groupe === sh.groupe) l.push(j); });
+  return l;
+}
+function nomGroupeLibre() {
+  let n = 0;
+  for (const sh of doc.shapes) {
+    const m = /^G(\d+)$/.exec(sh.groupe || '');
+    if (m) n = Math.max(n, +m[1]);
+  }
+  return 'G' + (n + 1);
+}
+// Les calques qu'un appendice entraîne. `layerIndex` reste lu : les dessins déjà
+// enregistrés (le requin) ne doivent pas changer d'aspect au premier chargement.
+function calquesDe(f) {
+  if (f.calques && f.calques.length) return f.calques;
+  return f.layerIndex != null ? [f.layerIndex] : [];
+}
+function TYPE(f) { return f.type === 'tentacule' ? 'tentacule' : 'nageoire'; }
+
 // Taille de la bouche en unités du dessin. Tant qu'elle n'a pas été réglée, elle
 // suit l'œil — c'est le comportement d'origine, qu'on ne veut pas changer sous
 // les pieds d'un dessin déjà calé. `drawFace` place l'œil à 0,22 fois la taille
@@ -207,6 +248,48 @@ function tailleBouche() {
   if (!doc || !doc.points.mouth) return 0;
   if (doc.points.mouth.r != null) return doc.points.mouth.r;
   return (doc.points.eye.r || 10) * 0.2 / 0.22;
+}
+
+// Boîte du dessin, ou la surface de travail s'il est encore vide.
+function boiteDoc() {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const sh of doc.shapes) for (const q of sh.points) {
+    if (q[0] < x0) x0 = q[0]; if (q[0] > x1) x1 = q[0];
+    if (q[1] < y0) y0 = q[1]; if (q[1] > y1) y1 = q[1];
+  }
+  if (!isFinite(x0)) { x0 = 0; y0 = 0; x1 = doc.naturalW || 420; y1 = doc.naturalH || 260; }
+  return { x0, y0, L: Math.max(1, x1 - x0), H: Math.max(1, y1 - y0) };
+}
+
+// GABARITS d'ancrage. Les valeurs par défaut supposent un poisson vu de profil :
+// museau à droite, bouche tout devant, queue qui bat. Sur un crabe c'était faux
+// sur les trois points à la fois — bouche posée sur une pince, un seul œil, et
+// un tiers de la carapace qui ondulait. Trois boutons plutôt que six réglages.
+function gabarit(genre) {
+  if (!doc) return;
+  instantane();
+  const { x0, y0, L, H } = boiteDoc();
+  const p = doc.points;
+  const rO = p.eye.r, rB = p.mouth.r;
+  p.center = { x: x0 + L * 0.5, y: y0 + H * 0.5 };
+  p.nose = { x: x0 + L, y: y0 + H * 0.5 };
+  p.tail = { x: x0, y: y0 + H * 0.5 };
+  delete p.eye2;
+  if (genre === 'profil') {
+    p.eye = { x: x0 + L * 0.78, y: y0 + H * 0.38, r: rO };
+    p.mouth = { x: x0 + L * 0.90, y: y0 + H * 0.58, r: rB };
+    delete doc.sansQueue;
+  } else {
+    // Vu de face ou de dessus : deux yeux écartés, et la bouche AU MILIEU —
+    // c'est le cas du crabe, de l'étoile, du coquillage, du poulpe.
+    p.eye = { x: x0 + L * 0.62, y: y0 + H * 0.34, r: rO, ecart: Math.round(L * 0.24) };
+    p.mouth = { x: x0 + L * 0.50, y: y0 + H * 0.54, r: rB };
+    if (genre === 'rampant') doc.sansQueue = true; else delete doc.sansQueue;
+  }
+  marquer(); panneau();
+  dire(genre === 'profil' ? 'gabarit poisson : un œil, bouche au museau, queue active'
+     : genre === 'face' ? 'gabarit vu de face : deux yeux, bouche au milieu'
+     : 'gabarit rampant : deux yeux, bouche au milieu, pas de queue', 'ok');
 }
 
 // ---------------------------------------------------------------------------
@@ -314,7 +397,11 @@ function choisir(id) {
   rail();
 }
 
-function apres() { trace = null; reprendreFond(); cadrer(); panneau(); rail(); dire(doc ? '' : 'Aucun dessin : importe-en un, ou pars de la silhouette du jeu.'); }
+function apres() {
+  trace = null; coches.clear();
+  reprendreFond(); cadrer(); panneau(); rail();
+  dire(doc ? '' : 'Aucun dessin : importe-en un, ou pars de la silhouette du jeu.');
+}
 
 // ---------------------------------------------------------------------------
 // Vue : le dessin est rendu par le VRAI code du jeu
@@ -471,8 +558,9 @@ function dessiner() {
 
 function poignees(sp) {
   const R = 6;
-  // Ligne de queue
-  if (doc.tailBlend != null) {
+  // Ligne de queue — masquée quand la créature n'en a pas : la montrer laissait
+  // croire qu'un réglage restait actif.
+  if (doc.tailBlend != null && !doc.sansQueue) {
     const [x] = versEcran([doc.tailBlend, 0]);
     ctx.strokeStyle = outil === 'queue' ? '#c98a1b' : 'rgba(201,138,27,.45)';
     ctx.lineWidth = outil === 'queue' ? 2 : 1;
@@ -483,34 +571,64 @@ function poignees(sp) {
     ctx.fillText('queue ←', x - 52, 14);
   }
 
-  // Nageoires : le disque montre le RAYON D'INFLUENCE, pas une décoration —
-  // c'est jusque-là que la rotation se propage dans le corps.
+  // Appendices. Deux dessins, parce que ce sont deux gestes différents :
+  //  · nageoire  → un DISQUE, le rayon d'influence de la rotation ;
+  //  · tentacule → une FLÈCHE, l'axe le long duquel l'onde court.
+  // Montrer un disque pour un tentacule laissait croire à une rotation.
   (doc.fins || []).forEach((f, i) => {
     const vif = outil === 'nageoires' && i === finSel;
-    // Le second disque, en symétrique, est dessiné en pointillés : on doit voir
-    // OÙ il tombe, c'est tout l'intérêt de l'option.
-    const axes = f.miroir ? [[f.x, false], [2 * doc.points.center.x - f.x, true]] : [[f.x, false]];
-    for (const [fx, image] of axes) {
+    // Le second tracé, en symétrique, est en pointillés : on doit voir OÙ il
+    // tombe, c'est tout l'intérêt de l'option.
+    const axes = f.miroir ? [[f.x, 1, false], [2 * doc.points.center.x - f.x, -1, true]]
+                          : [[f.x, 1, false]];
+    for (const [fx, sens, image] of axes) {
       const [x, y] = versEcran([fx, f.y]);
       const r = (f.r || 60) * vueT.k;
       ctx.strokeStyle = vif ? 'rgba(45,127,211,.9)' : 'rgba(45,127,211,.35)';
-      ctx.fillStyle = 'rgba(45,127,211,.07)';
       ctx.lineWidth = vif ? 2 : 1;
       if (image) ctx.setLineDash([6, 5]);
-      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-      ctx.setLineDash([]);
+      if (TYPE(f) === 'tentacule') {
+        const a0 = (f.ang != null ? f.ang : 180) * Math.PI / 180;
+        const ax = Math.cos(a0) * sens, ay = Math.sin(a0);
+        const bx = x + ax * r, by = y + ay * r;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(bx, by); ctx.stroke();
+        // L'amplitude se voit : l'enveloppe que le bout parcourt.
+        const amp = (f.amp != null ? f.amp : 15) / 100 * r;
+        ctx.beginPath();
+        ctx.moveTo(bx - ay * amp, by + ax * amp);
+        ctx.lineTo(bx + ay * amp, by - ax * amp);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = image ? '#9fc0dd' : (vif ? '#1560d8' : '#7ea6cc');
+        ctx.beginPath(); ctx.arc(bx, by, vif ? 5.5 : 4, 0, Math.PI * 2); ctx.fill();
+      } else {
+        ctx.fillStyle = 'rgba(45,127,211,.07)';
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.setLineDash([]);
+      }
       ctx.fillStyle = image ? '#9fc0dd' : (vif ? '#1560d8' : '#7ea6cc');
       ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
     }
   });
 
-  // Contour de la forme sélectionnée, pour savoir ce qu'on va déplacer
-  if (outil === 'forme' && doc.shapes[formeSel]) {
-    const pts = doc.shapes[formeSel].points;
-    ctx.strokeStyle = '#1560d8'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
-    ctx.beginPath();
-    pts.forEach((p, i) => { const [x, y] = versEcran(p); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
-    ctx.closePath(); ctx.stroke(); ctx.setLineDash([]);
+  // Contour du calque actif — et de tout son groupe, puisqu'un geste les prend
+  // tous. Dans tous les outils qui travaillent SUR un calque : sans repère
+  // permanent on ne sait pas sur lequel on agit. Pas dans « Ancres », où on
+  // regarde un visage et où le pointillé ne fait que gêner.
+  if (doc.shapes[formeSel] && outil !== 'ancres' && outil !== 'dessiner') {
+    const lot = groupeDe(formeSel);
+    ctx.setLineDash([6, 4]);
+    for (const j of lot) {
+      const actif = j === formeSel;
+      ctx.strokeStyle = actif ? '#1560d8' : 'rgba(21,96,216,.4)';
+      ctx.lineWidth = actif ? 2 : 1.2;
+      ctx.beginPath();
+      doc.shapes[j].points.forEach((p, i) => {
+        const [x, y] = versEcran(p); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      });
+      ctx.closePath(); ctx.stroke();
+    }
+    ctx.setLineDash([]);
   }
 
   // Points de la forme sélectionnée
@@ -586,9 +704,28 @@ function bandeau() {
 // ---------------------------------------------------------------------------
 // Panneau contextuel
 // ---------------------------------------------------------------------------
+// Amplitude effective d'un appendice : la sienne, ou à défaut celle du premier
+// calque qu'il entraîne (le comportement d'avant, pour les dessins déjà calés).
+function ampDe(f) {
+  if (f.amp != null) return f.amp;
+  const i = calquesDe(f)[0];
+  return (doc.shapes[i] && doc.shapes[i].amp) || 15;
+}
+// Liste de cases à cocher « quelles formes » — le même bloc sert aux appendices
+// et à la queue.
+function listeCalques(attr, choisies) {
+  const s = new Set(choisies);
+  return `<div class="calques">` + doc.shapes.map((sh, i) =>
+    `<label><input type="checkbox" data-${attr}="${i}" ${s.has(i) ? 'checked' : ''}>` +
+    `<span class="pastel" style="background:${sh.fill || sh.stroke || '#888'}"></span>` +
+    `forme ${i + 1}${sh.groupe ? ' · ' + sh.groupe : ''}</label>`).join('') + `</div>`;
+}
 function panneau() {
   const p = $('#panneau');
   if (!espece) { p.innerHTML = '<p class="aide">Choisis une espèce dans la liste.</p>'; return; }
+  // Un document rechargé peut avoir moins de formes : une case cochée sur un
+  // indice disparu ferait planter « Aplatir ».
+  if (doc) for (const i of [...coches]) if (i >= doc.shapes.length) coches.delete(i);
   const def = SPECIES[espece];
   const nom = manifeste[espece] || (doc && doc.nom) || espece;
 
@@ -621,6 +758,17 @@ function panneau() {
           ? 'Suit la taille de l\'œil tant qu\'on n\'y touche pas.'
           : 'Réglée à part de l\'œil.'} Le cercle bleu sur le dessin : tire sa poignée droite.</p>
 
+        <h2>Gabarit</h2>
+        <div class="rangee">
+          <button data-gab="profil">Poisson</button>
+          <button data-gab="face">De face</button>
+          <button data-gab="rampant">Rampant</button>
+        </div>
+        <p class="aide">Replace les ancres d'un coup. Un poisson se voit de
+          <b>profil</b> : un œil, bouche au museau, queue qui bat. Un crabe ou une
+          étoile se voient de <b>dessus</b> : deux yeux, <b>bouche au milieu</b>,
+          et <b>pas de queue</b> du tout.</p>
+
         <h2>Nombre d'yeux</h2>
         <div class="rangee"><button id="bDeuxYeux" class="${deux ? 'on' : ''}">${deux ? 'Revenir à un œil' : 'Passer à deux yeux'}</button></div>
         ${deux && doc.points.eye.ecart != null ? `
@@ -635,31 +783,89 @@ function panneau() {
           à un poisson vu de côté. Tout ce qui se voit de face ou de dessus —
           crabe, raie, coquillage, poulpe — en veut deux.</p>`;
     } else if (outil === 'nageoires') {
-      h += `<h2>Nageoires</h2><p class="aide">Le disque est le <b>rayon d'influence</b> :
-        la rotation s'y propage à plein au centre et s'éteint au bord.
-        <kbd>clic</kbd> sur le dessin pour en poser une.</p>`;
-      if (!doc.fins.length) h += '<p class="aide"><i>aucune nageoire</i></p>';
+      h += `<h2>Appendices</h2><p class="aide">Nageoire, patte, antenne, bras de poulpe.
+        <kbd>clic</kbd> dans le vide en pose un sur le calque sélectionné.</p>`;
+      if (!doc.fins.length) h += '<p class="aide"><i>aucun appendice</i></p>';
       else {
-        h += `<label>Nageoire <span class="val">${finSel + 1} / ${doc.fins.length}</span></label>
-          <select id="selFin">${doc.fins.map((f, i) => `<option value="${i}" ${i === finSel ? 'selected' : ''}>nageoire ${i + 1} → forme ${f.layerIndex + 1}</option>`).join('')}</select>
-          <label>Rayon <span class="val" id="vFR">${Math.round(doc.fins[finSel].r)}</span></label>
-          <input type="range" id="sFR" min="10" max="${Math.round(doc.naturalW * 0.6)}" value="${doc.fins[finSel].r}">
-          <label>Forme entraînée</label>
-          <select id="selFinCalque">${doc.shapes.map((sh, i) => `<option value="${i}" ${i === doc.fins[finSel].layerIndex ? 'selected' : ''}>forme ${i + 1}</option>`).join('')}</select>
-          <div class="rangee"><button id="bMiroirFin" class="${doc.fins[finSel].miroir ? 'on' : ''}">${doc.fins[finSel].miroir ? 'Symétrique ✓' : 'Rendre symétrique'}</button></div>
+        const f = doc.fins[finSel], tt = TYPE(f);
+        const tent = tt === 'tentacule';
+        h += `<select id="selFin">${doc.fins.map((o, i) => {
+            const c = calquesDe(o);
+            return `<option value="${i}" ${i === finSel ? 'selected' : ''}>${i + 1}. ${TYPE(o)}`
+                 + ` → ${c.length > 1 ? c.length + ' formes' : 'forme ' + (c[0] + 1)}</option>`;
+          }).join('')}</select>
+
+          <h2>Type</h2>
+          <div class="rangee">
+            <button data-typeapp="nageoire" class="${tent ? '' : 'on'}">Nageoire</button>
+            <button data-typeapp="tentacule" class="${tent ? 'on' : ''}">Tentacule</button>
+          </div>
+          <p class="aide">${tent
+            ? 'Une <b>onde court</b> de l\'ancre vers la pointe de la flèche : la base ne bouge pas, le bout parcourt toute l\'amplitude. C\'est ce qu\'il faut pour une patte, une antenne, un bras — un pivot les rend raides.'
+            : 'La forme <b>pivote</b> autour de l\'ancre : plein effet au centre du disque, plus rien à son bord.'}</p>
+
+          <label>${tent ? 'Longueur' : 'Rayon d\'influence'} <span class="val" id="vFR">${Math.round(f.r)}</span></label>
+          <input type="range" id="sFR" min="10" max="${Math.round(doc.naturalW * 0.9)}" value="${Math.round(f.r)}">`;
+        if (tent) h += `
+          <label>Direction <span class="val" id="vFA">${Math.round(f.ang != null ? f.ang : 180)}°</span></label>
+          <input type="range" id="sFA" min="-180" max="180" value="${Math.round(f.ang != null ? f.ang : 180)}">
+          <label>Ondes sur la longueur <span class="val" id="vFO">${(f.ondes != null ? f.ondes : 1).toFixed(2)}</span></label>
+          <input type="range" id="sFO" min="0" max="2" step="0.05" value="${f.ondes != null ? f.ondes : 1}">
+          <p class="aide">Tire la <b>pointe de la flèche</b> sur le dessin : direction et
+            longueur d'un seul geste. 0 onde = le membre se balance d'un bloc ;
+            1 onde = il se déroule.</p>`;
+        h += `
+          <label>Amplitude <span class="val" id="vFAm">${ampDe(f)}</span>${tent ? ' %' : '°'}</label>
+          <input type="range" id="sFAm" min="0" max="${tent ? 80 : 60}" value="${ampDe(f)}">
+          <label>Déphasage <span class="val" id="vFPh">${Math.round(f.phase || 0)}°</span></label>
+          <input type="range" id="sFPh" min="0" max="360" value="${Math.round(f.phase || 0)}">
+          <label>Vitesse <span class="val" id="vFV">${(f.vitesse || 1).toFixed(2)}</span>×</label>
+          <input type="range" id="sFV" min="0.2" max="2.5" step="0.05" value="${f.vitesse || 1}">
+          <p class="aide">Déphasage et vitesse <b>propres à cet appendice</b> : sans eux,
+            les huit pattes d'un crabe battent toutes ensemble, ce qui se lit comme un
+            tressaillement et pas comme une marche.</p>
+
+          <div class="rangee"><button id="bMiroirFin" class="${f.miroir ? 'on' : ''}">${f.miroir ? 'Symétrique ✓' : 'Rendre symétrique'}</button></div>
           <p class="aide">Un crabe, une raie, un poulpe ont des appendices des <b>deux</b>
-            côtés : un seul ancrage n'en anime qu'une moitié. En symétrique, un second
-            ancrage est posé en miroir de l'axe vertical du dessin et tourne en sens
-            inverse — les deux côtés battent comme une paire de pattes.</p>
-          <div class="rangee"><button id="bSupFin">Supprimer cette nageoire</button></div>`;
+            côtés : un seul ancrage n'en anime qu'une moitié. En symétrique, un second est
+            posé en miroir de l'axe vertical du dessin et joue en sens inverse — les deux
+            côtés battent comme une paire de pattes.</p>
+
+          <h2>Formes entraînées</h2>
+          ${listeCalques('cal', calquesDe(f))}
+          <div class="rangee"><button id="bFinGroupe">Tout le groupe de la forme ${formeSel + 1}</button></div>
+          <p class="aide">Un appendice peut entraîner <b>plusieurs formes</b> : une patte
+            dessinée en trois pièces bat alors d'un seul geste, sans déchirure au
+            raccord. C'est l'« aplatissement » — voir la liste des formes plus bas.</p>
+          <div class="rangee"><button id="bSupFin">Supprimer cet appendice</button></div>`;
       }
     } else if (outil === 'queue') {
-      h += `<h2>Queue</h2><p class="aide">Tout ce qui est <b>à gauche</b> de la ligne ondule,
-        d'autant plus qu'on approche du bout. Tire la ligne sur le dessin.</p>
-        <label>tailBlend <span class="val" id="vTB">${Math.round(doc.tailBlend)}</span></label>
+      h += `<h2>Queue</h2>
+        <div class="rangee"><button id="bSansQueue" class="${doc.sansQueue ? 'on' : ''}">${doc.sansQueue ? 'Sans queue ✓' : 'Cette créature n\'a pas de queue'}</button></div>
+        <p class="aide">Un crabe, une étoile, un coquillage n'ont rien à faire onduler :
+          la valeur par défaut faisait tortiller un tiers du crabe. Leurs membres
+          s'animent avec des <b>appendices</b>, pas avec la queue.</p>`;
+      if (!doc.sansQueue) h += `
+        <p class="aide">Tout ce qui est <b>à gauche</b> de la ligne ondule, d'autant plus
+          qu'on approche du bout. Tire la ligne sur le dessin.</p>
+        <label>Départ de la queue <span class="val" id="vTB">${Math.round(doc.tailBlend)}</span></label>
         <input type="range" id="sTB" min="0" max="${Math.round(doc.naturalW)}" value="${Math.round(doc.tailBlend)}">
-        <label>Amplitude de la forme ${formeSel + 1} <span class="val" id="vAmp">${doc.shapes[formeSel].amp}</span></label>
-        <input type="range" id="sAmp" min="0" max="60" value="${doc.shapes[formeSel].amp}">`;
+        <label>Ondes le long du corps <span class="val" id="vTO">${(doc.tailOndes || 0).toFixed(2)}</span></label>
+        <input type="range" id="sTO" min="0" max="3" step="0.05" value="${doc.tailOndes || 0}">
+        <p class="aide">0 = la queue bat <b>d'un seul tenant</b>, comme un poisson.
+          1 ou 2 = l'onde <b>court</b> vers le bout : c'est une murène ou une anguille,
+          dont le corps entier est un tentacule. Pour celles-là, pousse aussi le départ
+          de la queue jusqu'au museau.</p>
+        ${doc.shapes[formeSel] ? `
+          <label>Amplitude de la forme ${formeSel + 1} <span class="val" id="vAmp">${doc.shapes[formeSel].amp}</span></label>
+          <input type="range" id="sAmp" min="0" max="60" value="${doc.shapes[formeSel].amp}">` : ''}
+        <h2>Formes qui ondulent</h2>
+        <div class="rangee"><button id="bQTout" class="${doc.queueCalques ? '' : 'on'}">Toutes${doc.queueCalques ? '' : ' ✓'}</button></div>
+        ${doc.queueCalques ? listeCalques('qcal', doc.queueCalques) : ''}
+        <p class="aide">Par défaut la queue déforme tout le dessin. Restreindre est utile
+          quand un élément doit rester <b>rigide</b> — une carapace, un œil posé sur le
+          corps, un coquillage porté sur le dos.</p>
+        ${doc.queueCalques ? '' : '<div class="rangee"><button id="bQChoisir">Choisir les formes…</button></div>'}`;
     } else if (outil === 'forme') {
       h += `<h2>Forme entière</h2><p class="aide">Tire la forme sélectionnée pour la
         déplacer. Les boutons agissent autour de son centre.</p>
@@ -701,18 +907,33 @@ function panneau() {
       <div class="rangee"><button id="bFantome" class="${fantome ? 'on' : ''}">Silhouette d'origine</button></div>
       <p class="aide">Superpose en gris la silhouette procédurale que ce dessin remplace : c'est le repère pour juger de la taille.</p>
 
-      <h2>Formes</h2><div class="formes">` + doc.shapes.map((sh, i) =>
-      `<div class="forme ${i === formeSel ? 'sel' : ''}" data-i="${i}">
-         <span class="pastel" style="background:${sh.fill}"></span>
-         <span class="info">forme ${i + 1} · ${sh.points.length} pts</span>
-       </div>`).join('') + `</div>
+      <h2>Formes</h2><div class="formes">` + doc.shapes.map((sh, i) => {
+      const anime = doc.fins.filter(f => calquesDe(f).includes(i)).length;
+      return `<div class="forme ${i === formeSel ? 'sel' : ''}" data-i="${i}">
+         <input type="checkbox" data-coche="${i}" ${coches.has(i) ? 'checked' : ''}>
+         <span class="pastel" style="background:${sh.fill || sh.stroke || '#888'}"></span>
+         <span class="info">forme ${i + 1} · ${sh.points.length} pts${anime ? ' · 🖐' + anime : ''}</span>
+         ${sh.groupe ? `<span class="grp">${sh.groupe}</span>` : ''}
+       </div>`; }).join('') + `</div>
       <div class="rangee">
         <input type="color" id="cFill" value="${(doc.shapes[formeSel] && doc.shapes[formeSel].fill) || '#888888'}">
-        <button id="bMonte">▲</button><button id="bDesc">▼</button><button id="bSup">✕</button>
+        <button id="bMonte" title="Vers le fond">▲</button>
+        <button id="bDesc" title="Vers l'avant">▼</button>
+        <button id="bSup" title="Supprimer">✕</button>
       </div>
       <label class="puce"><input type="checkbox" id="cSmooth"
         ${doc.shapes[formeSel] && doc.shapes[formeSel].smooth ? 'checked' : ''}> contour lissé</label>
-      <p class="aide">L'ordre est l'ordre de dessin : la première forme est au fond.</p>`;
+      <div class="rangee">
+        <button id="bAplatir">Aplatir les cochées (${coches.size})</button>
+        <button id="bDegrouper" ${groupeDe(formeSel).length > 1 ? '' : 'disabled'}>Dégrouper</button>
+      </div>
+      <p class="aide"><b>Aplatir</b> ne fond pas les tracés — un corps et sa rayure n'ont
+        pas la même couleur. Les formes cochées deviennent un <b>seul bloc</b> : elles se
+        déplacent, tournent et s'animent ensemble, et un seul appendice les entraîne
+        toutes. C'est ce qu'il faut pour un corps peint en plusieurs couches, et pour une
+        patte dessinée en trois pièces.<br>
+        L'ordre est l'ordre de dessin : la première forme est au fond.
+        <kbd>🖐n</kbd> = nombre d'appendices qui animent la forme.</p>`;
 
     h += `<h2>Enregistrer</h2>
       <label>Nom du fichier</label>
@@ -794,8 +1015,41 @@ function cabler() {
     marquer(); panneau();
   });
   on('#selFin', 'change', e => { finSel = +e.target.value; panneau(); dessiner(); });
+  ['#sFA', '#sFO', '#sFAm', '#sFPh', '#sFV', '#sTO'].forEach(sel => on(sel, 'pointerdown', instantane));
   on('#sFR', 'input', e => { doc.fins[finSel].r = +e.target.value; $('#vFR').textContent = e.target.value; marquer(); });
-  on('#selFinCalque', 'change', e => { doc.fins[finSel].layerIndex = +e.target.value; marquer(); });
+  on('#sFA', 'input', e => { doc.fins[finSel].ang = +e.target.value; $('#vFA').textContent = e.target.value + '°'; marquer(); });
+  on('#sFO', 'input', e => { doc.fins[finSel].ondes = +e.target.value; $('#vFO').textContent = (+e.target.value).toFixed(2); marquer(); });
+  on('#sFAm', 'input', e => { doc.fins[finSel].amp = +e.target.value; $('#vFAm').textContent = e.target.value; marquer(); });
+  on('#sFPh', 'input', e => { doc.fins[finSel].phase = +e.target.value; $('#vFPh').textContent = e.target.value + '°'; marquer(); });
+  on('#sFV', 'input', e => { doc.fins[finSel].vitesse = +e.target.value; $('#vFV').textContent = (+e.target.value).toFixed(2); marquer(); });
+  document.querySelectorAll('[data-typeapp]').forEach(b => b.addEventListener('click', () => {
+    instantane();
+    const f = doc.fins[finSel];
+    f.type = b.dataset.typeapp;
+    // Les deux réglages ne sont pas dans la même unité (degrés de rotation d'un
+    // côté, pourcentage de longueur de l'autre) : garder l'ancienne valeur
+    // donnait une patte qui décollait du corps au changement de type.
+    f.amp = f.type === 'tentacule' ? 25 : 20;
+    if (f.type === 'tentacule' && f.ang == null) f.ang = 180;
+    marquer(); panneau();
+  }));
+  document.querySelectorAll('[data-cal]').forEach(c => c.addEventListener('change', () => {
+    instantane();
+    const f = doc.fins[finSel];
+    const l = new Set(calquesDe(f));
+    const i = +c.dataset.cal;
+    c.checked ? l.add(i) : l.delete(i);
+    f.calques = [...l].sort((a, b) => a - b);
+    delete f.layerIndex;
+    marquer(); panneau();
+  }));
+  on('#bFinGroupe', 'click', () => {
+    instantane();
+    const f = doc.fins[finSel];
+    f.calques = groupeDe(formeSel);
+    delete f.layerIndex;
+    marquer(); panneau();
+  });
   on('#bMiroirFin', 'click', () => {
     instantane();
     const f = doc.fins[finSel];
@@ -803,8 +1057,40 @@ function cabler() {
     marquer(); panneau();
   });
   on('#bSupFin', 'click', () => { instantane(); doc.fins.splice(finSel, 1); finSel = 0; marquer(); panneau(); });
+  on('#bSansQueue', 'click', () => {
+    instantane();
+    // `tailBlend` est CONSERVÉ : décocher rend la queue telle qu'elle était
+    // réglée, sans avoir à la repositionner.
+    if (doc.sansQueue) delete doc.sansQueue; else doc.sansQueue = true;
+    marquer(); panneau();
+  });
+  on('#sTO', 'input', e => { doc.tailOndes = +e.target.value; $('#vTO').textContent = (+e.target.value).toFixed(2); marquer(); });
+  on('#bQTout', 'click', () => { instantane(); delete doc.queueCalques; marquer(); panneau(); });
+  on('#bQChoisir', 'click', () => {
+    instantane();
+    doc.queueCalques = doc.shapes.map((_, i) => i);
+    marquer(); panneau();
+  });
+  document.querySelectorAll('[data-qcal]').forEach(c => c.addEventListener('change', () => {
+    instantane();
+    const l = new Set(doc.queueCalques || []);
+    const i = +c.dataset.qcal;
+    c.checked ? l.add(i) : l.delete(i);
+    doc.queueCalques = [...l].sort((a, b) => a - b);
+    marquer(); panneau();
+  }));
+  document.querySelectorAll('[data-gab]').forEach(b => b.addEventListener('click', () => { gabarit(b.dataset.gab); }));
+  on('#bAplatir', 'click', aplatir);
+  on('#bDegrouper', 'click', degrouper);
+  document.querySelectorAll('[data-coche]').forEach(c => c.addEventListener('click', ev => {
+    ev.stopPropagation();
+    const i = +c.dataset.coche;
+    c.checked ? coches.add(i) : coches.delete(i);
+    panneau();
+  }));
   on('#sTB', 'input', e => { doc.tailBlend = +e.target.value; $('#vTB').textContent = e.target.value; marquer(); });
   on('#sAmp', 'input', e => { doc.shapes[formeSel].amp = +e.target.value; $('#vAmp').textContent = e.target.value; marquer(); });
+  on('#sAmp', 'pointerdown', instantane);
   on('#cFill', 'input', e => { if (doc.shapes[formeSel]) { doc.shapes[formeSel].fill = e.target.value; marquer(); panneau(); } });
   on('#bPlusPetit', 'click', () => echelleForme(0.95));
   on('#bPlusGrand', 'click', () => echelleForme(1 / 0.95));
@@ -819,8 +1105,9 @@ function cabler() {
     if (doc.shapes.length < 2) return dire('il faut au moins une forme', 'ko');
     instantane();
     doc.shapes.splice(formeSel, 1);
-    doc.fins = doc.fins.filter(f => f.layerIndex !== formeSel)
-                       .map(f => (f.layerIndex > formeSel ? Object.assign(f, { layerIndex: f.layerIndex - 1 }) : f));
+    decalerCalques(j => (j === formeSel ? null : (j > formeSel ? j - 1 : j)));
+    doc.fins = doc.fins.filter(f => calquesDe(f).length);
+    coches.clear();
     formeSel = Math.max(0, formeSel - 1); marquer(); panneau();
   });
   document.querySelectorAll('.forme').forEach(el =>
@@ -857,22 +1144,26 @@ function cabler() {
 // évite le piège — aux ancrages de nageoire qui visent cette forme, sinon le
 // disque d'influence reste derrière et la nageoire se déforme autour du vide.
 function transformer(fn) {
-  const sh = doc.shapes[formeSel];
-  if (!sh) return;
-  sh.points = sh.points.map(fn);
+  const lot = groupeDe(formeSel);
+  if (!lot.length || !doc.shapes[formeSel]) return;
+  const vus = new Set(lot);
+  for (const j of lot) doc.shapes[j].points = doc.shapes[j].points.map(fn);
+  // Les ancrages qui visent un des calques déplacés suivent, sinon le disque
+  // d'influence reste derrière et la nageoire se déforme autour du vide.
   for (const f of doc.fins) {
-    if (f.layerIndex !== formeSel) continue;
+    if (!calquesDe(f).some(j => vus.has(j))) continue;
     const [x, y] = fn([f.x, f.y]);
     f.x = x; f.y = y;
   }
   marquer();
 }
 
-// Centre de la boîte de la forme : repère des mises à l'échelle et rotations.
+// Centre de la boîte du GROUPE : repère des mises à l'échelle et rotations.
+// Prendre le centre du seul calque actif ferait tourner les pièces d'une même
+// patte autour de trois centres différents — elle se désarticulerait.
 function centreForme() {
-  const pts = doc.shapes[formeSel].points;
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  for (const p of pts) {
+  for (const j of groupeDe(formeSel)) for (const p of doc.shapes[j].points) {
     if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0];
     if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1];
   }
@@ -902,11 +1193,28 @@ function dupliquerForme() {
   instantane();
   const sh = JSON.parse(JSON.stringify(doc.shapes[formeSel]));
   sh.points = sh.points.map(p => [p[0] + doc.naturalW * 0.04, p[1] + doc.naturalH * 0.04]);
+  // La copie sort du groupe : dupliquer une nageoire, c'est en faire une AUTRE.
+  delete sh.groupe;
   doc.shapes.splice(formeSel + 1, 0, sh);
-  // Les nageoires visant une forme au-delà du point d'insertion se décalent.
-  for (const f of doc.fins) if (f.layerIndex > formeSel) f.layerIndex++;
+  // Les appendices visant une forme au-delà du point d'insertion se décalent.
+  decalerCalques(j => (j > formeSel ? j + 1 : j));
   formeSel++;
   marquer(); panneau();
+}
+
+// Toute renumérotation des calques doit être répercutée sur ce qui les VISE :
+// les appendices et la liste des calques qui ondulent. C'était fait à la main,
+// à trois endroits, sur le seul `layerIndex` — et rien ne suivait `calques`.
+function decalerCalques(map) {
+  const conv = (l) => l.map(map).filter(j => j != null);
+  for (const f of doc.fins) {
+    f.calques = conv(calquesDe(f));
+    delete f.layerIndex;
+  }
+  if (doc.queueCalques) {
+    doc.queueCalques = conv(doc.queueCalques);
+    if (!doc.queueCalques.length) delete doc.queueCalques;
+  }
 }
 
 function bouger(d) {
@@ -914,11 +1222,28 @@ function bouger(d) {
   if (j < 0 || j >= doc.shapes.length) return;
   instantane();
   const t = doc.shapes[formeSel]; doc.shapes[formeSel] = doc.shapes[j]; doc.shapes[j] = t;
-  for (const f of doc.fins) {
-    if (f.layerIndex === formeSel) f.layerIndex = j;
-    else if (f.layerIndex === j) f.layerIndex = formeSel;
-  }
+  decalerCalques(k => (k === formeSel ? j : (k === j ? formeSel : k)));
   formeSel = j; marquer(); panneau();
+}
+
+// « Aplatir » : les calques cochés deviennent un seul bloc animé.
+function aplatir() {
+  const lot = [...coches].sort((a, b) => a - b);
+  if (lot.length < 2) return dire('coche au moins deux formes dans la liste', 'ko');
+  instantane();
+  const nom = nomGroupeLibre();
+  for (const i of lot) doc.shapes[i].groupe = nom;
+  formeSel = lot[0]; coches.clear();
+  marquer(); panneau();
+  dire(`${lot.length} formes aplaties dans « ${nom} » : elles se déplacent et s'animent ensemble`, 'ok');
+}
+function degrouper() {
+  const lot = groupeDe(formeSel);
+  if (lot.length < 2) return dire('cette forme n\'est dans aucun groupe');
+  instantane();
+  for (const i of lot) delete doc.shapes[i].groupe;
+  marquer(); panneau();
+  dire('groupe défait');
 }
 
 function marquer() { if (espece && doc) brouillons[espece] = doc; dessiner(); rail(); }
@@ -997,6 +1322,16 @@ function pres(sx, sy) {
     if (best) return best;
   }
   if (outil === 'nageoires') {
+    // La POINTE d'un tentacule d'abord : elle règle direction et longueur d'un
+    // seul geste, et elle est testée avant la base parce qu'un tentacule court
+    // met les deux poignées à portée l'une de l'autre.
+    for (let i = 0; i < doc.fins.length; i++) {
+      const f = doc.fins[i];
+      if (TYPE(f) !== 'tentacule') continue;
+      const a0 = (f.ang != null ? f.ang : 180) * Math.PI / 180;
+      const [x, y] = versEcran([f.x + Math.cos(a0) * (f.r || 60), f.y + Math.sin(a0) * (f.r || 60)]);
+      if (Math.hypot(sx - x, sy - y) < seuil) return { type: 'boutApp', i };
+    }
     for (let i = 0; i < doc.fins.length; i++) {
       const [x, y] = versEcran([doc.fins[i].x, doc.fins[i].y]);
       if (Math.hypot(sx - x, sy - y) < seuil) return { type: 'fin', i };
@@ -1013,9 +1348,14 @@ function pres(sx, sy) {
       if (Math.hypot(sx - x, sy - y) < seuil) return { type: 'point', i };
     }
   }
-  if (outil === 'forme' && doc.shapes[formeSel]) {
+  if (outil === 'forme') {
     const [wx, wy] = versDoc(sx, sy);
-    if (dansForme(doc.shapes[formeSel].points, wx, wy)) return { type: 'forme', wx, wy };
+    // Le calque ACTIF d'abord : sinon un calque posé par-dessus lui volerait le
+    // clic dès qu'on veut déplacer celui qu'on vient de sélectionner.
+    if (doc.shapes[formeSel] && dansForme(doc.shapes[formeSel].points, wx, wy))
+      return { type: 'forme', i: formeSel, wx, wy };
+    for (let i = doc.shapes.length - 1; i >= 0; i--)
+      if (dansForme(doc.shapes[i].points, wx, wy)) return { type: 'forme', i, wx, wy };
   }
   return null;
 }
@@ -1061,7 +1401,10 @@ vue.addEventListener('pointerdown', ev => {
   if (cible) {
     instantane();
     attrape = cible; vue.setPointerCapture(ev.pointerId);
-    if (cible.type === 'fin') { finSel = cible.i; panneau(); }
+    if (cible.type === 'fin' || cible.type === 'boutApp') { finSel = cible.i; panneau(); }
+    // Cliquer un calque le SÉLECTIONNE : c'était le seul moyen manquant pour
+    // reprendre un dessin existant — il fallait deviner son rang dans la liste.
+    if (cible.type === 'forme' && cible.i !== formeSel) { formeSel = cible.i; panneau(); }
     return;
   }
 
@@ -1078,7 +1421,11 @@ vue.addEventListener('pointerdown', ev => {
       for (const q of pts) { a = Math.min(a, q[0]); b = Math.min(b, q[1]); c = Math.max(c, q[0]); e2 = Math.max(e2, q[1]); }
       r = Math.max(10, Math.round(Math.hypot(c - a, e2 - b) * 0.75));
     }
-    doc.fins.push({ x, y, r, layerIndex: formeSel });
+    // Le nouvel appendice entraîne TOUT LE GROUPE du calque actif : si l'artiste
+    // a pris la peine d'aplatir une patte en trois pièces, il ne veut pas poser
+    // trois ancrages identiques.
+    doc.fins.push({ x, y, r, type: 'nageoire', amp: 20, phase: 0, vitesse: 1,
+                    calques: groupeDe(formeSel) });
     finSel = doc.fins.length - 1;
     marquer(); panneau();
     return;
@@ -1111,6 +1458,14 @@ vue.addEventListener('pointerdown', ev => {
       marquer(); panneau();
       return;
     }
+    // Ni point ni contour sous le curseur : un clic dans un AUTRE calque le
+    // sélectionne, pour retoucher un dessin existant sans passer par la liste.
+    const [wx, wy] = versDoc(sx, sy);
+    for (let i = doc.shapes.length - 1; i >= 0; i--) {
+      if (i !== formeSel && dansForme(doc.shapes[i].points, wx, wy)) {
+        formeSel = i; panneau(); dessiner(); return;
+      }
+    }
   }
   attrape = { type: 'vue', sx, sy, ox: vueT.x, oy: vueT.y };
   vue.setPointerCapture(ev.pointerId);
@@ -1134,6 +1489,11 @@ vue.addEventListener('pointermove', ev => {
     oe.r = Math.max(1, x - oe.x);
   }
   else if (a.type === 'fin') { doc.fins[a.i].x = x; doc.fins[a.i].y = y; }
+  else if (a.type === 'boutApp') {
+    const f = doc.fins[a.i], dx = x - f.x, dy = y - f.y;
+    f.r = Math.max(10, Math.round(Math.hypot(dx, dy)));
+    f.ang = Math.round(Math.atan2(dy, dx) * 180 / Math.PI);
+  }
   else if (a.type === 'queue') doc.tailBlend = x;
   else if (a.type === 'point') doc.shapes[formeSel].points[a.i] = [x, y];
   else if (a.type === 'forme') {
@@ -1273,8 +1633,16 @@ function aEnvoyer() {
     if (pt.r != null) pt.r = a(pt.r);
     if (pt.ecart != null) pt.ecart = a(pt.ecart);
   }
-  for (const f of d.fins) { f.x = a(f.x); f.y = a(f.y); f.r = Math.round(f.r); }
-  d.tailBlend = a(d.tailBlend);
+  for (const f of d.fins) {
+    f.x = a(f.x); f.y = a(f.y); f.r = Math.round(f.r);
+    if (f.ang != null) f.ang = Math.round(f.ang);
+    if (f.phase != null) f.phase = Math.round(f.phase);
+    if (f.vitesse != null) f.vitesse = a(f.vitesse);
+    if (f.ondes != null) f.ondes = a(f.ondes);
+  }
+  // `tailBlend` reste enregistré même sans queue : décocher « sans queue » doit
+  // rendre le réglage tel qu'il était, pas une valeur par défaut.
+  if (d.tailBlend != null) d.tailBlend = a(d.tailBlend);
   return d;
 }
 
@@ -1317,12 +1685,29 @@ function dire(m, cls) { const e = $('#etat'); e.textContent = m || ''; e.classNa
 // ---------------------------------------------------------------------------
 // Outils, boucle, démarrage
 // ---------------------------------------------------------------------------
+function choisirOutil(nom) {
+  outil = nom;
+  document.querySelectorAll('#barre button[data-outil]').forEach(x =>
+    x.classList.toggle('on', x.dataset.outil === nom));
+  panneau(); dessiner();
+}
 document.querySelectorAll('#barre button[data-outil]').forEach(b =>
-  b.addEventListener('click', () => {
-    outil = b.dataset.outil;
-    document.querySelectorAll('#barre button[data-outil]').forEach(x => x.classList.toggle('on', x === b));
-    panneau(); dessiner();
-  }));
+  b.addEventListener('click', () => choisirOutil(b.dataset.outil)));
+
+// Raccourcis 1…6, dans l'ordre de la barre. Un outil de dessin où l'on change
+// d'outil à la souris fait faire l'aller-retour vingt fois par minute.
+const ORDRE = ['ancres', 'nageoires', 'queue', 'forme', 'points', 'dessiner'];
+addEventListener('keydown', ev => {
+  if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test((ev.target.tagName || ''))) return;
+  const i = +ev.key;
+  if (i >= 1 && i <= ORDRE.length) { ev.preventDefault(); choisirOutil(ORDRE[i - 1]); }
+});
+
+// Une erreur JavaScript ne doit pas se solder par une page qui « ne marche
+// pas » sans rien dire : la barre d'état la montre.
+addEventListener('error', ev => dire('erreur : ' + (ev.message || ev.error || ''), 'ko'));
+addEventListener('unhandledrejection', ev => dire('erreur : ' + (ev.reason || ''), 'ko'));
 
 addEventListener('resize', () => { cadrer(); });
 

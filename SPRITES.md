@@ -10,7 +10,7 @@ Un seul outil : **[atelier.html](atelier.html)**, servi par le serveur de dev.
         ┌─────────────────── ATELIER ───────────────────┐
         │                                               │
   silhouette du jeu ──┐                                 │
-  fichier .svg ───────┼──▶ ancres · nageoires · queue · points · visage
+  fichier .svg ───────┼──▶ ancres · appendices · queue · calques · visage
   fichier .json ──────┘                    │            │
                                            ▼            │
                        aperçu par le VRAI rendu du jeu  │
@@ -77,15 +77,44 @@ sans avoir à retrouver l'image — mais elle l'alourdit (56 ko pour un PNG de
   raie, coquillage, poulpe — en veut deux. Le second est **symétrique du
   premier**, réglé par un simple **écartement** : une seule ancre à placer. Un
   bouton le libère si le dessin est asymétrique.
-- **Nageoires** — clic pour en poser une. Le disque affiché est le **rayon
-  d'influence** : la rotation s'y propage à plein au centre et s'éteint au bord.
-  Un bouton la rend **symétrique** : un second ancrage apparaît en miroir de
-  l'axe vertical du dessin (en pointillés), tournant en sens inverse. Un crabe,
-  une raie, un poulpe ont des appendices des deux côtés — un seul ancrage n'en
-  animait qu'une moitié.
-- **Queue** — la ligne verticale `tailBlend`. Tout ce qui est à sa gauche ondule.
+  Trois **gabarits** replacent tout d'un coup : *Poisson* (un œil, bouche au
+  museau, queue active), *De face* et *Rampant* (deux yeux, **bouche au milieu**,
+  et pour le dernier **pas de queue**). Les valeurs par défaut supposaient un
+  poisson vu de profil ; sur un crabe elles étaient fausses sur les trois points
+  à la fois — bouche posée sur une pince, un seul œil, un tiers de la carapace
+  qui ondulait.
+- **Appendices** — nageoire, patte, antenne, bras. Clic dans le vide pour en
+  poser un. **Deux types**, parce que ce sont deux gestes différents :
+  - **nageoire** — la forme *pivote* autour de l'ancre. Le disque affiché est le
+    **rayon d'influence** : plein effet au centre, plus rien au bord.
+  - **tentacule** — une **onde court** de l'ancre vers la pointe de la flèche :
+    la base ne bouge pas, le bout parcourt toute l'amplitude. C'est ce qu'il faut
+    pour une patte de crabe ou un bras de poulpe — un pivot les rend raides,
+    articulés sur une seule charnière. La pointe de la flèche se tire : elle
+    règle direction et longueur d'un seul geste. Le curseur *ondes* dit si le
+    membre se balance d'un bloc (0) ou se déroule (1).
+
+  Communs aux deux : **symétrie** (un second ancrage en miroir de l'axe vertical,
+  en pointillés, jouant en sens inverse — un crabe, une raie, un poulpe ont des
+  appendices des deux côtés), **amplitude**, et surtout **déphasage** et
+  **vitesse** propres à chaque appendice : sans eux les huit pattes d'un crabe
+  battent toutes ensemble, ce qui se lit comme un tressaillement et pas comme une
+  marche. Enfin, un appendice entraîne **plusieurs formes** (cases à cocher) :
+  une patte dessinée en trois pièces bat alors d'un seul geste, sans déchirure au
+  raccord.
+- **Queue** — la ligne verticale `tailBlend` : tout ce qui est à sa gauche ondule.
+  Un bouton **« cette créature n'a pas de queue »** la coupe entièrement (le
+  réglage est conservé, décocher le rend tel quel) : un crabe, une étoile, un
+  coquillage n'ont rien à faire onduler, et la valeur par défaut faisait tortiller
+  un tiers du crabe. Un curseur **ondes le long du corps** fait *courir* l'onde
+  vers le bout au lieu de battre d'un seul tenant : c'est une murène ou une
+  anguille, dont le corps entier est un tentacule. Et la liste **formes qui
+  ondulent** restreint la déformation quand un élément doit rester rigide — une
+  carapace, un coquillage porté sur le dos.
 - **Points** — tirer les carrés retouche le contour ; clic sur le trait insère un
-  point, <kbd>alt</kbd>+clic en supprime un.
+  point, <kbd>alt</kbd>+clic en supprime un. **Un clic dans un autre calque le
+  sélectionne** : c'était le seul moyen manquant pour reprendre un dessin
+  existant, il fallait deviner son rang dans la liste.
 - **✏️ Dessiner** — poser les sommets d'un polygone au clic. Double-clic,
   <kbd>Entrée</kbd> ou un clic sur le premier sommet ferment la forme ;
   <kbd>retour arrière</kbd> retire le dernier point, <kbd>Échap</kbd> abandonne.
@@ -93,12 +122,32 @@ sans avoir à retrouver l'image — mais elle l'alourdit (56 ko pour un PNG de
   la liste des formes. Pas de poignées de Bézier : le lissage passe par les
   milieux de segments, comme dans le jeu — ce qu'on trace est donc exactement ce
   qui sera rendu.
-- **Forme** — la forme entière : on la tire pour la déplacer, et les boutons
+- **Calque** — la forme entière : on la tire pour la déplacer, et les boutons
   l'agrandissent, la tournent, la retournent ou la dupliquent autour de son
-  centre. Un miroir horizontal sert à faire la nageoire de l'autre côté :
-  dupliquer, retourner, déplacer. **Les ancrages de nageoire suivent la forme**
-  qu'ils visent, sinon le disque d'influence reste derrière et la nageoire se
-  déforme autour du vide.
+  centre. Cliquer n'importe quel calque le sélectionne (le calque actif garde la
+  priorité, sinon celui du dessus lui volerait le clic). Un miroir horizontal
+  sert à faire la nageoire de l'autre côté : dupliquer, retourner, déplacer.
+  **Les ancrages suivent la forme** qu'ils visent, sinon le disque d'influence
+  reste derrière et la nageoire se déforme autour du vide.
+
+Les six outils ont un raccourci, <kbd>1</kbd> à <kbd>6</kbd> dans l'ordre de la
+barre.
+
+### Aplatir des calques
+
+Dans la liste des formes, chaque ligne a une **case à cocher** ; **Aplatir**
+réunit les formes cochées en un **groupe**.
+
+Aplatir ne fond **pas** les tracés — un corps et sa rayure n'ont pas la même
+couleur, les souder ferait perdre le dessin. Ce que ça déclare, c'est que ces
+calques n'en font plus qu'un du point de vue de l'**animation** et des **gestes** :
+ils se déplacent, tournent et se retournent ensemble, et un seul appendice les
+entraîne tous (bouton *tout le groupe*). C'est ce qu'il faut pour un corps peint
+en plusieurs couches, et pour une patte dessinée en trois pièces.
+
+Le contour du groupe est tracé en pointillés sur le dessin (plein pour le calque
+actif), et la liste indique par un `🖐n` combien d'appendices animent chaque
+forme.
 
 Plus, dans le panneau : un curseur d'**échelle** et un bouton **silhouette
 d'origine**, qui superpose en gris la silhouette procédurale que le dessin
@@ -188,9 +237,29 @@ d'espèce reste lu : le manifeste ne fait que le compléter ou l'annuler.
 | `shapes[].smooth` | contour lissé plutôt qu'en ligne brisée | lignes droites |
 | `shapes[].pivot` | rotation en bloc — **repli** quand aucun `fins[]` ne vise la forme | elle ondule |
 | `shapes[].amp` | amplitude d'animation, en degrés pour une nageoire | 15 |
-| `fins[]` | `{x, y, r, layerIndex, miroir}` : ancrage de nageoire, rayon d'influence, et **symétrie** | pas de nageoire animée |
+| `shapes[].groupe` | nom libre : calques **aplatis** en un seul bloc animé | forme isolée |
+| `fins[]` | **appendices**, voir le tableau ci-dessous | rien n'est animé |
 | `tailBlend` | x en deçà duquel les points appartiennent à la queue | rien n'ondule |
+| `sansQueue` | la créature n'a **pas** de queue (crabe, étoile, coquillage) | elle en a une |
+| `tailOndes` | nombre d'ondes le long de la queue — 0 = battement d'un bloc, 1-2 = onde qui **court** (murène) | 0 |
+| `queueCalques` | restreint l'ondulation à certains calques | tous |
 | `faceK`, `faceTx`, `faceTy` | calibration en multiples de `size` (repli) | `def.spriteFace`, puis 0,75 |
+
+### Un appendice (`fins[]`)
+
+| Champ | Rôle | Défaut |
+|---|---|---|
+| `x`, `y` | l'ancre : centre de rotation, ou **base** du tentacule | — |
+| `r` | rayon d'influence (nageoire) ou **longueur** (tentacule) | 1 |
+| `calques` | les formes entraînées, **plusieurs possibles** | `[layerIndex]` |
+| `layerIndex` | forme unique — forme historique, toujours lue | — |
+| `type` | `'nageoire'` (rotation) ou `'tentacule'` (onde progressive) | `nageoire` |
+| `miroir` | second ancrage en miroir de l'axe vertical, jouant en sens inverse | non |
+| `amp` | degrés de rotation, ou **% de la longueur** pour un tentacule | celle du calque |
+| `phase` | déphasage en degrés — indispensable dès qu'il y a plusieurs pattes | 0 |
+| `vitesse` | multiplicateur de fréquence | 1 |
+| `ang` | tentacule : direction de la base vers le bout, en degrés | 180 (vers la queue) |
+| `ondes` | tentacule : nombre d'ondes sur la longueur | 1 |
 
 ### Les cinq règles du rendu
 

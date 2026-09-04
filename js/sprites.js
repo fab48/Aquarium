@@ -3,12 +3,32 @@
 // Le format de l'éditeur, tel qu'il est consommé ici :
 //   naturalW/H  — dimensions du dessin d'origine
 //   points      — ANCRES : center (origine de la créature), nose, eye, mouth, tail
-//   shapes[]    — { points: [[x,y]…], fill, smooth, pivot, amp }
+//   shapes[]    — { points: [[x,y]…], fill, smooth, pivot, amp, groupe }
 //                 `smooth`  : contour lissé plutôt qu'en ligne brisée
 //                 `pivot`   : point d'attache — la forme PIVOTE autour (nageoire)
 //                 `amp`     : amplitude d'animation de la forme
+//                 `groupe`  : nom libre — plusieurs calques « aplatis » en un
+//                             seul bloc animé (le corps et ses rayures, les
+//                             trois pièces d'une patte…)
 //   tailBlend   — x en deçà duquel les points appartiennent à la QUEUE et ondulent
-//   fins[]      — marqueurs de nageoires (x, y, r, layerIndex) posés par l'éditeur
+//   sansQueue   — TOUTE créature n'a pas de queue : un crabe, une étoile, un
+//                 coquillage n'ont rien à faire onduler. Sans ce drapeau, la
+//                 valeur par défaut de `tailBlend` faisait tortiller un tiers
+//                 du crabe.
+//   tailOndes   — nombre d'ondes le long de la queue. 0 = battement d'un seul
+//                 tenant (un poisson) ; 1 ou 2 = onde qui COURT vers le bout
+//                 (une murène, une anguille — le corps entier est un tentacule).
+//   queueCalques— restreint l'ondulation à certains calques (défaut : tous)
+//   fins[]      — APPENDICES posés par l'éditeur. Deux types :
+//                 `nageoire`  (défaut) — rotation autour de l'ancre, pondérée
+//                             par la distance : plein effet au centre, nul au
+//                             bord du rayon `r`.
+//                 `tentacule` — onde progressive le long d'un axe : base à
+//                             l'ancre, direction `ang`, longueur `r`. C'est ce
+//                             qu'il faut pour une patte, une antenne, un bras
+//                             de poulpe — une rotation en bloc les rend raides.
+//                 Communs : `calques` (les formes entraînées), `miroir`,
+//                 `amp`, `phase`, `vitesse`.
 //
 // Le fichier est écrit par `atelier.html`. `Assets/sprites.json` dit quelle
 // espèce utilise quel dessin (voir `init`).
@@ -60,8 +80,22 @@ const Sprites = {
   preparer(d) {
     // 2 points suffisent pour un trait ouvert (un segment de tentacule) ; il en
     // faut 3 pour un contour rempli.
-    const shapes = (d.shapes || []).filter(sh => sh.points
-      && sh.points.length >= (sh.fill == null && sh.stroke ? 2 : 3));
+    // Les calques écartés DÉCALENT les indices : un appendice qui visait la
+    // forme 5 aurait animé la 4. On garde donc la correspondance ancien -> neuf.
+    const shapes = [], reindex = {};
+    (d.shapes || []).forEach((sh, i) => {
+      if (!sh.points || sh.points.length < (sh.fill == null && sh.stroke ? 2 : 3)) return;
+      reindex[i] = shapes.length;
+      shapes.push(sh);
+    });
+    // Les calques visés par un appendice ou par la queue, exprimés dans les
+    // indices d'origine, ramenés aux indices retenus.
+    const vises = (liste) => {
+      if (!liste || !liste.length) return null;
+      const s = new Set();
+      for (const i of liste) if (reindex[i] != null) s.add(reindex[i]);
+      return s.size ? s : null;
+    };
     let minX = Infinity, maxX = -Infinity;
     for (const sh of shapes) for (const p of sh.points) {
       if (p[0] < minX) minX = p[0];
@@ -76,8 +110,11 @@ const Sprites = {
       cx: c.x, cy: c.y,
       minX,
       // Sans `tailBlend`, rien n'ondule : mieux vaut un poisson raide qu'un
-      // poisson dont le corps entier se tortille.
-      tailBlend: d.tailBlend != null ? d.tailBlend : minX,
+      // poisson dont le corps entier se tortille. `sansQueue` le dit
+      // explicitement — un crabe n'a pas de nageoire caudale à faire battre.
+      tailBlend: d.sansQueue ? null : (d.tailBlend != null ? d.tailBlend : minX),
+      tailOndes: d.tailOndes || 0,
+      queueCalques: vises(d.queueCalques),
       oeil: d.points && d.points.eye,
       // DEUXIÈME ŒIL, optionnel. Le visage commun est de PROFIL — un seul œil,
       // ce qui convient à un poisson vu de côté. Tout ce qui se voit de face ou
@@ -118,10 +155,21 @@ const Sprites = {
       // Ancrages de nageoire, RANGÉS PAR CALQUE : chacun porte un rayon
       // d'influence `r` qui pondère la rotation des points alentour
       // (cf. `tracerForme`). L'éditeur en autorise plusieurs sur un même calque.
-      finsPar: (d.fins || []).reduce((acc, f) => {
-        const i = f.layerIndex;
-        if (i == null || !shapes[i]) return acc;
-        (acc[i] || (acc[i] = [])).push(f);
+      // Un appendice peut entraîner PLUSIEURS calques (`calques`). C'est ce qui
+      // permet d'« aplatir » une patte dessinée en trois pièces, ou un poisson
+      // dont la nageoire porte un liseré : sans ça il fallait poser un ancrage
+      // par pièce, tous à régler à l'identique, et le moindre écart se voyait
+      // comme une déchirure. `layerIndex` reste lu — les dessins déjà calés ne
+      // bougent pas.
+      appPar: (d.fins || []).reduce((acc, f) => {
+        const brut = (f.calques && f.calques.length)
+          ? f.calques
+          : (f.layerIndex != null ? [f.layerIndex] : []);
+        for (const i of brut) {
+          const j = reindex[i];
+          if (j == null) continue;
+          (acc[j] || (acc[j] = [])).push(f);
+        }
         return acc;
       }, {}),
     };

@@ -394,12 +394,21 @@ const FishBody = {
       // `faceTx`/`faceTy` : le décalage fin du panneau de calibration, exprimé
       // en fractions de la taille du visage.
       const dx = (sp.faceTx || 0) * fs, dy = (sp.faceTy || 0) * fs;
-      ctx.save();
-      ctx.translate((oe.x - sp.cx) * k - fs * 0.55 + dx, (oe.y - sp.cy) * k + fs * 0.18 + dy);
-      // `sansBouche` : elle est dessinée juste après, sur sa propre ancre.
-      this.drawFace(ctx, fs, e.expression, t + (e.phase || 0),
-                    e.emoteK ? e.emoteK() : 1, e._eyeLook, !!bo);
-      ctx.restore();
+      // Un œil, ou deux : le second se dessine en reposant le MÊME visage à sa
+      // propre ancre. Sourcil, joue et clignement suivent donc tout seuls.
+      const yeux = [[oe, fs]];
+      if (sp.oeil2) {
+        const fs2 = sp.oeil2.r ? (sp.oeil2.r * k) / 0.22 : fs;
+        yeux.push([sp.oeil2, fs2]);
+      }
+      for (const [a, taille] of yeux) {
+        ctx.save();
+        ctx.translate((a.x - sp.cx) * k - taille * 0.55 + dx, (a.y - sp.cy) * k + taille * 0.18 + dy);
+        // `sansBouche` : elle est dessinée une seule fois, sur sa propre ancre.
+        this.drawFace(ctx, taille, e.expression, t + (e.phase || 0),
+                      e.emoteK ? e.emoteK() : 1, e._eyeLook, !!bo);
+        ctx.restore();
+      }
       if (bo) {
         const expr = e.expression, k2 = e.emoteK ? e.emoteK() : 1;
         const em = this.EMOTIONS[expr] || this.EMOTIONS.idle;

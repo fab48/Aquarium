@@ -171,8 +171,12 @@ let anime = false;
 let fantome = false;    // superposition de la silhouette procédurale
 let attrape = null;     // ce que la souris tient en ce moment
 
-const CLE_ANCRES = ['center', 'nose', 'eye', 'mouth', 'tail'];
-const COUL = { center: '#0a8f3c', nose: '#8a5ea8', eye: '#e0322f', mouth: '#1560d8', tail: '#c98a1b' };
+// `eye2` n'est présente que si l'espèce a deux yeux : la liste effective est
+// donc lue depuis le document, pas figée.
+const CLE_ANCRES = ['center', 'nose', 'eye', 'eye2', 'mouth', 'tail'];
+const COUL = { center: '#0a8f3c', nose: '#8a5ea8', eye: '#e0322f', eye2: '#e0322f',
+               mouth: '#1560d8', tail: '#c98a1b' };
+function ancres() { return CLE_ANCRES.filter(c => doc && doc.points[c]); }
 
 // ---------------------------------------------------------------------------
 // Rail des espèces
@@ -363,11 +367,11 @@ function poignees(sp) {
   }
 
   // Ancres
-  for (const cle of CLE_ANCRES) {
+  for (const cle of ancres()) {
     const a = doc.points[cle]; if (!a) continue;
     const [x, y] = versEcran([a.x, a.y]);
     const vif = outil === 'ancres';
-    if (cle === 'eye' && a.r) {   // cercle de taille de l'œil
+    if (cle.startsWith('eye') && a.r) {   // cercle de taille de l'œil
       ctx.strokeStyle = vif ? 'rgba(224,50,47,.85)' : 'rgba(224,50,47,.3)';
       ctx.lineWidth = vif ? 2 : 1;
       ctx.beginPath(); ctx.arc(x, y, a.r * vueT.k, 0, Math.PI * 2); ctx.stroke();
@@ -434,7 +438,14 @@ function panneau() {
         <label>Taille de l'œil <span class="val" id="vR">${(doc.points.eye.r || 0).toFixed(1)}</span></label>
         <input type="range" id="sR" min="1" max="${Math.round(doc.naturalW * 0.3)}" step="0.5" value="${doc.points.eye.r || 10}">
         <p class="aide">Le cercle rouge sur le dessin. Tire sa poignée droite, ou ce curseur.</p>
-        <div class="rangee"><button id="bAutoOeil">Déduire du dessin</button></div>`;
+        <div class="rangee"><button id="bAutoOeil">Déduire du dessin</button></div>
+        ${doc.points.eye2 ? `
+          <label>Deuxième œil <span class="val" id="vR2">${(doc.points.eye2.r || 0).toFixed(1)}</span></label>
+          <input type="range" id="sR2" min="1" max="${Math.round(doc.naturalW * 0.3)}" step="0.5" value="${doc.points.eye2.r || 10}">` : ''}
+        <div class="rangee"><button id="bDeuxYeux">${doc.points.eye2 ? 'Retirer le deuxième œil' : 'Ajouter un deuxième œil'}</button></div>
+        <p class="aide">Le visage commun est de <b>profil</b> : un seul œil, ce qui va
+          à un poisson vu de côté. Tout ce qui se voit de face ou de dessus —
+          crabe, raie, coquillage, poulpe — en veut deux.</p>`;
     } else if (outil === 'nageoires') {
       h += `<h2>Nageoires</h2><p class="aide">Le disque est le <b>rayon d'influence</b> :
         la rotation s'y propage à plein au centre et s'éteint au bord.
@@ -509,6 +520,19 @@ function cabler() {
   ['#sR', '#sFR', '#sTB', '#sAmp'].forEach(sel => on(sel, 'pointerdown', instantane));
   on('#cFill', 'pointerdown', instantane);
   on('#sR', 'input', e => { doc.points.eye.r = +e.target.value; $('#vR').textContent = (+e.target.value).toFixed(1); marquer(); });
+  on('#sR2', 'pointerdown', instantane);
+  on('#sR2', 'input', e => { doc.points.eye2.r = +e.target.value; $('#vR2').textContent = (+e.target.value).toFixed(1); marquer(); });
+  on('#bDeuxYeux', 'click', () => {
+    instantane();
+    if (doc.points.eye2) delete doc.points.eye2;
+    else {
+      // Posé À CÔTÉ du premier, pas dessus : sinon on croit que le bouton n'a
+      // rien fait et on reclique.
+      const o = doc.points.eye;
+      doc.points.eye2 = { x: o.x - (o.r || 10) * 2.6, y: o.y, r: o.r };
+    }
+    marquer(); panneau();
+  });
   on('#bAutoOeil', 'click', () => {
     instantane();
     doc.points.eye.r = SVGImport.rayonOeil(doc.shapes, doc.points.eye, doc.naturalW);
@@ -597,12 +621,13 @@ function pres(sx, sy) {
   if (!doc) return null;
   const seuil = 11;
   if (outil === 'ancres') {
-    const a = doc.points.eye;
-    if (a && a.r) {
+    for (const cle of ['eye', 'eye2']) {
+      const a = doc.points[cle];
+      if (!a || !a.r) continue;
       const [x, y] = versEcran([a.x, a.y]);
-      if (Math.hypot(sx - (x + a.r * vueT.k), sy - y) < seuil) return { type: 'rayonOeil' };
+      if (Math.hypot(sx - (x + a.r * vueT.k), sy - y) < seuil) return { type: 'rayonOeil', cle };
     }
-    for (const cle of CLE_ANCRES) {
+    for (const cle of ancres()) {
       const p = doc.points[cle]; if (!p) continue;
       const [x, y] = versEcran([p.x, p.y]);
       if (Math.hypot(sx - x, sy - y) < seuil) return { type: 'ancre', cle };
@@ -698,7 +723,10 @@ vue.addEventListener('pointermove', ev => {
   const [x, y] = versDoc(sx, sy);
   const a = attrape;
   if (a.type === 'ancre') { doc.points[a.cle].x = x; doc.points[a.cle].y = y; }
-  else if (a.type === 'rayonOeil') doc.points.eye.r = Math.max(1, x - doc.points.eye.x);
+  else if (a.type === 'rayonOeil') {
+    const oe = doc.points[a.cle];
+    oe.r = Math.max(1, x - oe.x);
+  }
   else if (a.type === 'fin') { doc.fins[a.i].x = x; doc.fins[a.i].y = y; }
   else if (a.type === 'queue') doc.tailBlend = x;
   else if (a.type === 'point') doc.shapes[formeSel].points[a.i] = [x, y];

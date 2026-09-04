@@ -144,11 +144,16 @@ const SVGImport = {
     if (!p.mouth) p.mouth = { x: x0 + L * 0.9, y: y0 + Ht * 0.58 };
     if (p.eye.r == null) p.eye.r = this.rayonOeil(doc.shapes, p.eye, L);
 
-    return {
-      version: 1,
+    // On PART DU DOCUMENT D'ORIGINE et on ne surcharge que ce qu'on connaît.
+    // Reconstruire un objet neuf champ par champ jetait silencieusement tout le
+    // reste : `SharkSVG.json` a perdu son `sourceRaw` — le SVG d'origine de
+    // l'éditeur, 2,8 ko — au premier enregistrement depuis l'atelier. Un outil
+    // d'édition ne doit jamais supprimer ce qu'il ne comprend pas.
+    return Object.assign({}, doc, {
+      version: doc.version || 1,
       naturalW: Math.round(doc.naturalW || L),
       naturalH: Math.round(doc.naturalH || Ht),
-      sourceKind: 'atelier',
+      sourceKind: doc.sourceKind || 'atelier',
       points: p,
       fins: doc.fins || [],
       tailBlend: doc.tailBlend != null ? doc.tailBlend : x0 + L * 0.28,
@@ -161,7 +166,7 @@ const SVGImport = {
       shapes: doc.shapes,
       espece: doc.espece || null,
       nom: doc.nom || null,
-    };
+    });
   },
 
   // Rayon d'œil déduit du dessin : le quart de la hauteur du corps à l'aplomb de

@@ -51,7 +51,9 @@ orange = brouillon non enregistré, grise = silhouette procédurale.
 - **Ancres** — `center` (le point que le jeu place à la position de la créature),
   `nose`, `tail`, et surtout `eye` / `mouth` qui portent le visage commun.
   L'ancre `eye` est un **cercle** dont on tire la poignée : son rayon donne la
-  taille de l'œil.
+  taille de l'œil. Un bouton **ajoute un deuxième œil** : le visage commun est de
+  profil, ce qui va à un poisson vu de côté, mais tout ce qui se voit de face ou
+  de dessus — crabe, raie, coquillage, poulpe — en veut deux.
 - **Nageoires** — clic pour en poser une. Le disque affiché est le **rayon
   d'influence** : la rotation s'y propage à plein au centre et s'éteint au bord.
 - **Queue** — la ligne verticale `tailBlend`. Tout ce qui est à sa gauche ondule.
@@ -69,6 +71,13 @@ pour déplacer la vue.
 **Le bandeau du bas** montre le dessin sous sept humeurs. Une calibration juste
 doit tenir sur toutes : `sleeping` (bouche du ronflement) et `angry` (sourcil
 lourd) sont les deux qui débordent en premier d'une tête trop petite.
+
+**L'enregistrement préserve les champs qu'il ne comprend pas.** L'atelier repart
+du document d'origine et ne surcharge que ce qu'il connaît. Reconstruire un objet
+neuf champ par champ jetait silencieusement le reste : `SharkSVG.json` a perdu
+son `sourceRaw` — le SVG d'origine de l'éditeur, 2,8 ko — au premier
+enregistrement. Un outil d'édition ne doit jamais supprimer ce qu'il ne
+comprend pas.
 
 **Enregistrer** écrit `Assets/<nom>.json`. **Activer dans le jeu** ajoute
 l'entrée au manifeste. **Revenir au procédural** retire l'entrée **sans effacer
@@ -124,6 +133,7 @@ d'espèce reste lu : le manifeste ne fait que le compléter ou l'annuler.
 | `spriteScale` | rattrapage d'échelle du document | `def.spriteScale`, puis 1 |
 | `points.center` | **origine de la créature** : le point posé à `(entity.x, entity.y)` | centre de la boîte |
 | `points.eye` | ancre de l'œil (et du sourcil, de la joue) | pas de visage |
+| `points.eye2` | **deuxième œil**, pour une créature vue de face ou de dessus | un seul œil |
 | `points.eye.r` | **taille de l'œil, en unités du dessin** — la calibration à préférer | on passe à `faceK` |
 | `points.mouth` | ancre de la bouche, **honorée séparément** | bouche à sa place par défaut |
 | `points.nose`, `points.tail` | repères de l'atelier | ignorés par le jeu |
@@ -140,6 +150,11 @@ d'espèce reste lu : le manifeste ne fait que le compléter ou l'annuler.
 
 ### Les cinq règles du rendu
 
+0. **Un œil ou deux, sans code de rendu supplémentaire.** Le second se dessine
+   en reposant le MÊME visage à sa propre ancre : sourcil, joue et clignement
+   suivent tout seuls, et les deux yeux battent ensemble parce que le clignement
+   ne dépend que de la taille et du temps. Chacun peut avoir son rayon, pour une
+   tête légèrement tournée.
 1. **Les deux ancres du visage sont honorées séparément.** Caler le seul œil et
    laisser la bouche à sa place par défaut ne marche pas : le visage commun met
    la bouche en avant et à peine plus bas que l'œil, alors que le requin de

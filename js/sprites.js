@@ -76,6 +76,13 @@ const Sprites = {
       // poisson dont le corps entier se tortille.
       tailBlend: d.tailBlend != null ? d.tailBlend : minX,
       oeil: d.points && d.points.eye,
+      // DEUXIÈME ŒIL, optionnel. Le visage commun est de PROFIL — un seul œil,
+      // ce qui convient à un poisson vu de côté. Tout ce qui se voit de face ou
+      // de dessus (crabe, raie, coquillage, poulpe) en veut deux. Il n'y a rien
+      // de neuf à dessiner pour ça : on repose le même visage à un second
+      // endroit, mouche comprise, clignement compris — les deux yeux battent
+      // ensemble parce que le clignement ne dépend que de la taille et du temps.
+      oeil2: d.points && d.points.eye2,
       bouche: d.points && d.points.mouth,
       // CALIBRATION DU VISAGE, par ordre de préséance.
       // 1. `points.eye.r` — le rayon de l'œil DANS LES UNITÉS DU DESSIN. C'est

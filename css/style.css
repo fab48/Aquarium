@@ -4,11 +4,15 @@ html, body {
   font-family: "Segoe UI", system-ui, sans-serif;
   height: 100%;
   touch-action: none;
+  overscroll-behavior: none;   /* pas de pull-to-refresh sur mobile */
 }
 /* touch-action ne s'hérite pas : sans lui ICI, le navigateur préempte le
    glissé sur le canvas et coupe le pointermove en plein déplacement de vue
    (PERFORMANCE.md §4). */
 #game { display: block; width: 100vw; height: 100vh; cursor: crosshair; touch-action: none; }
+/* 100vh déborde sous la barre d'URL des navigateurs mobiles ; dvh suit la
+   hauteur réellement visible (les anciens navigateurs gardent le vh au-dessus) */
+#game { height: 100dvh; }
 
 #hud { position: fixed; inset: 0; pointer-events: none; }
 

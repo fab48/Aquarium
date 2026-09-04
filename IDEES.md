@@ -2,13 +2,15 @@
 
 Toutes les idées rassemblées et dédoublonnées : les propositions des enfants, la
 liste de souhaits d'espèces, les gags dans l'esprit parc à thème, la couche
-économique. **Rien de ce document n'est codé.**
+économique.
 
-Le roster **codé** (27 espèces) est en [§6](#6-le-roster-existant-27-espèces).
+**État au 4 septembre 2026** : le §1 est **fait** — 21 des 25 espèces manquantes
+sont codées et équilibrées, le roster passe de 27 à **51**. Le reste du document
+(§2 à §5) n'est pas codé. `FICHES.md` décrit chaque espèce du roster une par une.
 
 | Section | Contenu |
 |---|---|
-| [§1](#1-les-poissons-manquants-25) | **Les 25 poissons manquants** — la liste de référence |
+| [§1](#1-les-poissons-manquants--21-sur-25-sont-faits) | Les poissons manquants — **21 sur 25 sont faits** |
 | [§2](#2-gags-et-mises-en-scène) | Gags et scènes, sans nouvelle espèce |
 | [§3](#3-à-corriger-sur-lexistant) | À corriger sur l'existant |
 | [§4](#4-interaction-joueur) | Interaction joueur |
@@ -18,179 +20,50 @@ Le roster **codé** (27 espèces) est en [§6](#6-le-roster-existant-27-espèces
 
 ---
 
-## 1. Les poissons manquants (25)
+## 1. Les poissons manquants — **21 sur 25 sont faits**
 
-Synthèse des trois sources — **(E)** les enfants, **(F)** la liste de souhaits,
-**(A)** proposé en lisant les trous de la chaîne alimentaire. Les doublons entre
-sources sont fusionnés (le « poisson ballon piquant » des enfants et le « Fugu
-Gonflé » de la liste sont le même poisson ; le « poisson-balayeur » et le
-« concombre aspirateur » aussi).
+*Mis à jour le 4 septembre 2026. Le roster est passé de 27 à **51 espèces**.*
 
-`T1` brouteur · `T2` petit poisson · `T3` prédateur moyen · `T4` grand
-prédateur · `Ch` charognard.
+Toutes les espèces listées ici ont été codées, équilibrées en simulation et
+décrites dans `FICHES.md` :
 
-### Récif et eau claire (9)
+**Récif et eau claire** — Poisson Dentiste, Fugu Gonflé, Poisson Police, Mérou
+Patatras, Poisson Papillon Amoureux, Dorade Dorée, Poisson Coffre-au-Trésor,
+Nudibranche Fluo, Corail Viva.
 
-| Poisson | Niv. | Ce qu'il apporte | Source |
-|---|:--:|---|:--:|
-| **Poisson Dentiste** | T2 | soigne la bouche des prédateurs, qui font la queue devant sa station. Le prédateur ne le mange jamais. **C'est lui qui fait repousser les dents du Requin Dents-Molles** — sans lui le requin ne peut plus manger. | E·A |
-| **Fugu Gonflé** | T2 | gonfle tout rond dès qu'on l'approche et **pique** l'importun, qui prend un `malaise()` | E·F |
-| **Poisson Police** | T3 | gronde ceux qui pètent ou font des farces ; le fautif passe en `ashamed` | E |
-| **Mérou Patatras** | T4 | embusqué de récif, aspire sa proie au lieu de la mordre. **Mange le Poisson-clown Chatouille**, qui n'avait aucun prédateur. | F |
-| **Poisson Papillon** | T2 | ne se déplace **jamais seul** : toujours en couple, côte à côte | F |
-| **Dorade Dorée** | T2 | banc doré, contrepoint au Confetti bariolé | F |
-| **Poisson Coffre** | T2 | cubique, nage mal — c'est tout le gag | F |
-| **Nudibranche Fluo** | T1 | **le seul brouteur mobile** : les trois T1 actuels sont tous `fixed` | A |
-| **Corail Viva** | T1 | second refuge de ponte à côté de l'anémone (décor vivant) | F |
+**Surface** — Tortue Papi, Espadon Voilier, Maquereau Métronome, Crevette
+Sauteuse.
 
-### Surface (4)
+**Ciel** — Pélican Attrape-Tout, Goéland Chapardeur, Cormoran Sous-Marin.
 
-| Poisson | Niv. | Ce qu'il apporte | Source |
-|---|:--:|---|:--:|
-| **Tortue Papi** | T3 | **le trou le plus béant** : seuls le Poisson-lune et la Murène mangent des méduses. Traverse toute la colonne d'eau, respire en surface (`breathes`), lente à regarder. | A |
-| **Espadon Voilier** | T4 | le sprinteur ; rien ne va vite en surface | F |
-| **Maquereau Métronome** | T2 | la surface n'a que **2 espèces** contre 9 en eau claire | A |
-| **Crevette Sauteuse** | T2 | base de chaîne en eau claire (la Crevette Guirlande est abyssale) | F |
+**Fond** — Anguille Jardinière, Bernard-l'Ermite Déménageur, Concombre
+Aspirateur, Rascasse Épineuse, Oursin Pic-Pic.
 
-### Ciel (3)
+**Le large** — Barracuda Perce-Ballon, Anguille Coup-de-Jus, Krill Étincelle.
 
-**Les oiseaux frayent sur la plage.** Nouvelle frayère `beach`, sur le sable
-**émergé** au-dessus de la ligne d'eau : la première hors de l'eau. Elle vaut
-pour le Fou Moustachu comme pour les trois à venir. `Ecosystem.nurseryPoint` et
-la migration de ponte devront l'accepter **sans déclencher la noyade à l'air
-libre** (`_sec`, qui tue au bout de 4 s hors de l'eau).
+### Ce qui reste à inventer
 
-Il n'y a **qu'une** espèce aérienne aujourd'hui (le Fou Moustachu). En ajouter
-trois ne se verra que si **chacun pêche autrement** — sinon ce sont trois
-silhouettes qui font la même chose.
+- **Requin-marteau** — resté optionnel : `CLAUDE.md` prévient que concentrer
+  plusieurs prédateurs sur une même proie la fait s'effondrer, et le large en
+  compte déjà six.
 
-| Poisson | Niv. | Ce qu'il apporte | Source |
-|---|:--:|---|:--:|
-| **Pélican Attrape-Tout** | T4 | **chope les poissons volants EN PLEIN VOL** — voir la fiche ci-dessous | F |
-| **Goéland Rapide** | T4 | vole la prise des deux autres. Un gag qui se raconte seul, et il ne consomme aucune proie de son côté. | F |
-| **Cormoran Plongeur** | T4 | plonge et **nage sous l'eau**, contrairement au Fou | F |
+### Six espèces d'ambiance n'ont pas de gag
 
-#### Fiche : le Pélican Attrape-Tout
+Dorade, Corail, Maquereau, Crevette Sauteuse, Oursin, Krill. C'est **assumé** :
+elles remplissent l'eau, on les regarde en masse sans les suivre. Leur donner
+une scène coûterait du budget de bulles (déjà à 567/min pour 250 visées) sans
+rien raconter de plus.
 
-**Ce qu'il fait.** Il patrouille au-dessus de la surface et **cueille en plein
-vol** les poissons volants — il n'entre jamais dans l'eau. C'est le contraire
-exact du Fou Moustachu, qui plonge dedans. La scène existe déjà à moitié :
-le Poisson Volant Cascadeur et la Sardine Bulle-fofolle **sautent déjà** hors de
-l'eau (`jumps`), et personne ne les attend là-haut.
+### La leçon de la grande vague
 
-**La mécanique générique à créer : `snatch: true`.** Un happeur ne vise que les
-proies en **phase aérienne** (`jumpState === 'air'`) et ne descend jamais sous la
-surface. Trois branchements, tous dans du code qui existe :
+Vingt et une espèces d'un coup, c'est **+300 entités** et la simulation qui passe
+de 4,8 à 7,6 ms (elle monte en O(n^1,4)). Les espèces d'**ambiance** ont donc été
+dimensionnées à la moitié de ce qu'on croirait : elles remplissent l'eau aussi
+bien à 30 qu'à 60, et chaque individu coûte. Retombé à 6,0 ms.
 
-- `Ecosystem.nearestPreyFor` — ignorer une proie qui n'est pas en l'air ;
-- `Entity.think` — abandonner la chasse dès que la cible **retombe** à l'eau,
-  sinon le pélican la suit dans la mer ;
-- `Entity.move`, branche `aerial` — le seuil « trop profond, il abandonne » est
-  la **surface** (`SURFACE_Y`) au lieu de `SURFACE_Y + 130`.
-
-**Le gag est dans le raté.** Sur un `missChance`, il referme son bec sur le
-poisson, sa **poche se gonfle**… et le poisson en ressort par le haut, `scared`,
-pendant que le pélican prend un air `ashamed`. La poche qui se déforme se lit
-depuis le rendu (`_chew`), sans nouvelle bulle.
-
-**Rendu.** `render: 'bird'` + un flag `pouch: true` lu par `drawBird`, comme
-`disco` pour le crabe : la grosse poche orange remplace la moustache noire du
-Fou.
-
-**Le risque d'équilibre, à mesurer avant de valider.** Il chasse **les deux
-mêmes proies** que le Fou Moustachu (`volant`, `bulle_fofolle`), et `CLAUDE.md`
-prévient que concentrer plusieurs prédateurs sur une même proie la fait
-s'effondrer. Deux amortisseurs naturels, plus un à régler :
-
-- sa fenêtre de tir est **beaucoup plus étroite** que celle du Fou : seulement
-  les quelques secondes où un poisson est en l'air ;
-- `popCap` bas (2 à 4 individus) ;
-- `missChance` élevé — mais attention au **piège inverse** : avec une fenêtre
-  déjà rare et un raté fréquent, c'est **le pélican** qui meurt de faim. C'est
-  exactement ce qui était arrivé à la Murène quand la peur des proies s'est
-  ajoutée à son `missChance`. À vérifier en simulation longue, sur les
-  populations de `volant`, `bulle_fofolle` **et** `pelican`.
-
-**Nom.** La liste de souhaits dit « Pélican Farceur », mais « Farceur » est déjà
-pris par le Dauphin. « Attrape-Tout » dit ce qu'il fait — à trancher.
-
-### Fond (6)
-
-| Poisson | Niv. | Ce qu'il apporte | Source |
-|---|:--:|---|:--:|
-| **Anguilles-jardinières** | T2 | une colonie de tubes qui ondulent et **rentrent dans le sable d'un coup** quand un prédateur passe. Aucun effet de groupe équivalent aujourd'hui. | A |
-| **Bernard-l'ermite Déménageur** | Ch | change de coquille, et peut **se disputer celle du Coquillage Rieur** : un gag né de deux espèces déjà là | A |
-| **Concombre Aspirateur** | T1 | mange les cacas (`Food.poops`) en râlant : rend visible le mécanisme de trop-plein, et nettoie vraiment le sable | E·A |
-| **Rascasse Épineuse** | T4 | embusquée immobile, venimeuse ; **piquer rend malade** | F |
-| **Oursin Pic-pic** | T1 | fixe, intouchable ; **piquer rend malade** | F |
-| **Anguille Coup-de-Jus** | T4 | **électrocute** ce qui l'approche — voir la fiche ci-dessous | F |
-
-> **Collision de noms à trancher** : « Pic-pic » est donné à la fois à la
-> rascasse et à l'oursin. J'ai mis « Rascasse Épineuse » pour les distinguer —
-> à toi de choisir qui garde « Pic-pic ».
-
-#### La mécanique commune des piquants : `piquant: true`
-
-**Tous ceux qui pic-pic rendent malade.** Fugu, Oursin, Rascasse : au contact,
-la victime prend un `malaise()` (la fonction existe déjà — elle borne la faim à
-0,9, se voit sur le visage, et **ne tue jamais**) puis détale. C'est la
-contrepartie de leur immunité : personne ne les mange, et c'est pour ça.
-
-Ça rejoint les deux sources de maladie **déjà codées** — avaler un caca, et
-respirer le prout du Perroquet Pétomane. Une seule exception à prévoir : le
-Poisson-Tapis mange les cacas **sans être malade**.
-
-#### Fiche : l'Anguille Coup-de-Jus
-
-**Ce qu'elle fait.** Elle **électrocute** ce qui l'approche. Des **éclairs**
-partent d'elle, et les touchés sont **sonnés** — exactement l'effet du choc
-contre un gros, qui existe déjà et se lit déjà (`Entity.assomme` : il part en
-vrille, voit des étoiles, reste hébété quelques secondes). **Les très faibles en
-meurent.**
-
-**La mécanique à créer : `shock: { range, cooldown }`.**
-
-- la décharge frappe **tous** les voisins du rayon, pas seulement un ;
-- effet par défaut : `assomme()` — rien à inventer, tout est déjà là ;
-- **la mort ne frappe que les très faibles** : à définir précisément (les
-  alevins ? en dessous d'une taille ? les déjà affamés ?). Seul point à
-  trancher avant de coder ;
-- un **cooldown franc** entre deux décharges, sinon elle vide son voisinage en
-  quelques secondes — la leçon de la murène « ping-pong » et du `_snapCd` de la
-  Baudroie ;
-- les éclairs sont un nouveau VFX dans `particles.js`.
-
-**⚠️ Le point délicat.** C'est la **première mécanique du jeu qui tue sans
-manger**. Elle échappe donc à tous les garde-fous d'équilibre — report de
-prédation, `refugeFloor`, plafonds — qui ne comptent que la prédation. À
-surveiller en simulation longue avant de la valider.
-
-### Grands prédateurs et base de chaîne (3)
-
-| Poisson | Niv. | Ce qu'il apporte | Source |
-|---|:--:|---|:--:|
-| **Barracuda** | T4 | fonce à travers les Fugus et les fait **exploser** (`Entity.explose`) — le seul à pouvoir les manger sans se piquer | E |
-| **Krill** | T1 | la Baleine et la Raie filtrent aujourd'hui du plancton **abstrait** ; un krill visible donnerait un sens à leur passage | A |
-| **Requin-marteau** | T4 | *optionnel.* `CLAUDE.md` prévient que concentrer plusieurs prédateurs sur une même proie la fait s'effondrer — à n'ajouter qu'avec sa propre proie. | A |
-
-### Noms à trancher sur l'existant
-
-Cinq espèces codées portent un nom différent de la liste de souhaits :
-
-| Liste de souhaits | Dans le jeu | Remarque |
-|---|---|---|
-| Orque **Echo** | Orque **Blagueuse** | « Echo » dit l'écholocation, « Blagueuse » ses gags |
-| Calmar **Violette** | Calamar **Fusée** | « Fusée » raconte sa propulsion |
-| Anémone **Câline** | l'Anémone n'a pas de surnom ; « Câline » est l'**Étoile de Mer** | un seul « Câline » possible |
-| Poisson-lune **Bada-boum** | Poisson-lune **Zen** | **à intervertir, voir ci-dessous** |
-| Hippocampe **Zen** | Hippocampe **Timide** | idem |
-
-**L'inversion Zen / Bada-boum vaut d'être prise telle qu'elle est écrite dans la
-liste de souhaits.** Le môle a déjà `sleeps: true`, il pique du nez en pleine
-journée : « Bada-boum » raconte sa chute. Et un hippocampe minuscule qui
-s'appelle « Zen », c'est plus drôle que l'inverse.
-
----
+Deuxième leçon : **une silhouette posée au sol doit être inscrite dans TROIS
+listes** (`GROUND_RENDERS`, `bottomDweller` du spawn, et le calage en y). L'oursin
+n'était dans aucune : il flottait en pleine eau, à 1 100 px au-dessus du sable.
 
 ## 2. Gags et mises en scène
 
@@ -355,11 +228,12 @@ la population par rapport à sa fourchette saine, en une barre à trois zones
 
 ---
 
-## 6. Le roster existant (27 espèces)
+## 6. Le roster (51 espèces)
 
-Ce qui est **codé** dans `js/species.js`. Treize de ces espèces n'apparaissent
-dans aucune liste de souhaits, et ce sont elles qui tiennent l'équilibre : elles
-sont en **gras**.
+Le tableau ci-dessous est celui des **27 espèces d'origine** ; les 24 ajoutées
+depuis (§1) sont décrites une par une dans **`FICHES.md`**, qui fait autorité.
+Treize des espèces ci-dessous n'apparaissaient dans aucune liste de souhaits, et
+ce sont elles qui tiennent l'équilibre : elles sont en **gras**.
 
 | Espèce | Vraie espèce | Niv. | Taille | Où | Mange |
 |---|---|:--:|---:|---|---|

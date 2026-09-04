@@ -5,7 +5,10 @@ html, body {
   height: 100%;
   touch-action: none;
 }
-#game { display: block; width: 100vw; height: 100vh; cursor: crosshair; }
+/* touch-action ne s'hérite pas : sans lui ICI, le navigateur préempte le
+   glissé sur le canvas et coupe le pointermove en plein déplacement de vue
+   (PERFORMANCE.md §4). */
+#game { display: block; width: 100vw; height: 100vh; cursor: crosshair; touch-action: none; }
 
 #hud { position: fixed; inset: 0; pointer-events: none; }
 
@@ -61,4 +64,15 @@ html, body {
 #info {
   position: absolute; bottom: 16px; left: 16px; color: rgba(255,255,255,.65);
   font-size: 12px; max-width: 300px; line-height: 1.5;
+}
+
+/* --- Écrans tactiles : cibles plus grosses, aide souris masquée --- */
+@media (pointer: coarse) {
+  /* 48 px : assez pour le doigt, et 6 boutons + les écarts tiennent dans les
+     375 px d'un petit téléphone (56 px faisait déborder la barre). */
+  .food-btn, #legend-btn, #info-btn { width: 48px; height: 48px; font-size: 23px; margin-left: 0; }
+  #food-bar { gap: 7px; bottom: 12px; width: max-content; }
+  #info { display: none; }              /* le texte d'aide parle de la molette */
+  #legend { right: 8px; left: 8px; width: auto; max-height: 60vh; bottom: 84px; }
+  #depth-gauge { right: 8px; }
 }

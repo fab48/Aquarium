@@ -193,15 +193,29 @@ plus la pression GC du §2. Viser **30 fps**, pas 60. Tout le bloc « simulation
 du §5 est donc prioritaire pour le mobile ; le bloc « rendu » l'est pour les
 machines sans accélération.
 
-Il manque par ailleurs des choses **fonctionnelles**, pas des performances :
+Le **fonctionnel tactile a été fait** (2026-09-04, `Input.touchDown/touchMove/
+touchUp/tap` dans `js/input.js`, plus `touch-action: none` sur `#game` et une
+media query `pointer: coarse`) :
 
-- pas de **pinch-to-zoom** — le zoom passe uniquement par `wheel`
-  (`js/input.js:25`) ;
-- pas de `touch-action: none` sur le canvas : le navigateur peut préempter le
-  glissé et couper le `pointermove` en plein déplacement de vue ;
-- le **défilement par les bords de l'écran** et la **fiche au survol** (loupe)
-  n'ont pas d'équivalent tactile ;
-- le HUD et les fiches d'identité sont dimensionnés pour une souris.
+- **tap** = nourrir · **glissé 1 doigt** = déplacer la vue (seuil de 14 px pour
+  les distinguer) · **pincement** = zoom centré entre les doigts, qui déplace
+  aussi la vue par son centre · **double-tap** = suivre la créature ;
+- la fiche d'identité (loupe) s'**épingle au tap** sur une créature — le
+  « survol » n'existe pas au doigt, et la recalculer depuis le dernier point
+  touché la faisait disparaître dès que l'animal s'éloignait ;
+- le **défilement par les bords** est désactivé en mode tactile : le doigt levé
+  laisse mx/my figés au bord, la caméra partait toute seule ;
+- boutons du HUD à 48 px sous `pointer: coarse` (56 px débordaient des 375 px
+  d'un petit téléphone), texte d'aide masqué (il parle de la molette).
+
+Trois pièges rencontrés : `touch-action` **ne s'hérite pas** (le poser sur
+`body` ne protège pas le canvas) ; `setPointerCapture` **peut jeter** et
+avalait tout le geste (try/catch) ; un doigt perdu sans `pointerup` ni
+`pointercancel` (geste système) restait dans la Map et transformait le contact
+suivant en pincement fantôme — d'où le nettoyage sur `lostpointercapture`.
+
+Reste dimensionné pour le bureau : la fiche d'identité elle-même (lisible mais
+petite) et l'atelier (`atelier.html`, outil de dev, hors sujet mobile).
 
 ---
 

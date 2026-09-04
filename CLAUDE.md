@@ -25,6 +25,14 @@ déplacement) · **double-clic sur une créature = la caméra la suit** (cerceau
 double-clic dans le vide ou déplacement manuel pour la relâcher) · bouton 🔍 =
 fiches d'identité au survol · bouton ❔ = légende.
 
+**Tactile** (`Input.touchDown/touchMove/touchUp/tap`) : tap = nourrir · glissé
+1 doigt = déplacer la vue · pincement = zoom · double-tap = suivre · avec la
+loupe, tap sur une créature = fiche **épinglée** (pas de survol au doigt). Le
+défilement par les bords est coupé en mode tactile. Pièges vérifiés dans
+[PERFORMANCE.md](PERFORMANCE.md) §4 : `touch-action` ne s'hérite pas (posé sur
+`#game`), `setPointerCapture` peut jeter, et un doigt perdu sans `pointerup` se
+purge sur `lostpointercapture` — sinon pincement fantôme.
+
 Avec la loupe active, la créature **suivie garde sa fiche affichée** en
 permanence (liseré doré + 🎯, comme son cerceau) et le survol en ajoute une
 seconde, décalée pour ne pas la recouvrir (`IdCard.draw(ctx, e, eviter,

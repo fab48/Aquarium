@@ -51,6 +51,10 @@
   .pastille.sprite { background: #35b06a; }
   .pastille.brouillon { background: #f0a92e; }
   .esp .nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rubrique { font-size: 10px; text-transform: uppercase; letter-spacing: .07em;
+              color: #8ba2b4; padding: 12px 8px 3px; }
+  .esp .fic { font-size: 10.5px; color: #8ba2b4; margin-left: auto; padding-left: 6px; }
+  .esp.actif .fic { color: rgba(255,255,255,.75); }
 
   /* --- Scène --- */
   #scene { flex: 1; display: flex; flex-direction: column; min-width: 0; }
@@ -172,7 +176,9 @@ let outil = 'ancres';
 let formeSel = 0;
 let finSel = 0;
 let manifeste = {};     // espèce -> nom de fichier sprite
+let fichiers = [];      // tous les dessins présents dans Assets/
 const brouillons = {};  // espèce -> doc pas encore enregistré
+let fichierOuvert = null;   // dessin libre en cours d'édition, s'il y en a un
 let vueT = { x: 0, y: 0, k: 1 };
 let anime = false;
 let fantome = false;    // superposition de la silhouette procédurale
@@ -192,18 +198,70 @@ function rail() {
   const l = $('#liste');
   l.innerHTML = '';
   let nSprite = 0;
+  const titre = txt => {
+    const d = document.createElement('div');
+    d.className = 'rubrique'; d.textContent = txt; l.appendChild(d);
+  };
+
+  titre('Espèces du jeu');
   for (const id of Object.keys(SPECIES)) {
     const d = document.createElement('div');
-    d.className = 'esp' + (id === espece ? ' actif' : '');
+    d.className = 'esp' + (id === espece && !fichierOuvert ? ' actif' : '');
     const aSprite = !!manifeste[id];
     if (aSprite) nSprite++;
     d.innerHTML = `<span class="pastille ${brouillons[id] ? 'brouillon' : (aSprite ? 'sprite' : '')}"></span>`
-                + `<span class="nom">${SPECIES[id].name}</span>`;
-    d.title = aSprite ? `dessin : ${manifeste[id]}` : 'silhouette procédurale';
-    d.onclick = () => choisir(id);
+                + `<span class="nom">${SPECIES[id].name}</span>`
+                + (aSprite ? `<span class="fic">${manifeste[id]}</span>` : '');
+    d.title = aSprite ? `dessin : ${manifeste[id]}.json` : 'silhouette procédurale';
+    d.onclick = () => { fichierOuvert = null; choisir(id); };
     l.appendChild(d);
   }
-  $('#compte').textContent = `${nSprite} dessin${nSprite > 1 ? 's' : ''} sur ${Object.keys(SPECIES).length} espèces`;
+
+  // Tout dessin présent dans Assets/ mais rattaché à aucune espèce. Sans cette
+  // rubrique, un fichier enregistré puis désactivé devenait introuvable : il
+  // existait sur le disque et nulle part dans l'outil.
+  const rattaches = new Set(Object.values(manifeste));
+  const libres = fichiers.filter(f => !rattaches.has(f));
+  if (libres.length) {
+    titre('Dessins non rattachés');
+    for (const f of libres) {
+      const d = document.createElement('div');
+      d.className = 'esp' + (f === fichierOuvert ? ' actif' : '');
+      d.innerHTML = `<span class="pastille brouillon"></span><span class="nom">${f}</span>`;
+      d.title = `Assets/${f}.json — pas encore rattaché à une espèce`;
+      d.onclick = () => ouvrirFichier(f);
+      l.appendChild(d);
+    }
+  }
+
+  $('#compte').textContent =
+    `${nSprite} dessin${nSprite > 1 ? 's' : ''} actif${nSprite > 1 ? 's' : ''} · `
+    + `${fichiers.length} fichier${fichiers.length > 1 ? 's' : ''} dans Assets/`;
+}
+
+// Ouvre un dessin libre, en le rattachant provisoirement à l'espèce courante
+// (il faut bien un `size` pour le mettre à l'échelle).
+function ouvrirFichier(f) {
+  fichierOuvert = f;
+  // Un dessin libre a quand même besoin d'une espèce : c'est elle qui donne le
+  // `size` qui met le dessin à l'échelle. Si le nom du fichier est celui d'une
+  // espèce, on la prend — sinon `crabe.json` s'affichait à la taille du requin.
+  if (SPECIES[f]) espece = f;
+  dire('chargement de ' + f + '…');
+  fetch(`Assets/${f}.json`).then(r => r.json())
+    .then(d => {
+      doc = SVGImport.finaliser(Object.assign({}, d, { espece, nom: f }));
+      formeSel = 0; finSel = 0;
+      cadrer(); panneau(); rail();
+      dire(`${f}.json ouvert — rattache-le à une espèce avec « Activer dans le jeu »`, 'ok');
+    })
+    .catch(e => dire('illisible : ' + e, 'ko'));
+}
+
+function inventaire() {
+  return fetch('api/sprites').then(r => r.json())
+    .then(r => { fichiers = r.sprites || []; })
+    .catch(() => { fichiers = Object.values(manifeste); });
 }
 
 function choisir(id) {
@@ -348,15 +406,22 @@ function poignees(sp) {
   // Nageoires : le disque montre le RAYON D'INFLUENCE, pas une décoration —
   // c'est jusque-là que la rotation se propage dans le corps.
   (doc.fins || []).forEach((f, i) => {
-    const [x, y] = versEcran([f.x, f.y]);
-    const r = (f.r || 60) * vueT.k;
     const vif = outil === 'nageoires' && i === finSel;
-    ctx.strokeStyle = vif ? 'rgba(45,127,211,.9)' : 'rgba(45,127,211,.35)';
-    ctx.fillStyle = 'rgba(45,127,211,.07)';
-    ctx.lineWidth = vif ? 2 : 1;
-    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = vif ? '#1560d8' : '#7ea6cc';
-    ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+    // Le second disque, en symétrique, est dessiné en pointillés : on doit voir
+    // OÙ il tombe, c'est tout l'intérêt de l'option.
+    const axes = f.miroir ? [[f.x, false], [2 * doc.points.center.x - f.x, true]] : [[f.x, false]];
+    for (const [fx, image] of axes) {
+      const [x, y] = versEcran([fx, f.y]);
+      const r = (f.r || 60) * vueT.k;
+      ctx.strokeStyle = vif ? 'rgba(45,127,211,.9)' : 'rgba(45,127,211,.35)';
+      ctx.fillStyle = 'rgba(45,127,211,.07)';
+      ctx.lineWidth = vif ? 2 : 1;
+      if (image) ctx.setLineDash([6, 5]);
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = image ? '#9fc0dd' : (vif ? '#1560d8' : '#7ea6cc');
+      ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+    }
   });
 
   // Contour de la forme sélectionnée, pour savoir ce qu'on va déplacer
@@ -443,7 +508,10 @@ function panneau() {
   const def = SPECIES[espece];
   const nom = manifeste[espece] || (doc && doc.nom) || espece;
 
-  let h = `<h2>${def.name}</h2><p class="aide">${def.realName || ''}<br>
+  let h = `<h2>${fichierOuvert ? fichierOuvert + '.json' : def.name}</h2>
+    <p class="aide">${fichierOuvert
+        ? `dessin non rattaché · mis à l'échelle de <b>${def.name}</b>`
+        : (def.realName || '')}<br>
     taille de jeu <b>${def.size}</b> · ${doc ? doc.shapes.length + ' forme(s)' : 'silhouette procédurale'}</p>`;
 
   if (doc) {
@@ -489,6 +557,11 @@ function panneau() {
           <input type="range" id="sFR" min="10" max="${Math.round(doc.naturalW * 0.6)}" value="${doc.fins[finSel].r}">
           <label>Forme entraînée</label>
           <select id="selFinCalque">${doc.shapes.map((sh, i) => `<option value="${i}" ${i === doc.fins[finSel].layerIndex ? 'selected' : ''}>forme ${i + 1}</option>`).join('')}</select>
+          <div class="rangee"><button id="bMiroirFin" class="${doc.fins[finSel].miroir ? 'on' : ''}">${doc.fins[finSel].miroir ? 'Symétrique ✓' : 'Rendre symétrique'}</button></div>
+          <p class="aide">Un crabe, une raie, un poulpe ont des appendices des <b>deux</b>
+            côtés : un seul ancrage n'en anime qu'une moitié. En symétrique, un second
+            ancrage est posé en miroir de l'axe vertical du dessin et tourne en sens
+            inverse — les deux côtés battent comme une paire de pattes.</p>
           <div class="rangee"><button id="bSupFin">Supprimer cette nageoire</button></div>`;
       }
     } else if (outil === 'queue') {
@@ -601,6 +674,12 @@ function cabler() {
   on('#selFin', 'change', e => { finSel = +e.target.value; panneau(); dessiner(); });
   on('#sFR', 'input', e => { doc.fins[finSel].r = +e.target.value; $('#vFR').textContent = e.target.value; marquer(); });
   on('#selFinCalque', 'change', e => { doc.fins[finSel].layerIndex = +e.target.value; marquer(); });
+  on('#bMiroirFin', 'click', () => {
+    instantane();
+    const f = doc.fins[finSel];
+    f.miroir = !f.miroir;
+    marquer(); panneau();
+  });
   on('#bSupFin', 'click', () => { instantane(); doc.fins.splice(finSel, 1); finSel = 0; marquer(); panneau(); });
   on('#sTB', 'input', e => { doc.tailBlend = +e.target.value; $('#vTB').textContent = e.target.value; marquer(); });
   on('#sAmp', 'input', e => { doc.shapes[formeSel].amp = +e.target.value; $('#vAmp').textContent = e.target.value; marquer(); });
@@ -982,7 +1061,7 @@ function enregistrer() {
     doc.nom = nom;
     delete brouillons[espece];
     dire(`écrit dans ${rep.fichier} (${rep.octets} octets)`, 'ok');
-    rail();
+    inventaire().then(rail);
   }).catch(e => dire('serveur injoignable — lancer dev_server.py : ' + e, 'ko'));
 }
 
@@ -996,10 +1075,11 @@ function activer(nom) {
   }).then(r => r.json()).then(rep => {
     if (rep.erreur) return dire('refusé : ' + rep.erreur, 'ko');
     manifeste = m;
+    fichierOuvert = null;
     dire(nom === null
       ? `${SPECIES[espece].name} revient à sa silhouette procédurale`
       : `${SPECIES[espece].name} utilise maintenant ${nom}.json — recharge le jeu`, 'ok');
-    rail(); panneau();
+    inventaire().then(() => { rail(); panneau(); });
   }).catch(e => dire('serveur injoignable : ' + e, 'ko'));
 }
 
@@ -1024,10 +1104,12 @@ fetch('Assets/sprites.json').then(r => (r.ok ? r.json() : {})).catch(() => ({}))
     manifeste = m || {};
     // Les sprites déclarés en dur dans species.js comptent aussi.
     for (const id in SPECIES) if (SPECIES[id].sprite && !(id in manifeste)) manifeste[id] = SPECIES[id].sprite;
-    rail(); panneau();
-    const premier = Object.keys(manifeste)[0] || Object.keys(SPECIES)[0];
-    choisir(premier);
-    boucle();
+    inventaire().then(() => {
+      rail(); panneau();
+      const premier = Object.keys(manifeste)[0] || Object.keys(SPECIES)[0];
+      choisir(premier);
+      boucle();
+    });
   });
 })();
 </script>

@@ -35,8 +35,14 @@ première mise en eau.
 python dev_server.py 8642      # puis http://localhost:8642/atelier.html
 ```
 
-**Le rail de gauche** liste les 27 espèces. Pastille verte = un dessin est actif,
-orange = brouillon non enregistré, grise = silhouette procédurale.
+**Le rail de gauche** liste les 27 espèces — il lit `SPECIES`, donc toute espèce
+ajoutée au jeu y apparaît d'elle-même. Pastille verte = un dessin est actif,
+orange = brouillon non enregistré, grise = silhouette procédurale. Une seconde
+rubrique, **« dessins non rattachés »**, liste tout fichier présent dans
+`Assets/` mais lié à aucune espèce (route `GET /api/sprites`) : sans elle, un
+dessin enregistré puis désactivé devenait introuvable — il existait sur le disque
+et nulle part dans l'outil. Ouvrir un tel dessin le met à l'échelle de l'espèce
+dont il porte le nom, si elle existe.
 
 **Trois entrées** :
 
@@ -62,6 +68,10 @@ orange = brouillon non enregistré, grise = silhouette procédurale.
   bouton le libère si le dessin est asymétrique.
 - **Nageoires** — clic pour en poser une. Le disque affiché est le **rayon
   d'influence** : la rotation s'y propage à plein au centre et s'éteint au bord.
+  Un bouton la rend **symétrique** : un second ancrage apparaît en miroir de
+  l'axe vertical du dessin (en pointillés), tournant en sens inverse. Un crabe,
+  une raie, un poulpe ont des appendices des deux côtés — un seul ancrage n'en
+  animait qu'une moitié.
 - **Queue** — la ligne verticale `tailBlend`. Tout ce qui est à sa gauche ondule.
 - **Points** — tirer les carrés retouche le contour ; clic sur le trait insère un
   point, <kbd>alt</kbd>+clic en supprime un.
@@ -159,7 +169,7 @@ d'espèce reste lu : le manifeste ne fait que le compléter ou l'annuler.
 | `shapes[].smooth` | contour lissé plutôt qu'en ligne brisée | lignes droites |
 | `shapes[].pivot` | rotation en bloc — **repli** quand aucun `fins[]` ne vise la forme | elle ondule |
 | `shapes[].amp` | amplitude d'animation, en degrés pour une nageoire | 15 |
-| `fins[]` | `{x, y, r, layerIndex}` : ancrage de nageoire et son rayon d'influence | pas de nageoire animée |
+| `fins[]` | `{x, y, r, layerIndex, miroir}` : ancrage de nageoire, rayon d'influence, et **symétrie** | pas de nageoire animée |
 | `tailBlend` | x en deçà duquel les points appartiennent à la queue | rien n'ondule |
 | `faceK`, `faceTx`, `faceTy` | calibration en multiples de `size` (repli) | `def.spriteFace`, puis 0,75 |
 
@@ -198,7 +208,18 @@ d'espèce reste lu : le manifeste ne fait que le compléter ou l'annuler.
 5. **Une nageoire n'est pas un calque qu'on fait tourner en bloc.** Chaque point
    pivote autour de l'ancre, pondéré par sa distance : plein effet au centre, nul
    au-delà du rayon `r`, lissage en S entre les deux — c'est ce qui évite la
-   couture au raccord avec le corps.
+   couture au raccord avec le corps. En **symétrique** (`miroir`), un second
+   ancrage agit à l'image du premier par rapport à l'axe vertical, **en sens
+   inverse** : sans l'inversion les deux côtés partiraient du même côté au lieu
+   de battre comme une paire de pattes. Relevé sur le crabe : un point à +55 px
+   du centre se déplace de −3,04, son symétrique de +3,04.
+6. **La chorégraphie d'une espèce n'appartient pas à sa silhouette.** La danse du
+   Crabe Disco et son défilé de couleurs vivaient dans `drawCrab` : lui donner un
+   dessin les faisait disparaître. `FishBody.choregraphie()` les applique
+   maintenant AUTOUR du corps, quel qu'il soit — le défilé de couleurs par une
+   rotation de teinte, qui marche sur un aplat procédural comme sur un dessin à
+   dix couleurs (repeindre chaque forme écraserait un dessin fait main).
+   Vérifié : rebond et changement de teinte présents dans les deux modes.
 
 ---
 

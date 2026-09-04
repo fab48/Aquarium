@@ -40,6 +40,20 @@ class NoCacheHandler(SimpleHTTPRequestHandler):
     def log_message(self, fmt, *args):  # silence : une ligne par fichier, inutile
         pass
 
+    # --- Inventaire des dessins ---------------------------------------------
+    # L'atelier doit pouvoir montrer TOUT ce qui existe dans Assets/, pas
+    # seulement ce qui est rattaché à une espèce : un dessin enregistré puis
+    # désactivé devenait invisible, donc introuvable.
+    def do_GET(self):
+        if self.path == "/api/sprites":
+            noms = []
+            if os.path.isdir(ASSETS):
+                for f in sorted(os.listdir(ASSETS)):
+                    if f.endswith(".json") and f != "sprites.json":
+                        noms.append(f[:-5])
+            return self._repondre(200, {"sprites": noms})
+        return super().do_GET()
+
     # --- Écriture ------------------------------------------------------------
     def do_POST(self):
         try:

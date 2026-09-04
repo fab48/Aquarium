@@ -441,15 +441,23 @@ const FishBody = {
       let x = p[0], y = p[1] + u * u * onde * amp;
       if (fins) {
         for (const f of fins) {
-          const r = f.r || 1;
-          const poids = lissage(1 - Math.hypot(x - f.x, y - f.y) / r);
-          if (poids <= 0) continue;
-          // `amp` est lu en degrés — c'est l'unité du curseur de l'outil.
-          const a = battement * poids * amp * Math.PI / 360;
-          const cos = Math.cos(a), sin = Math.sin(a);
-          const dx = x - f.x, dy = y - f.y;
-          x = f.x + dx * cos - dy * sin;
-          y = f.y + dx * sin + dy * cos;
+          // SYMÉTRIE. Un crabe, une raie, un poulpe ont des appendices des DEUX
+          // côtés : un seul ancrage n'animait qu'une moitié. `miroir` en pose un
+          // second, image de celui-ci par rapport à l'axe vertical du dessin, et
+          // qui tourne en SENS INVERSE — sans quoi les deux côtés partiraient du
+          // même côté au lieu de battre comme une paire de pattes.
+          const cotes = f.miroir ? [[f.x, 1], [2 * sp.cx - f.x, -1]] : [[f.x, 1]];
+          for (const [fx, sens] of cotes) {
+            const r = f.r || 1;
+            const poids = lissage(1 - Math.hypot(x - fx, y - f.y) / r);
+            if (poids <= 0) continue;
+            // `amp` est lu en degrés — c'est l'unité du curseur de l'outil.
+            const a = sens * battement * poids * amp * Math.PI / 360;
+            const cos = Math.cos(a), sin = Math.sin(a);
+            const dx = x - fx, dy = y - f.y;
+            x = fx + dx * cos - dy * sin;
+            y = f.y + dx * sin + dy * cos;
+          }
         }
       }
       P[i] = [x, y];
@@ -1404,14 +1412,12 @@ const FishBody = {
 
   drawCrab(ctx, e, t) {
     const s = e.size;
-    const disco = e._disco || (e.def.disco && e.expression === 'eating');
-    const col = disco ? `hsl(${(t * 300) % 360}, 85%, 62%)` : e.color;
-    // Chorégraphie : il rebondit et se déhanche pendant son jeu de couleurs
-    if (e._disco) {
-      const d = e._danceT || 0;
-      ctx.translate(Math.sin(d * 9) * s * 0.35, -Math.abs(Math.sin(d * 12)) * s * 0.55);
-      ctx.rotate(Math.sin(d * 9) * 0.3);
-    }
+    // Le rebond et le défilé de couleurs sont montés par `choregraphie()`, en
+    // amont : ce sont des gags de l'espèce, pas des traits de la silhouette, et
+    // ils doivent tenir aussi quand un dessin remplace celle-ci.
+    // Reste ici la teinte du repas, qui n'a pas de danse associée.
+    const col = (e.def.disco && e.expression === 'eating')
+      ? `hsl(${(t * 300) % 360}, 85%, 62%)` : e.color;
     // pattes
     ctx.strokeStyle = col; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
     for (let i = 0; i < 3; i++) {
@@ -1502,10 +1508,35 @@ const FishBody = {
     ctx.restore();
   },
 
+  // CHORÉGRAPHIE — ce que fait la CRÉATURE, pas ce qu'est son corps.
+  // La danse du Crabe Disco et son défilé de couleurs vivaient dans `drawCrab` :
+  // remplacer sa silhouette par un dessin les faisait disparaître, alors que ce
+  // sont des gags de l'espèce, indépendants de la façon dont on la dessine.
+  // Ils s'appliquent donc AUTOUR du corps, quel qu'il soit.
+  // Renvoie true s'il faut refermer un `ctx.save()`.
+  choregraphie(ctx, e, t) {
+    if (!e._disco) return false;
+    const s = e.size, d = e._danceT || 0;
+    ctx.save();
+    ctx.translate(Math.sin(d * 9) * s * 0.35, -Math.abs(Math.sin(d * 12)) * s * 0.55);
+    ctx.rotate(Math.sin(d * 9) * 0.3);
+    // Le défilé de couleurs : une rotation de teinte, qui marche sur un aplat
+    // procédural comme sur un dessin à dix couleurs. Repeindre chaque forme
+    // écraserait un dessin fait main.
+    ctx.filter = `hue-rotate(${Math.round((t * 300) % 360)}deg) saturate(1.5)`;
+    return true;
+  },
+
   draw(ctx, e, t) {
+    const chore = this.choregraphie(ctx, e, t);
     // Un sprite déclaré prime sur la silhouette procédurale ; s'il n'est pas
     // encore chargé, `drawSprite` retombe tout seul sur le rendu par défaut.
-    if (e.def.sprite) { this.drawSprite(ctx, e, t); if (e._chew > 0) this.drawMouthful(ctx, e, t); return; }
+    if (e.def.sprite) {
+      this.drawSprite(ctx, e, t);
+      if (e._chew > 0) this.drawMouthful(ctx, e, t);
+      if (chore) ctx.restore();
+      return;
+    }
     switch (e.def.render) {
       case 'jelly': this.drawJelly(ctx, e, t); break;
       case 'crab': this.drawCrab(ctx, e, t); break;
@@ -1526,5 +1557,6 @@ const FishBody = {
       default: this.drawFish(ctx, e, t);
     }
     if (e._chew > 0) this.drawMouthful(ctx, e, t);
+    if (chore) ctx.restore();
   },
 };

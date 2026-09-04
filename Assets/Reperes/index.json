@@ -2,151 +2,181 @@
 "anemone": {
 "h": 157,
 "rang": 13,
+"retourne": false,
 "w": 176
 },
 "anguille": {
 "h": 112,
 "rang": 29,
+"retourne": true,
 "w": 176
 },
 "bulle_fofolle": {
 "h": 106,
 "rang": 1,
+"retourne": true,
 "w": 158
 },
 "cachalot": {
 "h": 101,
 "rang": 27,
+"retourne": true,
 "w": 196
 },
 "calamar": {
 "h": 150,
 "rang": 22,
+"retourne": true,
 "w": 173
 },
 "calamar_geant": {
 "h": 148,
 "rang": 23,
+"retourne": true,
 "w": 186
 },
 "clown": {
 "h": 112,
 "rang": 7,
+"retourne": true,
 "w": 155
 },
 "confetti": {
 "h": 130,
 "rang": 5,
+"retourne": false,
 "w": 160
 },
 "coquillage": {
 "h": 150,
 "rang": 11,
+"retourne": false,
 "w": 174
 },
 "crabe": {
 "h": 160,
 "rang": 26,
+"retourne": false,
 "w": 183
 },
 "crevette": {
 "h": 144,
 "rang": 21,
+"retourne": true,
 "w": 162
 },
 "dauphin": {
 "h": 147,
 "rang": 10,
+"retourne": true,
 "w": 179
 },
 "etoile": {
 "h": 160,
 "rang": 12,
+"retourne": false,
 "w": 192
 },
 "gros_dodo": {
 "h": 146,
 "rang": 28,
+"retourne": true,
 "w": 178
 },
 "hippocampe": {
 "h": 176,
 "rang": 8,
+"retourne": true,
 "w": 110
 },
 "lanterne": {
 "h": 146,
 "rang": 20,
+"retourne": true,
 "w": 186
 },
 "meduse": {
 "h": 165,
 "rang": 14,
+"retourne": false,
 "w": 144
 },
 "merou": {
 "h": 122,
 "rang": 30,
+"retourne": true,
 "w": 178
 },
 "moustachu": {
 "h": 135,
 "rang": 3,
+"retourne": false,
 "w": 161
 },
 "murene": {
 "h": 152,
 "rang": 16,
+"retourne": false,
 "w": 184
 },
 "orque": {
 "h": 143,
 "rang": 19,
+"retourne": false,
 "w": 164
 },
 "pelican": {
 "h": 147,
 "rang": 4,
+"retourne": false,
 "w": 182
 },
 "perroquet": {
 "h": 128,
 "rang": 9,
+"retourne": true,
 "w": 185
 },
 "poisson_lune": {
 "h": 190,
 "rang": 18,
+"retourne": true,
 "w": 146
 },
 "poisson_tapis": {
 "h": 105,
 "rang": 24,
+"retourne": true,
 "w": 192
 },
 "poulpe": {
 "h": 146,
 "rang": 25,
+"retourne": false,
 "w": 175
 },
 "raie": {
 "h": 170,
 "rang": 17,
+"retourne": false,
 "w": 177
 },
 "requin": {
 "h": 125,
 "rang": 15,
+"retourne": true,
 "w": 194
 },
 "thon": {
 "h": 121,
 "rang": 6,
+"retourne": true,
 "w": 178
 },
 "volant": {
 "h": 146,
 "rang": 2,
+"retourne": false,
 "w": 166
 }
 }

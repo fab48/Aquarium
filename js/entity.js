@@ -442,7 +442,10 @@ class Entity {
     if (def.lure) this.pecheALaLampe(dt);
 
     // Chasse (prédateurs) / charognards
-    if (def.prey && !def.lure && this.hunger > 0.45 && this.state !== 'hunt') {
+    if (this._traverse > 0) this._traverse -= dt;
+    // Il ne rechasse pas tant qu'il n'a pas traversé (cf. Ecosystem.eat).
+    if (def.prey && !def.lure && this.hunger > 0.45 && this.state !== 'hunt'
+        && !(this._traverse > 0)) {
       const prey = Ecosystem.nearestPreyFor(this);
       if (prey) {
         this.state = 'hunt'; this.target = prey; this.stateTimer = 8;
@@ -453,9 +456,18 @@ class Entity {
     }
     if (this.state === 'hunt') {
       const p = this.target;
+      // ON NE MANGE QUE CE QU'ON A À SON MENU. L'état `hunt` sert aussi à
+      // FONCER sur quelqu'un sans vouloir le manger — le Poisson Police se rue
+      // sur les pétomanes pour les gronder, et il les avalait (6 poissons-clowns
+      // en 3 min). Un prédateur ne dévore que ses proies déclarées.
+      const comestible = p && def.prey && def.prey.includes(p.speciesId);
       // Le filtreur avale tout ce qui entre dans sa bouche : rayon large
       const reach = (this.size + p.size) ** 2 * (def.filterFeeder ? 2.2 : 0.6);
       if (!p || p.dead || this.stateTimer <= 0) { this.state = 'wander'; this.target = null; }
+      else if (!comestible) {
+        // Il l'a rejoint, mais il n'en veut pas : il le lâche.
+        if (U.dist2(this.x, this.y, p.x, p.y) < reach) { this.state = 'wander'; this.target = null; }
+      }
       else if (U.dist2(this.x, this.y, p.x, p.y) < reach) {
         // Fausse charge (Orque Blagueuse) : dévie au dernier moment, jamais de vraie prise
         if (def.trickster && Math.random() < 0.33) {

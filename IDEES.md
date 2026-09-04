@@ -4,8 +4,9 @@ Toutes les idées rassemblées et dédoublonnées : les propositions des enfants
 liste de souhaits d'espèces, les gags dans l'esprit parc à thème, la couche
 économique.
 
-**État au 4 septembre 2026** : le §1 est **fait** — 21 des 25 espèces manquantes
-sont codées et équilibrées, le roster passe de 27 à **51**. Le reste du document
+**État au 5 septembre 2026** : le §1 est **fait** — 21 des 25 espèces manquantes
+sont codées et équilibrées, le roster passe de 27 à **51** — la liste complète
+et le détail de chacune sont dans **`FICHES.md`**, qui fait autorité. Le reste du document
 (§2 à §5) n'est pas codé. `FICHES.md` décrit chaque espèce du roster une par une.
 
 | Section | Contenu |

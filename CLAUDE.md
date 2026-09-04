@@ -2,8 +2,9 @@
 
 Écosystème aquatique scrollable, contemplatif et comique. Le design complet est
 dans `aquarium_vivant_game_design.docx` (chaîne alimentaire, scroll bi-axial,
-cycle de vie, nourriture favorite). Le roster en compte aujourd'hui **27**, le
-GDD en décrivait 24.
+cycle de vie, nourriture favorite). Le roster en compte aujourd'hui **51**, le
+GDD en décrivait 24 et la planche de design **30** (`Assets/Concepts/Design
+Final.png`, découpée en repères par `decoupe_planche.py`).
 
 ## Stack
 
@@ -46,7 +47,8 @@ qu'elle bougeait.
 
 - `config.js` — constantes monde, zones écologiques, types de nourriture. 1 m = 40 px, surface à y=300.
 - `utils.js` — helpers math/couleur (`U`).
-- `species.js` — **espèces 100 % data-driven**. Chaque fiche a un `name` rigolo **contenant la vraie espèce** ("Baleine Gros Dodo", "Poisson Confetti") et un `realName` affiché en sous-titre de la fiche d'identité. Ajouter une espèce = ajouter une entrée `SPECIES` (mouvement, bande de profondeur, proies, nourriture favorite, silhouette). **Roster complet : 51 espèces.** Chaque fiche porte aussi une **`phrase`** et un **faux nom `latin`**, affichés uniquement dans la fiche d'identité (bloc `FICHES` en fin de fichier, séparé pour que les données de simulation restent lisibles). Flags génériques documentés en tête du fichier (`refuge`, `anchorToRefuge`, `ambush`, `lure`, `ink`, `aerial`, `jumps`, `stealthy`, `trickster`, `nocturnal`, `sizeVar`, `spanRatio`, `offshore`, `piquant`, `gonflable`, `snatch`, `shock`, `pouch`, `intouchable`, `perceBallon`, `plongeur`, `eatsPoop`, `gag(e,dt,t)`).
+- `species.js` — **espèces 100 % data-driven**. Chaque fiche a un `name` rigolo **contenant la vraie espèce** ("Baleine Gros Dodo", "Poisson Confetti") et un `realName` affiché en sous-titre de la fiche d'identité. Ajouter une espèce = ajouter une entrée `SPECIES` (mouvement, bande de profondeur, proies, nourriture favorite, silhouette). **Roster complet : 51 espèces** — la liste et le détail de chacune sont dans
+**[FICHES.md](FICHES.md)**, qui fait autorité. Chaque fiche porte aussi une **`phrase`** et un **faux nom `latin`**, affichés uniquement dans la fiche d'identité (bloc `FICHES` en fin de fichier, séparé pour que les données de simulation restent lisibles). Flags génériques documentés en tête du fichier (`refuge`, `anchorToRefuge`, `ambush`, `lure`, `ink`, `aerial`, `jumps`, `stealthy`, `trickster`, `nocturnal`, `sizeVar`, `spanRatio`, `offshore`, `piquant`, `gonflable`, `snatch`, `shock`, `pouch`, `intouchable`, `perceBallon`, `plongeur`, `eatsPoop`, `gag(e,dt,t)`).
 - `world.js` — triangle de profondeur en grille "profondeur max par colonne" (reco GDD §14), zones, fond sableux.
 - `camera.js` — scroll bi-axial borné par le triangle (impossible d'atteindre les abysses près de la plage).
 - `particles.js` — socle feedback réutilisable : splash, nuage de sable, bulles, sillage, **bulles d'action comiques** (`Particles.comic/hearts/stars`).
@@ -162,6 +164,29 @@ Piège trouvé en les branchant : **un oiseau ne peut pas brouter**. `planktonAt
 renvoie 0 au-dessus de la ligne d'eau, or un aérien y passe sa vie — le Pélican
 mourait de faim malgré son `grazes` (3 morts en 6 min). Les aériens broutent
 donc la **surface**, pas leur propre position.
+
+### La prédation se règle par le NOMBRE, pas par la difficulté
+
+Le banc de Confetti se faisait massacrer — 34 prises par les seuls thons en
+3 min. Trois leviers essayés, dans l'ordre d'efficacité réelle :
+
+1. **Le peuplement initial**, de loin le plus gros. `spawnGroups(id, n)` crée
+   `n × groupSize` individus **sans regarder `popCap`** : on démarrait à 23 thons
+   pour un plafond de 12, soit trois minutes de massacre avant que la population
+   redescende — et c'est précisément ce que le joueur voit en arrivant.
+2. **Le plafond du prédateur** (20 → 12 pour le Thon).
+3. **Le `missChance`**, le plus faible des trois : passer de 0 à 0,35 n'a retiré
+   que 14 % des prises.
+
+Deux mécaniques génériques en sont sorties :
+
+- **La traversée** — après une prise, le chasseur poursuit sur sa lancée et
+  ressort de l'autre côté du banc avant de rechasser (`_traverse`, 4 à 9 s).
+  C'est ce que fait un vrai prédateur de banc, et ça empêche de rester planté
+  dedans à enchaîner les bouchées.
+- **On ne mange que ses proies déclarées.** L'état `hunt` sert aussi à FONCER
+  sur quelqu'un sans vouloir le manger : le Poisson Police se ruait sur les
+  pétomanes pour les gronder… et les avalait (6 poissons-clowns en 3 min).
 
 ### Trop-plein : caca, malaise, explosion
 
@@ -579,6 +604,11 @@ sable 12 % → 4,3 %.
 - `svgexport.js` / `svgimport.js` — les deux sens du pont : rejouer une silhouette procédurale dans un faux contexte 2D qui enregistre au lieu de peindre pour la sortir en SVG, et échantillonner un dessin vectoriel pour le faire entrer.
 - `ANCHOR_TOOL.md` — spécification du « poseur d'ancrages », l'outil construit à part (Artifact autonome, hors dépôt) dont l'atelier reprend les capacités.
 - `atelier.html` — **l'outil unique** (page à part, servie par le même serveur de dev) : importer, poser les ancres et les nageoires, calibrer le visage, prévisualiser avec le VRAI rendu du jeu, et **enregistrer directement dans `Assets/`**. Une espèce s'active par le manifeste `Assets/sprites.json`, sans toucher au code. **[SPRITES.md](SPRITES.md) est le contrat complet.**
+- `decoupe_planche.py` — découpe `Assets/Concepts/Design Final.png` (les 30
+  créatures dessinées) en **un repère par espèce** dans `Assets/Reperes/`.
+  L'atelier les pose tout seuls en calque de repérage. Les 17 vignettes qui
+  regardent à gauche sont **retournées à la découpe** : le jeu dessine tout
+  vers la droite, une planche à l'envers est un patron à l'envers.
 - `background.js` — dégradé d'eau par profondeur, god rays, crêtes d'arrière-plan, rochers, végétation, cheminées volcaniques, plancton, jour/nuit.
 
 ### Décor posé au sol
@@ -664,8 +694,8 @@ idées des enfants, la liste de souhaits et les trous de la chaîne alimentaire 
 sont fusionnés et dédoublonnés), les gags dans l'esprit **parc à thème** (§2),
 les corrections sur l'existant (§3), la canne à pêche (§4), la couche
 **économique** — acheter des poissons, être payé aux naissances, sanctionné aux
-extinctions et aux espèces envahissantes (§5), le **roster des 27 espèces
-codées** avec sa répartition par zone et par niveau trophique (§6), et les
+extinctions et aux espèces envahissantes (§5), le **roster** (§6, tableau des 27 espèces
+d'origine) avec sa répartition par zone et par niveau trophique, et les
 contraintes à respecter en ajoutant une espèce (§7).
 
 **[FICHES.md](FICHES.md)** en est le pendant espèce par espèce : une fiche par

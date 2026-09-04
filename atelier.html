@@ -313,8 +313,10 @@ function rail() {
     if (aSprite) nSprite++;
     d.innerHTML = `<span class="pastille ${brouillons[id] ? 'brouillon' : (aSprite ? 'sprite' : '')}"></span>`
                 + `<span class="nom">${SPECIES[id].name}</span>`
+                + (aRepere(id) ? `<span class="fic" title="dessin de référence">🎨</span>` : '')
                 + (aSprite ? `<span class="fic">${manifeste[id]}</span>` : '');
-    d.title = aSprite ? `dessin : ${manifeste[id]}.json` : 'silhouette procédurale';
+    d.title = (aSprite ? `dessin : ${manifeste[id]}.json` : 'silhouette procédurale')
+            + (aRepere(id) ? ' · planche du design disponible' : '');
     d.onclick = () => { fichierOuvert = null; choisir(id); };
     l.appendChild(d);
   }
@@ -337,7 +339,8 @@ function rail() {
   }
 
   $('#compte').textContent =
-    `${nSprite} dessin${nSprite > 1 ? 's' : ''} actif${nSprite > 1 ? 's' : ''} · `
+    `${Object.keys(SPECIES).length} espèces · ${nSprite} dessin${nSprite > 1 ? 's' : ''} actif${nSprite > 1 ? 's' : ''} · `
+    + `${Object.keys(REPERES).length} planches · `
     + `${fichiers.length} fichier${fichiers.length > 1 ? 's' : ''} dans Assets/`;
 }
 
@@ -365,18 +368,78 @@ function ouvrirFichier(f) {
 // un rendu généré ailleurs. Elle est embarquée dans le document (comme le
 // `sourceRaw` de l'outil d'ancrages) : le fichier reste autonome, on peut
 // reprendre le travail sans avoir à retrouver l'image d'origine.
+//
+// Deux provenances, un seul objet `doc.fond` :
+//   `data` — une image choisie au disque, EMBARQUÉE dans le document ;
+//   `src`  — une image du dépôt (la planche découpée, ci-dessous), référencée
+//            par son chemin. 30 vignettes embarquées, ce serait 1 Mo de base64
+//            recopié dans les documents ; le chemin ne coûte rien et suit les
+//            mises à jour de la planche.
+// `x`, `y` et `k` la placent dans le repère du DESSIN : une vignette de 155 px
+// n'est jamais à l'échelle d'un document de 410, il faut pouvoir la caler.
 function chargerFond(dataURL, w, h) {
-  doc.fond = { data: dataURL, w, h, opacite: doc.fond ? doc.fond.opacite : 0.45 };
+  doc.fond = Object.assign({ x: 0, y: 0, k: 1, opacite: 0.45 }, doc.fond || {},
+                           { data: dataURL, src: null, w, h });
   imgFond = new Image();
   imgFond.onload = () => { cadrer(); };
   imgFond.src = dataURL;
 }
 function reprendreFond() {
   imgFond = null;
-  if (!doc || !doc.fond) return;
+  // Sans document ouvert, on montre quand même la planche de l'espèce : c'est
+  // ce qu'on regarde avant de décider de dessiner.
+  const src = (doc && doc.fond) ? (doc.fond.data || doc.fond.src)
+            : (aRepere(espece) ? `Assets/Reperes/${espece}.png` : null);
+  if (!src) return;
   imgFond = new Image();
   imgFond.onload = () => dessiner();
-  imgFond.src = doc.fond.data;
+  imgFond.src = src;
+}
+
+// --- La planche des 30 créatures ---------------------------------------------
+// `Assets/Reperes/<espèce>.png` : le dessin de référence, détouré, une image par
+// espèce. L'index dit qui en a une — sans lui il faudrait sonder 51 URL au
+// chargement pour afficher une pastille dans le rail.
+function aRepere(id) { return !!REPERES[id]; }
+
+// Cale la vignette sur le dessin en cours : même largeur, même centre. C'est le
+// seul placement qui serve à quelque chose — on redessine PAR-DESSUS.
+function ajusterFond() {
+  if (!doc || !doc.fond) return;
+  const b = bornesDoc();
+  if (!b) { doc.fond.x = 0; doc.fond.y = 0; doc.fond.k = 1; return; }
+  doc.fond.k = (b.x1 - b.x0) / doc.fond.w;
+  doc.fond.x = b.x0;
+  doc.fond.y = (b.y0 + b.y1) / 2 - doc.fond.h * doc.fond.k / 2;
+}
+
+// Boîte du dessin, en unités du document. `bornes()` travaille sur le sprite
+// préparé par le jeu, qui n'existe que quand il y a des formes.
+function bornesDoc() {
+  if (!doc || !doc.shapes.length) return null;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const s of doc.shapes) for (const p of s.points) {
+    if (p[0] < x0) x0 = p[0];
+    if (p[0] > x1) x1 = p[0];
+    if (p[1] < y0) y0 = p[1];
+    if (p[1] > y1) y1 = p[1];
+  }
+  return isFinite(x0) ? { x0, y0, x1, y1 } : null;
+}
+
+function poserRepere(id, silencieux) {
+  const r = REPERES[id];
+  if (!doc || !r) return false;
+  doc.fond = { src: `Assets/Reperes/${id}.png`, w: r.w, h: r.h,
+               x: 0, y: 0, k: 1, planche: id,
+               opacite: doc.fond ? doc.fond.opacite : 0.45 };
+  // Document vide : la surface de travail prend la taille de la vignette, on
+  // dessine DANS son repère. Document existant : on cale la vignette dessus.
+  if (!doc.shapes.length) { doc.naturalW = r.w; doc.naturalH = r.h; }
+  else ajusterFond();
+  reprendreFond();
+  if (!silencieux) dire(`planche posée en repérage (${r.w}×${r.h})`, 'ok');
+  return true;
 }
 
 function inventaire() {
@@ -400,6 +463,9 @@ function choisir(id) {
 
 function apres() {
   trace = null; coches.clear();
+  // La planche se pose TOUTE SEULE : c'est le dessin de référence de l'espèce,
+  // on ne travaille jamais sans. Elle ne remplace pas une image déjà choisie.
+  if (doc && !doc.fond && aRepere(espece)) poserRepere(espece, true);
   reprendreFond(); cadrer(); panneau(); rail();
   dire(doc ? '' : 'Aucun dessin : importe-en un, ou pars de la silhouette du jeu.');
 }
@@ -473,6 +539,24 @@ function cadrer() {
 }
 
 const versEcran = p => [p[0] * vueT.k + vueT.x, p[1] * vueT.k + vueT.y];
+
+// Le calque de repérage. Il se pose SOUS le dessin pour redessiner par-dessus,
+// et AU-DESSUS pour comparer : sur une espèce reprise de sa silhouette, le
+// corps opaque recouvre entièrement la référence et on ne compare plus rien.
+function tracerFond() {
+  if (!doc || !doc.fond || !imgFond || !imgFond.complete) return;
+  ctx.save();
+  ctx.globalAlpha = doc.fond.opacite;
+  const k = doc.fond.k || 1;
+  const [x, y] = versEcran([doc.fond.x || 0, doc.fond.y || 0]);
+  const lw = doc.fond.w * k * vueT.k, lh = doc.fond.h * k * vueT.k;
+  // Les planches sont déjà retournées vers la droite à la découpe ; ce miroir
+  // sert aux créatures vues de face, dont le sens ne veut rien dire, et aux
+  // images importées d'ailleurs.
+  if (doc.fond.miroir) { ctx.translate(x + lw, y); ctx.scale(-1, 1); ctx.drawImage(imgFond, 0, 0, lw, lh); }
+  else ctx.drawImage(imgFond, x, y, lw, lh);
+  ctx.restore();
+}
 const versDoc = (sx, sy) => [(sx - vueT.x) / vueT.k, (sy - vueT.y) / vueT.k];
 
 function dessiner() {
@@ -483,20 +567,26 @@ function dessiner() {
   ctx.fillStyle = '#dfeaf2'; ctx.fillRect(0, 0, W, H);
 
   if (!doc) {
+    // Pas de dessin, mais une planche : autant la montrer. C'est elle qu'on
+    // vient regarder avant de cliquer sur « Nouveau dessin ».
+    let bas = H / 2;
+    if (imgFond && imgFond.complete && aRepere(espece)) {
+      const r = REPERES[espece];
+      const k = Math.min(W * 0.55 / r.w, H * 0.62 / r.h);
+      ctx.save(); ctx.globalAlpha = 0.85;
+      ctx.drawImage(imgFond, W / 2 - r.w * k / 2, H / 2 - r.h * k / 2 - 14,
+                    r.w * k, r.h * k);
+      ctx.restore();
+      bas = H / 2 + r.h * k / 2 + 8;
+    }
     ctx.fillStyle = '#8ba2b4'; ctx.font = '15px system-ui'; ctx.textAlign = 'center';
-    ctx.fillText(espece ? 'Pas encore de dessin pour cette espèce.' : 'Choisis une espèce à gauche.', W / 2, H / 2);
+    ctx.fillText(espece ? 'Pas encore de dessin pour cette espèce.' : 'Choisis une espèce à gauche.', W / 2, bas);
     ctx.textAlign = 'left';
     return;
   }
 
-  // Calque de repérage, tout au fond
-  if (doc.fond && imgFond && imgFond.complete) {
-    ctx.save();
-    ctx.globalAlpha = doc.fond.opacite;
-    const [x, y] = versEcran([0, 0]);
-    ctx.drawImage(imgFond, x, y, doc.fond.w * vueT.k, doc.fond.h * vueT.k);
-    ctx.restore();
-  }
+  // Calque de repérage, sous le dessin — ou par-dessus, voir `dessus`.
+  if (!(doc.fond && doc.fond.dessus)) tracerFond();
 
   const sp = brancher();
   const def = defEspece();
@@ -527,6 +617,8 @@ function dessiner() {
   ctx.scale(vueT.k / kJeu, vueT.k / kJeu);
   try { FishBody.draw(ctx, poser('idle', t), t); } catch (err) { /* dessin incomplet */ }
   ctx.restore();
+
+  if (doc.fond && doc.fond.dessus) tracerFond();
   debrancher();
 
   poignees(sp);
@@ -950,12 +1042,33 @@ function panneau() {
   }
 
   if (doc && doc.fond) {
+    const f = doc.fond;
     h += `<h2>Calque de repérage</h2>
-      <label>Opacité <span class="val" id="vOpac">${doc.fond.opacite.toFixed(2)}</span></label>
-      <input type="range" id="sOpac" min="0" max="1" step="0.05" value="${doc.fond.opacite}">
-      <div class="rangee"><button id="bSansFond">Retirer l'image</button></div>
-      <p class="aide">Elle est embarquée dans le fichier, qui reste donc autonome —
-        mais elle l'alourdit : à retirer avant l'enregistrement final.</p>`;
+      <p class="aide">${f.planche
+        ? `planche du design — <code>Assets/Reperes/${f.planche}.png</code>`
+        : 'image importée, embarquée dans le fichier'} (${f.w}×${f.h})</p>
+      <label>Opacité <span class="val" id="vOpac">${f.opacite.toFixed(2)}</span></label>
+      <input type="range" id="sOpac" min="0" max="1" step="0.05" value="${f.opacite}">
+      <label>Échelle <span class="val" id="vFk">${(f.k || 1).toFixed(2)}</span></label>
+      <input type="range" id="sFk" min="0.1" max="4" step="0.01" value="${f.k || 1}">
+      <div class="rangee">
+        <label>x <input type="number" id="nFx" value="${Math.round(f.x || 0)}" step="1"></label>
+        <label>y <input type="number" id="nFy" value="${Math.round(f.y || 0)}" step="1"></label>
+      </div>
+      <div class="rangee">
+        <button id="bCaler" title="Même largeur et même centre que le dessin">Caler sur le dessin</button>
+        <button id="bMiroirFond" title="Le dessin du jeu regarde toujours vers la droite">↔ Retourner</button>
+      </div>
+      <div class="rangee">
+        <button id="bDessusFond" title="Sous le dessin pour calquer, dessus pour comparer">${doc.fond.dessus ? 'Passer dessous' : 'Passer dessus'}</button>
+        <button id="bSansFond">Retirer l'image</button>
+      </div>
+      <p class="aide">${f.planche
+        ? 'La planche est référencée par son chemin : elle n\'alourdit pas le fichier.'
+        : 'Elle est embarquée dans le fichier, qui reste donc autonome — mais elle l\'alourdit : à retirer avant l\'enregistrement final.'}</p>`;
+  } else if (doc && aRepere(espece)) {
+    h += `<h2>Calque de repérage</h2>
+      <div class="rangee"><button id="bPlanche">Poser la planche du design</button></div>`;
   }
 
   h += `<h2>Aperçu</h2>
@@ -1133,7 +1246,14 @@ function cabler() {
     marquer();
   });
   on('#sOpac', 'input', e => { doc.fond.opacite = +e.target.value; $('#vOpac').textContent = (+e.target.value).toFixed(2); dessiner(); });
-  on('#bSansFond', 'click', () => { instantane(); delete doc.fond; imgFond = null; marquer(); panneau(); });
+  on('#sFk', 'input', e => { doc.fond.k = +e.target.value; $('#vFk').textContent = (+e.target.value).toFixed(2); dessiner(); });
+  on('#nFx', 'input', e => { doc.fond.x = +e.target.value || 0; dessiner(); });
+  on('#nFy', 'input', e => { doc.fond.y = +e.target.value || 0; dessiner(); });
+  on('#bCaler', 'click', () => { instantane(); ajusterFond(); marquer(); panneau(); dessiner(); });
+  on('#bMiroirFond', 'click', () => { instantane(); doc.fond.miroir = !doc.fond.miroir; marquer(); dessiner(); });
+  on('#bDessusFond', 'click', () => { doc.fond.dessus = !doc.fond.dessus; panneau(); dessiner(); });
+  on('#bPlanche', 'click', () => { instantane(); poserRepere(espece); marquer(); panneau(); dessiner(); });
+  on('#bSansFond', 'click', () => { instantane(); delete doc.fond; reprendreFond(); marquer(); panneau(); });
   on('#bAnime', 'click', () => { anime = !anime; panneau(); });
   on('#bRecadrer', 'click', cadrer);
 }
@@ -1543,8 +1663,12 @@ $('#btnNeuf').onclick = () => {
   outil = 'dessiner';
   document.querySelectorAll('#barre button[data-outil]').forEach(b =>
     b.classList.toggle('on', b.dataset.outil === 'dessiner'));
+  // La planche de l'espèce sert de patron : document vide, elle prend toute la
+  // surface de travail et on trace directement dessus.
+  const avecPlanche = poserRepere(espece, true);
   marquer(); cadrer(); panneau();
-  dire('document vide — pose les sommets de ta première forme', 'ok');
+  dire(avecPlanche ? 'document vide, planche en repérage — trace par-dessus'
+                   : 'document vide — pose les sommets de ta première forme', 'ok');
 };
 
 $('#btnFond').onclick = () => {
@@ -1579,6 +1703,7 @@ $('#btnSilhouette').onclick = () => {
     doc = SVGImport.depuisEspece(espece);
     doc.nom = espece;
     formeSel = 0; finSel = 0;
+    if (!doc.fond && aRepere(espece)) poserRepere(espece, true);
     marquer(); cadrer(); panneau();
     dire(`silhouette reprise : ${doc.shapes.length} formes, ${doc.shapes.reduce((n, s) => n + s.points.length, 0)} points`, 'ok');
   } catch (err) { dire('échec : ' + err.message, 'ko'); }
@@ -1610,6 +1735,7 @@ function ouvrir(contenu, nom, type) {
           typeof contenu === 'string' ? JSON.parse(contenu) : contenu, { nom }));
     doc.espece = espece; doc.nom = nom;
     formeSel = 0; finSel = 0; trace = null;
+    if (!doc.fond && aRepere(espece)) poserRepere(espece, true);
     reprendreFond();
     marquer(); cadrer(); panneau();
     dire(`${nom} importé : ${doc.shapes.length} formes, `
@@ -1624,6 +1750,10 @@ window.Atelier = { ouvrir, choisir, get doc() { return doc; } };
 function aEnvoyer() {
   const d = JSON.parse(JSON.stringify(doc));
   delete d.espece; delete d.nom;
+  // La planche du design ne s'enregistre pas : elle est reposée toute seule à
+  // l'ouverture, et elle appartient au dépôt, pas au dessin. Une image importée
+  // au disque, elle, reste embarquée — sans elle le document n'est plus repris.
+  if (d.fond && d.fond.planche) delete d.fond;
   // Arrondi : un dessin n'a pas besoin de quinze décimales, et le fichier
   // triple de taille pour rien.
   const a = v => Math.round(v * 100) / 100;
@@ -1714,8 +1844,14 @@ addEventListener('resize', () => { cadrer(); });
 
 function boucle() { if (anime) { dessiner(); } bandeau(); requestAnimationFrame(boucle); }
 
-fetch('Assets/sprites.json').then(r => (r.ok ? r.json() : {})).catch(() => ({}))
-  .then(m => {
+// L'index des repères d'abord : le rail affiche une pastille par espèce qui a
+// son dessin dans la planche, et `choisir()` la pose aussitôt.
+Promise.all([
+  fetch('Assets/sprites.json').then(r => (r.ok ? r.json() : {})).catch(() => ({})),
+  fetch('Assets/Reperes/index.json').then(r => (r.ok ? r.json() : {})).catch(() => ({})),
+])
+  .then(([m, rep]) => {
+    REPERES = rep || {};
     manifeste = m || {};
     // Les sprites déclarés en dur dans species.js comptent aussi.
     for (const id in SPECIES) if (SPECIES[id].sprite && !(id in manifeste)) manifeste[id] = SPECIES[id].sprite;

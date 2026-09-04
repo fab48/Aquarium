@@ -79,10 +79,13 @@ const SPECIES = {
     name: 'Thon Speedy', realName: 'Thon', trophic: 3, movement: 'wideband',
     nursery: 'shallow',
     depthBand: [150, 900], size: 26, speed: 130, sprintSpeed: 420,
-    schooling: false, groupSize: [3, 4], popCap: 20,   // chassé par le Requin ET l'Orque : il lui faut du stock
+    // Plafond ramené de 20 à 12 : c'était le prédateur le plus nombreux du jeu,
+    // et le banc de Confetti — sa proie UNIQUE — y passait à 12 têtes/min.
+    schooling: false, groupSize: [3, 4], popCap: 12,
     // Confetti seul : la Méduse (vitesse 12) ne peut pas échapper à un sprint à
     // 420 et se faisait exterminer. Sa régulation revient au Poisson-lune (GDD §13).
-    prey: ['confetti'], favoriteFood: 'micro_crevettes', eatsFood: true,
+    prey: ['confetti'], missChance: 0.35,   // il traverse le banc et ressort bredouille une fois sur trois
+    favoriteFood: 'micro_crevettes', eatsFood: true,
     colors: ['#4a7fb5'],
     bodyRatio: 0.4, tail: 'lunate',
     lifespan: [280, 420],
@@ -101,7 +104,7 @@ const SPECIES = {
     // qu'à taille triplée (138), où le rayon de prise du requin vidait ses
     // proies jusqu'à leur plancher de report avant qu'il ne s'affame lui-même.
     schooling: false, groupSize: [1, 2], popCap: 6,
-    prey: ['thon', 'perroquet'], missChance: 0.5,   // rate souvent (gag signature)
+    prey: ['thon', 'perroquet'], missChance: 0.5, grazes: true,   // rate souvent (gag signature)
     colors: ['#8aa3b8'],
     bodyRatio: 0.42, tail: 'shark', fin: true,
     // Premier sprite de l'éditeur SVG (Assets/SharkSVG.json). Le visage commun
@@ -253,7 +256,8 @@ const SPECIES = {
     nursery: 'shallow',
     depthBand: [200, 900], size: 42, speed: 100, sprintSpeed: 260,
     schooling: false, groupSize: [2, 3], popCap: 10,
-    prey: ['confetti', 'perroquet'], favoriteFood: 'micro_crevettes', eatsFood: true,
+    // Il lâche le Perroquet, qui avait trois prédateurs et tombait de 12 à 5.
+    prey: ['confetti'], favoriteFood: 'micro_crevettes', eatsFood: true,
     colors: ['#b8c4cc'],
     // PAS de `sleeps` : le farceur ne fait pas la sieste en plein jour, c'est
     // lui qui va reveiller les DORMEURS.
@@ -463,7 +467,8 @@ const SPECIES = {
     // taille (≥ 70) le fait basculer dans les règles des colosses.
     depthBand: [1900, 3400], size: 78, speed: 46, sprintSpeed: 190,
     schooling: false, groupSize: [1, 2], popCap: 4, metabolism: 0.6, senseRange: 1800,
-    prey: ['calamar', 'poulpe'], missChance: 0.35,   // ses grands bras s'emmêlent
+    // Il lâche le Calmar Violette, chassé par trois : il garde le Poulpe.
+    prey: ['poulpe'], missChance: 0.35,   // ses grands bras s'emmêlent
     ink: true,
     colors: ['#a34a5e'],
     render: 'squid', giantSquid: true, sizeVar: 0.1, spanRatio: 1.45,
@@ -673,7 +678,8 @@ const SPECIES = {
     depthBand: [60, 700], size: 46, speed: 120, sprintSpeed: 460,
     offshore: 900,
     schooling: false, groupSize: [1, 2], popCap: 6,
-    prey: ['dorade', 'bulle_fofolle', 'maquereau'], missChance: 0.4, senseRange: 1500, grazes: true,
+    // Il lâche la Sardine : elle avait trois prédateurs et tombait de 26 à 9.
+    prey: ['dorade', 'maquereau'], missChance: 0.4, senseRange: 1500, grazes: true,
     colors: ['#3f6fa8', '#cfe4f5'],
     bodyRatio: 0.3, tail: 'lunate', sizeVar: 0.12,
     lifespan: [600, 900],

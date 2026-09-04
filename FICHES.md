@@ -76,7 +76,7 @@ la tortue.
 - **Phrase** — « Glou glou glou ! Oh, encore une bulle ! »
 - **Action** — chapelet de bulles permanent et gros glouglou joyeux. Sa phrase EST son gag.
 - **Mange** — plancton · **Favori** — Plancton doré
-- **Mangé par** — Fou Moustachu Volant, Pélican Attrape-Tout, Espadon Voilier
+- **Mangé par** — Fou Moustachu Volant, Pélican Attrape-Tout
 - T2 petit poisson · taille 13 · frayère **haut-fond** · plafond 36, plancher 13 · **frai éclair**
 
 ---
@@ -86,14 +86,14 @@ la tortue.
 ### Espadon Voilier — *Voilier / espadon* — *Istiophorus fiouuus*
 - **Phrase** — « Vous avez vu passer quelqu’un ? »
 - **Action** — il charge en ligne droite et siffle en passant.
-- **Mange** — Dorade Dorée, Sardine Bulle-fofolle, Maquereau Métronome · **Favori** — —
+- **Mange** — Dorade Dorée, Maquereau Métronome · **Favori** — —
 - **Mangé par** — personne
 - T4 grand prédateur · taille 46 · frayère **haut-fond** · plafond 6, plancher 4
 
 ### Dauphin Farceur — *Dauphin* — *Delphinus blagueurus*
 - **Phrase** — « BOUH ! …hihihi ! »
 - **Action** — en trois temps : approche discrète, jaillissement « BOUH ! », et il se plie de rire en tournant sur lui-même.
-- **Mange** — Poisson Confetti, Poisson-perroquet Pétomane · **Favori** — Micro-crevettes
+- **Mange** — Poisson Confetti · **Favori** — Micro-crevettes
 - **Mangé par** — personne
 - T3 prédateur moyen · taille 42 · frayère **haut-fond** · plafond 10, plancher 4
 
@@ -102,13 +102,13 @@ la tortue.
 - **Action** — il klaxonne un « VROUUUM » en passant à fond. Le seul texte justifié du jeu : c'est un bruit, pas une réplique.
 - **Mange** — Poisson Confetti · **Favori** — Micro-crevettes
 - **Mangé par** — Requin Dents-Molles, Orque Echo
-- T3 prédateur moyen · taille 26 · frayère **haut-fond** · plafond 20, plancher 7
+- T3 prédateur moyen · taille 26 · frayère **haut-fond** · plafond 12, plancher 4
 
 ### Poisson-perroquet Pétomane — *Poisson-perroquet* — *Scarus petomanus*
 - **Phrase** — « C’est pas moi ! »
 - **Action** — en quatre temps : il se fige gêné, se tortille, **détonation** par la queue avec propulsion, et les voisins verdissent. Le gag le plus abouti du jeu.
 - **Mange** — plancton · **Favori** — Plancton doré
-- **Mangé par** — Requin Dents-Molles, Dauphin Farceur, Murène du Récif
+- **Mangé par** — Requin Dents-Molles, Murène du Récif
 - T2 petit poisson · taille 20 · frayère **récif** · plafond 20, plancher 7
 
 ### Corail Viva — *Corail branchu* — *Acropora vivarium*
@@ -325,7 +325,7 @@ la tortue.
 ### Calamar Géant Timide — *Calmar géant (Architeuthis)* — *Architeuthis timidissimus*
 - **Phrase** — « …vous m’avez vu ? Zut. »
 - **Action** — on l'approche, il rentre ses bras, rougit et se laisse couler en espérant qu'on ne l'ait pas vu. Un géant qui fait le tout petit.
-- **Mange** — Calmar Violette, Poulpe Ninja · **Favori** — —
+- **Mange** — Poulpe Ninja · **Favori** — —
 - **Mangé par** — Cachalot Profond
 - T4 grand prédateur · taille 78 · frayère **profond** · plafond 4, plancher 2
 
@@ -368,7 +368,7 @@ la tortue.
 - **Phrase** — « Trois, deux, un… PSCHIT ! »
 - **Action** — trois, deux, un — il décolle à reculons, trop fort, et se cogne.
 - **Mange** — Crevette Guirlande, Baudroie-lanterne Allumeur · **Favori** — Micro-crevettes
-- **Mangé par** — Orque Echo, Cachalot Profond, Calamar Géant Timide
+- **Mangé par** — Orque Echo, Cachalot Profond
 - T3 prédateur moyen · taille 19 · frayère **profond** · plafond 24, plancher 8 · **frai éclair**
 
 ### Baudroie-lanterne Allumeur — *Poisson-lanterne (baudroie abyssale)* — *Melanocetus allumus*
@@ -474,13 +474,19 @@ s'accumulent et faussent tout.
 | Un crabe endormi traversait sa bande de sable toute la nuit | Le sommeil coupe la vitesse **et** l'accélération — deux fois, car la reptation court-circuite le steering |
 | Le Thon, le Mérou, le Barracuda, l'Espadon et les oiseaux mouraient de faim | Ils broutent : un prédateur à proie unique ou à proies rares n'a aucune marge |
 | Le Confetti était au menu de **cinq** prédateurs | Il sort de celui du Mérou et de la Rascasse, qui ont d'autres proies |
+| Le banc de Confetti se faisait quand même massacrer : **34 prises par les seuls thons en 3 min** | Trois leviers, dans cet ordre d'efficacité : le peuplement initial partait à **23 thons pour un plafond de 12**, le plafond lui-même descend de 20 à 12, et le Thon rate désormais une charge sur trois |
+| Le **Poisson Police mangeait les fautifs** qu'il venait gronder (6 poissons-clowns en 3 min) | L'état `hunt` sert aussi à foncer sur quelqu'un sans vouloir le manger : on ne dévore que ses **proies déclarées** |
+| Un chasseur restait planté dans le banc à enchaîner les bouchées | La **traversée** : après une prise il poursuit sur sa lancée et ressort de l'autre côté avant de rechasser |
+| Perroquet, Sardine et Calmar Violette avaient trois prédateurs chacun | Le Dauphin lâche le Perroquet, l'Espadon lâche la Sardine, le Calamar Géant lâche le Calmar |
 | L'Orque ne pouvait atteindre aucun de ses calmars | Sa bande descend de 1500 à 2400 : une proie hors bande est **inatteignable** |
 | Le Krill passait de 28 à 8 en 4 min | Longévité portée à [420, 620] — une base de chaîne à vie courte n'a le temps que d'une portée |
 
 ### État actuel
 
 - **Zéro espèce éteinte**, **zéro mort de faim** sur les simulations de contrôle.
-- ~590 entités pour 51 espèces, simulation à **6,1 ms** par frame.
+- Prédation sur le banc de Confetti : **11,7 → 9 prises/min**, et il se stabilise
+  au-dessus de son plancher (33-38 pour un plancher de 28) au lieu de tomber à 19.
+- ~600 entités pour 51 espèces, simulation à **6,1 ms** par frame.
 - Budget de bulles : **~508/min** pour une cible de 250. Ramené de 1284, mais
   encore au double. Méthode pour finir dans `CLAUDE.md`.
 
@@ -490,10 +496,22 @@ s'accumulent et faussent tout.
    inatteignable.** Il la poursuit, sa contrainte verticale le rappelle, il
    meurt de faim sans jamais manger.
 2. **Concentrer plusieurs prédateurs sur une même proie la fait s'effondrer**,
-   et tout ce qui en dépend avec elle. Trois, c'est déjà beaucoup.
+   et tout ce qui en dépend avec elle. Trois, c'est déjà beaucoup — deux est la
+   bonne valeur pour une espèce qu'on veut voir en banc.
 3. **Une base de chaîne doit vivre longtemps.** Avec une longévité de petit
    poisson, elle n'a le temps que d'une portée et s'éteint.
+
+4. **Le peuplement initial doit respecter les plafonds.** `spawnGroups(id, n)`
+   crée `n × groupSize` individus sans regarder `popCap` : on démarrait à 23
+   thons pour un plafond de 12, soit trois minutes de massacre avant que la
+   population redescende — et c'est précisément ce que le joueur voit en
+   arrivant.
 
 Et un piège de méthode : **en simulation à vide, personne ne va sur la plage.**
 C'est le curseur du joueur qui pousse. Une mesure sans interaction peut donc
 déclarer sain un système qui ne l'est pas.
+
+Corollaire vérifié : le massacre du banc près du rivage n'était **pas** dû à la
+souris. Sans aucune interaction, zéro confetti mangé à moins de 600 px du
+rivage — mais 34 avalés par les thons partout ailleurs. Quand quelque chose se
+voit à un endroit, la cause n'est pas forcément à cet endroit.

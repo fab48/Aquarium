@@ -14,10 +14,10 @@ const Ecosystem = {
     // là où la colonne d'eau est assez profonde.
     // Les anémones sont semées EN PREMIER : les espèces ancrées (clown, hippocampe)
     // et la ponte (Ecosystem.layEgg) ont besoin qu'elles existent déjà.
-    this.spawnGroups('anemone', 9);   // récifs répartis sur toute la zone claire
+    this.spawnGroups('anemone', 8);   // récifs répartis sur toute la zone claire
 
-    this.spawnGroups('coquillage', 3);
-    this.spawnGroups('etoile', 4);
+    this.spawnGroups('coquillage', 2);
+    this.spawnGroups('etoile', 3);
     this.spawnGroups('crabe', 3);
     this.spawnGroups('confetti', 2);   // 2-3 GROS bancs plutot que des poignees
     this.spawnGroups('bulle_fofolle', 4);
@@ -28,7 +28,7 @@ const Ecosystem = {
     this.spawnGroups('perroquet', 4);
     this.spawnGroups('poisson_lune', 3);
     this.spawnGroups('lanterne', 4);
-    this.spawnGroups('thon', 6);
+    this.spawnGroups('thon', 3);
     this.spawnGroups('raie', 3);
     this.spawnGroups('poulpe', 3);
     this.spawnGroups('murene', 3);   // groupes de 1, tres espacees : chacune son rocher
@@ -58,8 +58,8 @@ const Ecosystem = {
     this.spawnGroups('corail', 5);          // second refuge de ponte
     this.spawnGroups('oursin', 4);
     this.spawnGroups('nudibranche', 3);
-    this.spawnGroups('krill', 2);
-    this.spawnGroups('crevette_claire', 3);
+    this.spawnGroups('krill', 1);
+    this.spawnGroups('crevette_claire', 2);
     this.spawnGroups('maquereau', 2);
     this.spawnGroups('dorade', 2);
     this.spawnGroups('papillon', 4);
@@ -534,6 +534,14 @@ const Ecosystem = {
         o.state = 'flee'; o.target = pred; o.stateTimer = 1.4;
       }
     }
+    // LA TRAVERSÉE. Après une prise, le chasseur poursuit sur sa lancée et
+    // RESSORT DE L'AUTRE CÔTÉ du banc avant de repartir en chasse. C'est ce que
+    // fait un vrai prédateur de banc, c'est joli à regarder — et c'est surtout
+    // ce qui empêche un thon de rester planté dans le banc à enchaîner les
+    // bouchées : 34 confettis avalés en 3 min pour les seuls thons, sur un banc
+    // de 80. Le rythme se lit maintenant : charge, prise, il s'éloigne, il
+    // revient.
+    pred._traverse = U.rand(4, 9);
     pred.hunger = Math.max(0, pred.hunger - 0.45);
     pred.wellFed += 0.55;   // 2 prises suffisent : les prédateurs sont peu nombreux
     // Une proie, ça nourrit : il grossit un peu, et ça finira par ressortir.

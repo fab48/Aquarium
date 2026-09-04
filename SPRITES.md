@@ -35,8 +35,9 @@ première mise en eau.
 python dev_server.py 8642      # puis http://localhost:8642/atelier.html
 ```
 
-**Le rail de gauche** liste les 27 espèces — il lit `SPECIES`, donc toute espèce
-ajoutée au jeu y apparaît d'elle-même. Pastille verte = un dessin est actif,
+**Le rail de gauche** liste les 51 espèces — il lit `SPECIES`, donc toute espèce
+ajoutée au jeu y apparaît d'elle-même. Un 🎨 signale les 30 qui ont leur dessin
+dans la planche de design (§1 bis). Pastille verte = un dessin est actif,
 orange = brouillon non enregistré, grise = silhouette procédurale. Une seconde
 rubrique, **« dessins non rattachés »**, liste tout fichier présent dans
 `Assets/` mais lié à aucune espèce (route `GET /api/sprites`) : sans elle, un
@@ -49,15 +50,65 @@ dont il porte le nom, si elle existe.
 | Bouton | Ce qu'il fait |
 |---|---|
 | Nouveau dessin | document vide, pour dessiner de zéro |
-| Partir de la silhouette du jeu | rejoue la silhouette procédurale et la convertit en formes éditables — utilisable sur les 27 espèces, sans aucun outil externe |
+| Partir de la silhouette du jeu | rejoue la silhouette procédurale et la convertit en formes éditables — utilisable sur les 51 espèces, sans aucun outil externe |
 | Importer un SVG… | n'importe quel dessin vectoriel (Illustrator, Inkscape, le poseur d'ancrages) |
 | Importer un JSON… | un document d'atelier déjà commencé |
 
 Plus un **calque de repérage** : une image posée sous le dessin, à opacité
-réglable, pour redessiner par-dessus un rendu généré ailleurs. Elle est
-embarquée dans le document — le fichier reste autonome, on reprend le travail
-sans avoir à retrouver l'image — mais elle l'alourdit (56 ko pour un PNG de
-410×200), donc à retirer avant l'enregistrement final.
+réglable, pour redessiner par-dessus un rendu généré ailleurs. Une image choisie
+au disque est **embarquée** dans le document — le fichier reste autonome, on
+reprend le travail sans avoir à retrouver l'image — mais elle l'alourdit (56 ko
+pour un PNG de 410×200), donc à retirer avant l'enregistrement final. La planche
+du design, elle, est **référencée par son chemin** (§1 bis).
+
+---
+
+## 1 bis. La planche du design, posée toute seule
+
+`Assets/Concepts/Design Final.png` réunit les **30 créatures dessinées** du
+projet, en cinq colonnes de six, chacune avec sa légende. `decoupe_planche.py`
+en tire **une image par espèce** :
+
+```bash
+python decoupe_planche.py          # -> Assets/Reperes/<espèce>.png + index.json
+```
+
+Ce n'est pas une grille aveugle. Dans chaque case, on garde la **plus grosse
+composante connexe** et ce qui la touche : ça écarte d'un coup la légende et le
+bout de dessin de la case d'à côté, qui débordent tous les deux des lignes de la
+grille. Trois règles s'y sont ajoutées, chacune pour un cas rencontré :
+
+- **Les glyphes se retirent en premier.** La légende de l'étoile touchait un de
+  ses bras : dilatée, elle entrait dans la composante du dessin et plus aucun
+  filtre postérieur ne pouvait l'en sortir. Une lettre est petite, sombre et
+  grise — ça suffit à la reconnaître une par une, avant tout le reste.
+- **Un ventre blanc n'est pas du fond.** Le détourage part du blanc de la
+  planche ; le pélican et la baleine, presque blancs, ressortaient troués. Le
+  masque est rebouché par l'intérieur du contour.
+- **Le sens du dessin vient d'une table, pas d'une détection.** Le jeu dessine
+  tout vers la **droite** (`Entity.orientation` s'occupe du demi-tour), or 17 des
+  30 vignettes regardent à gauche : elles servaient de patron à l'envers. Lire le
+  sens sur la position de l'œil se trompait **8 fois sur 30** — un ventre blanc
+  passe pour un œil, une créature vue de face n'a pas de sens. Sur un asset figé
+  de trente images, la table (`VERS_LA_GAUCHE`) est plus sûre et se vérifie d'un
+  coup d'œil. Le retournement est **cuit dans le PNG**, pas laissé à l'outil.
+
+Dans l'atelier, la planche **se pose toute seule** : à l'ouverture d'une espèce,
+sur « Nouveau dessin », sur « Partir de la silhouette » et sur un import. Sur un
+document vide elle donne sa taille à la surface de travail (on trace dedans) ;
+sur un dessin existant elle est **calée** dessus — même largeur, même centre.
+Une espèce sans dessin l'affiche quand même en grand : c'est ce qu'on vient
+regarder avant de décider de dessiner.
+
+Le panneau la règle : opacité, échelle, x/y, « caler sur le dessin »,
+« ↔ retourner » (les créatures vues de face n'ont pas de sens) et surtout
+**« passer dessus »** — sous le dessin on calque, par-dessus on compare. Sans ce
+bouton, une espèce reprise de sa silhouette recouvre entièrement sa référence
+d'un corps opaque et il n'y a plus rien à comparer.
+
+Elle **ne s'enregistre pas** dans le document : elle appartient au dépôt, elle
+est reposée toute seule à l'ouverture, et la recopier en base64 dans trente
+fichiers coûterait 1 Mo pour rien.
 
 **Six outils**, dans la barre :
 
@@ -280,7 +331,7 @@ d'espèce reste lu : le manifeste ne fait que le compléter ou l'annuler.
    une règle mesurée : une silhouette procédurale occupe ~2,5 fois `size` en
    longueur (99 px relevés sur un requin de 40). **Cette règle suppose un poisson
    allongé** et se trompe lourdement sur tout ce qui est vertical : au relevé sur
-   les 27 espèces, l'hippocampe ressortait **83 %** trop grand et le poisson-lune
+   les 27 espèces d'alors, l'hippocampe ressortait **83 %** trop grand et le poisson-lune
    29 %. C'est à ça que sert `spriteScale`, qui rattrape **sans toucher à
    l'emprise physique** (`spanRatio`, que lisent l'anti-chevauchement des
    colosses et les distances de prise).
@@ -318,7 +369,7 @@ utilisable seul, depuis la console du jeu :
 
 ```js
 SVGExport.telecharger('requin')   // un fichier requin.svg
-SVGExport.tout()                  // les 27, à ~350 ms d'intervalle
+SVGExport.tout()                  // toutes, à ~350 ms d'intervalle
 ```
 
 Le module rejoue la silhouette dans un **faux contexte 2D qui enregistre au lieu
@@ -357,7 +408,7 @@ corde en travers de la créature.
 Mesuré sur un vrai dessin fait main (`Assets/clownfish.svg`, 17 ko) : **10
 formes, 430 points, 255 ms**, couleurs conservées.
 
-### Contrôle sur les 27 espèces
+### Contrôle sur les 27 espèces d'alors
 
 Reprise de la silhouette, rendu hors écran, comparaison de l'emprise de l'encre
 avec la silhouette procédurale, **au même instant d'animation** (sinon on compare

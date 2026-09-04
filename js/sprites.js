@@ -82,7 +82,15 @@ const Sprites = {
       // de neuf à dessiner pour ça : on repose le même visage à un second
       // endroit, mouche comprise, clignement compris — les deux yeux battent
       // ensemble parce que le clignement ne dépend que de la taille et du temps.
-      oeil2: d.points && d.points.eye2,
+      // Deux façons de le poser, et l'écartement est la bonne dans la plupart
+      // des cas : sur une tête vue de face les deux yeux sont symétriques, une
+      // seule ancre à placer suffit donc, avec un nombre pour les séparer.
+      // `eye2` reste lu pour un dessin asymétrique ou une tête tournée.
+      oeil2: (d.points && d.points.eye2)
+        || (d.points && d.points.eye && d.points.eye.ecart
+            ? { x: d.points.eye.x - d.points.eye.ecart,
+                y: d.points.eye.y, r: d.points.eye.r }
+            : null),
       bouche: d.points && d.points.mouth,
       // CALIBRATION DU VISAGE, par ordre de préséance.
       // 1. `points.eye.r` — le rayon de l'œil DANS LES UNITÉS DU DESSIN. C'est

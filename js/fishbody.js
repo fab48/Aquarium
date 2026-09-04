@@ -948,6 +948,88 @@ const FishBody = {
 
   // Étoile de mer : 5 bras arrondis, visage au centre, bras repliés en "câlin"
   // quand elle est contente.
+  // OURSIN : une boule hérissée, posée sur le sable. Les piquants ondulent très
+  // lentement — c'est ce qui le distingue d'un caillou. Le visage commun passe
+  // par-dessus, comme pour tout le monde.
+  drawUrchin(ctx, e, t) {
+    const s = e.size;
+    const respire = 1 + Math.sin(t * 0.7 + e.phase) * 0.04;
+    // Piquants : deux couronnes décalées, pour que la boule paraisse pleine
+    ctx.strokeStyle = e.colorDark;
+    ctx.lineCap = 'round';
+    for (let c = 0; c < 2; c++) {
+      const n = c ? 11 : 13;
+      ctx.lineWidth = Math.max(1.4, s * (c ? 0.1 : 0.14));
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2 + c * 0.28 + Math.sin(t * 0.5 + i) * 0.03;
+        const L = s * (c ? 1.5 : 1.85) * respire;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * s * 0.55, Math.sin(a) * s * 0.55);
+        ctx.lineTo(Math.cos(a) * L, Math.sin(a) * L);
+        ctx.stroke();
+      }
+    }
+    // Test (la coquille)
+    ctx.fillStyle = e.color;
+    ctx.beginPath(); ctx.arc(0, 0, s * 0.75 * respire, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.13)';
+    ctx.beginPath(); ctx.arc(-s * 0.2, -s * 0.22, s * 0.4, 0, Math.PI * 2); ctx.fill();
+    this.face(ctx, s * 0.62, e, t);
+  },
+
+  // TORTUE : carapace bombée à écailles, quatre nageoires qui rament en
+  // alternance, une petite tête qui sort devant. Elle rame LENTEMENT — c'est
+  // toute sa personnalité, et ça se voit à la fréquence, pas à la forme.
+  drawTurtle(ctx, e, t) {
+    const s = e.size;
+    const rame = Math.sin(t * 1.5 + e.phase);
+
+    // Nageoires arrière (petites, derrière la carapace)
+    ctx.fillStyle = e.colorDark;
+    for (const sgn of [-1, 1]) {
+      ctx.save();
+      ctx.translate(-s * 0.62, sgn * s * 0.42);
+      ctx.rotate(sgn * (0.5 + rame * 0.2));
+      ctx.beginPath(); ctx.ellipse(0, 0, s * 0.32, s * 0.14, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+    // Grandes nageoires avant : elles rament en OPPOSITION, sinon elle bat des
+    // deux « bras » à l'unisson et on dirait qu'elle applaudit.
+    for (const sgn of [-1, 1]) {
+      ctx.save();
+      ctx.translate(s * 0.3, sgn * s * 0.4);
+      ctx.rotate(sgn * (0.35 + rame * sgn * 0.55));
+      ctx.fillStyle = sgn < 0 ? e.colorDark : e.color;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(s * 0.7, sgn * s * 0.25, s * 1.05, sgn * s * 0.12);
+      ctx.quadraticCurveTo(s * 0.65, sgn * s * 0.5, 0, sgn * s * 0.22);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+    // Carapace
+    ctx.fillStyle = e.color;
+    ctx.beginPath(); ctx.ellipse(0, 0, s, s * 0.78, 0, 0, Math.PI * 2); ctx.fill();
+    // Écailles : un damier grossier, qui suffit à dire « tortue »
+    ctx.strokeStyle = 'rgba(40,60,40,0.35)';
+    ctx.lineWidth = Math.max(1, s * 0.05);
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath();
+      ctx.ellipse(i * s * 0.42, 0, s * 0.2, s * 0.62, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.14)';
+    ctx.beginPath(); ctx.ellipse(-s * 0.1, -s * 0.3, s * 0.55, s * 0.24, -0.2, 0, Math.PI * 2); ctx.fill();
+
+    // Tête devant (le visage commun s'y pose)
+    ctx.fillStyle = e.colorDark;
+    ctx.beginPath(); ctx.ellipse(s * 1.02, s * 0.02, s * 0.34, s * 0.28, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.save();
+    ctx.translate(s * 1.02, s * 0.02);
+    this.face(ctx, s * 0.36, e, t);
+    ctx.restore();
+  },
+
   drawStar(ctx, e, t) {
     const s = e.size;
     const hug = e.expression === 'happy'
@@ -1689,6 +1771,8 @@ const FishBody = {
       case 'seahorse': this.drawSeahorse(ctx, e, t); break;
       case 'eel': this.drawEel(ctx, e, t); break;
       case 'star': this.drawStar(ctx, e, t); break;
+      case 'urchin': this.drawUrchin(ctx, e, t); break;
+      case 'turtle': this.drawTurtle(ctx, e, t); break;
       case 'worm': this.drawWorm(ctx, e, t); break;
       case 'anemone': this.drawAnemone(ctx, e, t); break;
       case 'bird': this.drawBird(ctx, e, t); break;

@@ -733,4 +733,258 @@ const GAGS = {
     }
     if (cible < 0.2) e._gueuleOuverte = false;
   },
+
+  // LA STATION DE NETTOYAGE. Un gros arrive, s'arrête, ouvre grand la bouche ;
+  // le dentiste travaille dedans ; les deux repartent. Et surtout : c'est lui
+  // qui fait REPOUSSER les dents du Requin Dents-Molles — le gag du requin ne
+  // se referme que grâce à lui.
+  dentiste(e, dt, t) {
+    if (e._client && !e._client.dead) {
+      e._soinT -= dt;
+      e._freeze = 0.3; e._faceAt = e._client;
+      e._client._freeze = 0.3; e._client._faceAt = e;
+      e._client.hold('eating');                 // il ouvre grand
+      if (Math.random() < dt * 3) Particles.sparkles(e._client.x + e._client.size * 0.6, e._client.y, 2);
+      if (e._soinT <= 0) {
+        const c = e._client;
+        c.release();
+        if (c._edente > 0) { c._edente = 0; c.emote('happy', 2.5); }   // dents refaites !
+        else c.emote('happy', 1.8);
+        e.emote('proud', 2);
+        e._client = null; e._faceAt = null; e._soinCd = U.rand(10, 25);
+      }
+      return;
+    }
+    e._client = null;
+    e._soinCd = (e._soinCd ?? U.rand(4, 14)) - dt;
+    if (e._soinCd > 0) return;
+    // Priorité au requin édenté : c'est son patient le plus urgent.
+    let best = null, bestScore = 1e9;
+    for (const o of Ecosystem.neighbors(e.x, e.y)) {
+      if (o === e || o.dead || o.def.size < 18 || o._client) continue;
+      const d2 = U.dist2(e.x, e.y, o.x, o.y);
+      if (d2 > 200 * 200) continue;
+      const score = d2 / (o._edente > 0 ? 40 : 1);
+      if (score < bestScore) { bestScore = score; best = o; }
+    }
+    if (!best) { e._soinCd = 3; return; }
+    e._client = best; e._soinT = U.rand(2.4, 3.6);
+    if (Math.random() < 0.4) Particles.comic(e.x, e.y - e.size * 1.6, '🪥');
+  },
+
+  // LE POISSON POLICE GRONDE. Il repère un pétomane, un caca frais ou un
+  // farceur, fonce dessus et le sermonne — le fautif file, tout honteux.
+  police(e, dt, t) {
+    if (e._fautif && !e._fautif.dead) {
+      e._grondeT -= dt;
+      e._faceAt = e._fautif;
+      if (U.dist2(e.x, e.y, e._fautif.x, e._fautif.y) < (e.size + e._fautif.size + 30) ** 2) {
+        e._freeze = 0.3; e._fautif._freeze = 0.3;
+        e.hold('angry');
+        e._fautif.emote('ashamed', 2);
+      }
+      if (e._grondeT <= 0) { e.release(); e._fautif = null; e._faceAt = null; e._grondeCd = U.rand(14, 32); }
+      return;
+    }
+    e._fautif = null;
+    e._grondeCd = (e._grondeCd ?? U.rand(6, 18)) - dt;
+    if (e._grondeCd > 0) return;
+    for (const o of Ecosystem.neighbors(e.x, e.y)) {
+      if (o === e || o.dead || o.speciesId === e.speciesId) continue;
+      // Les fautifs : celui qui pète, celui qui vient de faire un caca, le farceur
+      const coupable = o._farting || o._poopPh > 0 || o._farcePh === 'bouh' || o._tickleTarget;
+      if (!coupable) continue;
+      if (U.dist2(e.x, e.y, o.x, o.y) > 420 * 420) continue;
+      e._fautif = o; e._grondeT = U.rand(2.5, 4);
+      e.state = 'hunt'; e.target = o; e.stateTimer = 5;   // il fonce dessus
+      if (Math.random() < 0.5) Particles.comic(e.x, e.y - e.size * 1.4, '🚨');
+      return;
+    }
+    e._grondeCd = 2.5;
+  },
+
+  // LE MÉROU ASPIRE au lieu de mordre : il ouvre une bouche énorme et la proie
+  // est happée. Le « patatras », c'est qu'il se cogne partout en fonçant.
+  merou(e, dt, t) {
+    e._aspire = U.lerp(e._aspire ?? 0, e.state === 'strike' ? 1 : 0, Math.min(1, dt * 10));
+    if (e.state === 'strike' && !e._slurp) {
+      e._slurp = true;
+      e.emote('eating', 1.4, false);
+      Particles.bubble(e.x + e.size * 0.8, e.y, 5);
+    }
+    if (e.state !== 'strike') e._slurp = false;
+  },
+
+  // LES PAPILLONS VONT PAR DEUX. Chacun se choisit un compagnon et le suit
+  // côte à côte ; séparés, ils se cherchent et se retrouvent avec des cœurs.
+  papillon(e, dt, t) {
+    if (e._duo && (e._duo.dead || e._duo.speciesId !== e.speciesId)) e._duo = null;
+    if (!e._duo) {
+      e._duoCd = (e._duoCd ?? 0) - dt;
+      if (e._duoCd > 0) return;
+      e._duoCd = 3;
+      for (const o of Ecosystem.neighbors(e.x, e.y)) {
+        if (o === e || o.dead || o.speciesId !== e.speciesId || o._duo) continue;
+        e._duo = o; o._duo = e;
+        e.emote('love', 1.8, false); o.emote('love', 1.8, false);
+        Particles.hearts((e.x + o.x) / 2, (e.y + o.y) / 2);
+        return;
+      }
+      return;
+    }
+    // Il nage COLLÉ à son compagnon, un peu en retrait
+    const d2 = U.dist2(e.x, e.y, e._duo.x, e._duo.y);
+    if (d2 > 60 * 60 && e.state === 'wander') {
+      e._figX = e._duo.x - 26; e._figY = e._duo.y + 10;   // réutilise le steering de figure
+    } else { e._figX = null; e._figY = null; }
+  },
+
+  // LE POISSON COFFRE NAGE MAL. Il avance par à-coups en tournant sur lui-même,
+  // et il a l'air très content de lui malgré tout.
+  coffre(e, dt, t) {
+    e._tangue = Math.sin(t * 4.5 + e.phase) * 0.22;
+    if (Math.random() < dt * 0.12) {
+      e.vx += U.rand(-1, 1) * 40; e.vy += U.rand(-1, 1) * 25;
+      if (Math.random() < 0.15) e.emote('proud', 1.6, false);
+    }
+  },
+
+  // LE NUDIBRANCHE CHANGE DE COULEUR en broutant. Il est déjà fluo ; là il
+  // pulse, comme s'il digérait quelque chose de très sucré.
+  nudibranche(e, dt, t) {
+    e._fluo = 0.5 + 0.5 * Math.sin(t * 1.1 + e.phase * 2);
+    if (Math.random() < dt * 0.03) e.emote('happy', 1.6, false);
+  },
+
+  // LA TORTUE REMONTE RESPIRER, prend son temps, et redescend. `breathes` fait
+  // déjà le travail ; le gag ajoute la LENTEUR assumée — elle bâille.
+  tortue(e, dt, t) {
+    e._bailleCd = (e._bailleCd ?? U.rand(20, 50)) - dt;
+    if (e._bailleCd > 0) return;
+    e._bailleCd = U.rand(40, 90);
+    e.emote('sleeping', 2.4, false);
+    e._freeze = 1.2;
+  },
+
+  // L'ESPADON CHARGE EN LIGNE DROITE, et il siffle en passant.
+  espadon(e, dt, t) {
+    e._siffleCd = (e._siffleCd ?? 0) - dt;
+    if (e.speedNow > e.def.speed * 2.2 && e._siffleCd <= 0) {
+      e._siffleCd = U.rand(20, 45);
+      Particles.wake(e.x - e.size, e.y);
+      Particles.shout(e.x, e.y - e.size, 'FIOUUU', '#cfe4f5', e.size);
+    }
+  },
+
+  // LE GOÉLAND VOLE LA PRISE DES AUTRES. Il ne chasse rien lui-même : il guette
+  // un oiseau qui vient d'attraper quelque chose, fond dessus, et repart avec.
+  goeland(e, dt, t) {
+    if (e._vol > 0) { e._vol -= dt; return; }
+    e._volCd = (e._volCd ?? U.rand(5, 15)) - dt;
+    if (e._volCd > 0) return;
+    for (const o of Ecosystem.neighbors(e.x, e.y)) {
+      if (o === e || o.dead || !o.def.aerial) continue;
+      if (o._chew <= 0 && !(o._poche > 0)) continue;      // il n'a rien à voler
+      if (U.dist2(e.x, e.y, o.x, o.y) > 320 * 320) continue;
+      // Le hold-up
+      e._volCd = U.rand(25, 55); e._vol = 1.4;
+      e.x = o.x + U.rand(-30, 30); e.y = o.y - 30;
+      o._chew = 0; o._chewPrey = null; o._poche = 0;
+      o.emote('angry', 2.2);
+      e.emote('smug', 2.2);
+      e.hunger = Math.max(0, e.hunger - 0.25);
+      Particles.comic(e.x, e.y - e.size, '😈');
+      Particles.burst(o.x, o.y, '#ffe08a', 6);
+      return;
+    }
+    e._volCd = 2;
+  },
+
+  // LE CORMORAN PLONGE VRAIMENT : il descend bien plus bas que le Fou, et
+  // ressort en secouant ses plumes.
+  cormoran(e, dt, t) {
+    if (e.y > CONFIG.SURFACE_Y + 40) {
+      e._sousLeau = true;
+      if (Math.random() < dt * 4) Particles.bubble(e.x, e.y, U.rand(1.5, 3));
+    } else if (e._sousLeau) {
+      e._sousLeau = false;
+      e.wet = 2.4;
+      Particles.splash(e.x);
+      e.emote('surprise', 1.4, false);
+    }
+  },
+
+  // LES ANGUILLES-JARDINIÈRES RENTRENT TOUTES D'UN COUP. Elles ondulent hors du
+  // sable, et à la moindre menace la colonie entière disparaît en une seconde.
+  // `_rentre` (0 → 1) est lu par le rendu.
+  jardiniere(e, dt, t) {
+    let menace = false;
+    for (const o of Ecosystem.neighbors(e.x, e.y)) {
+      if (o === e || o.dead || o.speciesId === e.speciesId) continue;
+      if (o.def.size < 20 && o.state !== 'hunt') continue;
+      if (U.dist2(e.x, e.y, o.x, o.y) < 190 * 190) { menace = true; break; }
+    }
+    const cible = menace ? 1 : 0;
+    e._rentre = U.lerp(e._rentre ?? 0, cible, Math.min(1, dt * (menace ? 9 : 1.2)));
+    if (menace && !e._planque) {
+      e._planque = true;
+      if (Math.random() < 0.15) e.emote('scared', 1.4, false);
+    }
+    if (!menace) e._planque = false;
+  },
+
+  // LE BERNARD-L'ERMITE DÉMÉNAGE. De temps en temps il trouve sa coquille trop
+  // petite, en cherche une autre — et va lorgner celle du Coquillage Rieur, qui
+  // n'apprécie pas du tout.
+  bernard(e, dt, t) {
+    e._demeCd = (e._demeCd ?? U.rand(25, 60)) - dt;
+    if (e._demeCd > 0) return;
+    e._demeCd = U.rand(50, 110);
+    e.emote('surprise', 2);
+    Particles.comic(e.x, e.y - e.size * 1.5, '🐚');
+    for (const o of Ecosystem.neighbors(e.x, e.y)) {
+      if (o.dead || o.speciesId !== 'coquillage') continue;
+      if (U.dist2(e.x, e.y, o.x, o.y) > 140 * 140) continue;
+      o.emote('angry', 2.4);            // « pas touche ! »
+      e.emote('ashamed', 2);
+      return;
+    }
+  },
+
+  // LE CONCOMBRE ASPIRE LE SABLE et râle. Il laisse un sillon propre derrière
+  // lui : c'est le seul animal du jeu qui NETTOIE.
+  concombre(e, dt, t) {
+    if (Math.random() < dt * 0.5) Particles.sandCloud(e.x - e.size, e.y + e.size * 0.3);
+    if (Math.random() < dt * 0.02) e.emote('disgust', 1.8, false);
+  },
+
+  // LA RASCASSE NE BOUGE PAS. Elle est déjà `fixed` et `piquant` : le gag,
+  // c'est qu'elle se fait passer pour un caillou — jusqu'au jaillissement.
+  rascasse(e, dt, t) {
+    e._camoufle = e.state === 'strike' ? 0 : U.lerp(e._camoufle ?? 1, 1, Math.min(1, dt * 2));
+    if (e.state === 'strike' && !e._surprise) {
+      e._surprise = true;
+      e.emote('angry', 1.6, false);
+      Particles.burst(e.x, e.y, '#ffb0b0', 6);
+    }
+    if (e.state !== 'strike') e._surprise = false;
+  },
+
+  // LE BARRACUDA FAIT EXPLOSER LES BALLONS. Il fonce droit sur un Fugu gonflé —
+  // et le fugu éclate. C'est le seul à pouvoir le manger sans se piquer.
+  barracuda(e, dt, t) {
+    if (e.state !== 'hunt' || !e.target || e.target.speciesId !== 'fugu') return;
+    const p = e.target;
+    if (U.dist2(e.x, e.y, p.x, p.y) > (e.size + p.size) ** 2) return;
+    if (p.dead) return;
+    // BOUM : le ballon crève. Le barracuda ne prend pas le malaise (perceBallon).
+    Particles.boom(p.x, p.y, p.size * 2);
+    Particles.burst(p.x, p.y, '#ffe08a', 12);
+    e.emote('smug', 2);
+    p.dead = true;
+    e._chew = 0.55; e._chewPrey = p.def;
+    e.hunger = Math.max(0, e.hunger - 0.45);
+    e.wellFed = Math.min(1.6, e.wellFed + 0.55);
+    e.target = null; e.state = 'wander';
+  },
 };

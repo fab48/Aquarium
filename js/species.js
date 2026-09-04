@@ -515,6 +515,318 @@ const SPECIES = {
     lifespan: [600, 900],
     gag: (e, dt, t) => GAGS.anguille(e, dt, t),
   },
+
+  // ========================================================================
+  // LE RÉCIF ET L'EAU CLAIRE
+  // ========================================================================
+
+  // Il ouvre une STATION DE NETTOYAGE et soigne la bouche des prédateurs, qui
+  // font la queue devant lui. C'est lui qui fait repousser les dents du Requin
+  // Dents-Molles — sans lui, le requin reste édenté beaucoup plus longtemps.
+  // Personne ne le mange : le contrat est respecté même par les affamés.
+  dentiste: {
+    name: 'Poisson Dentiste', realName: 'Labre nettoyeur', trophic: 2, movement: 'anchored',
+    nursery: 'reef', homeRadius: 70,
+    depthBand: [150, 1100], size: 10, speed: 45,
+    schooling: false, groupSize: [1, 2], popCap: 8,
+    favoriteFood: 'micro_crevettes', eatsFood: true,
+    intouchable: true,                 // aucun prédateur ne l'attaque
+    colors: ['#4fd0e0', '#123a52'],
+    bodyRatio: 0.42, tail: 'fan', sizeVar: 0.1,
+    lifespan: [420, 650],
+    gag: (e, dt, t) => GAGS.dentiste(e, dt, t),
+  },
+
+  // Il gronde ceux qui pètent, qui font des farces ou qui laissent un caca.
+  police: {
+    name: 'Poisson Police', realName: 'Poisson-sergent', trophic: 3, movement: 'strata',
+    nursery: 'reef',
+    depthBand: [120, 1100], size: 17, speed: 72, sprintSpeed: 160,
+    schooling: false, groupSize: [1, 2], popCap: 6,
+    favoriteFood: 'generic', eatsFood: true, grazes: true,
+    colors: ['#2f4f7a', '#e8eef5'],
+    bodyRatio: 0.55, tail: 'lunate', sizeVar: 0.1,
+    lifespan: [420, 620],
+    gag: (e, dt, t) => GAGS.police(e, dt, t),
+  },
+
+  // Embusqué du récif : il n'attrape pas, il ASPIRE. Et il mange le
+  // Poisson-clown Chatouille, qui n'avait aucun prédateur.
+  merou: {
+    name: 'Mérou Patatras', realName: 'Mérou', trophic: 4, movement: 'strata',
+    nursery: 'reef',
+    depthBand: [250, 1200], size: 38, speed: 34, sprintSpeed: 150,
+    schooling: false, groupSize: [1, 2], popCap: 6, metabolism: 0.7,
+    prey: ['clown', 'confetti', 'fugu'], missChance: 0.35, senseRange: 700,
+    ambush: { range: 190, missChance: 0.3 },
+    colors: ['#7d5a3c', '#c9a06a'],
+    bodyRatio: 0.72, tail: 'fan', sizeVar: 0.16,
+    lifespan: [700, 1000],
+    gag: (e, dt, t) => GAGS.merou(e, dt, t),
+  },
+
+  // Ils vont TOUJOURS par deux, côte à côte. Séparez-les et ils se cherchent.
+  papillon: {
+    name: 'Poisson Papillon Amoureux', realName: 'Poisson-papillon', trophic: 2, movement: 'strata',
+    nursery: 'reef',
+    depthBand: [150, 900], size: 12, speed: 58,
+    schooling: false, groupSize: [2, 4], popCap: 14,
+    favoriteFood: 'plancton_dore', eatsFood: true,
+    colors: ['#ffd75e', '#2b2f4a'],
+    bodyRatio: 0.86, tail: 'fan', sizeVar: 0.12,
+    lifespan: [300, 460],
+    gag: (e, dt, t) => GAGS.papillon(e, dt, t),
+  },
+
+  // Un banc doré, contrepoint calme au Confetti bariolé.
+  dorade: {
+    name: 'Dorade Dorée', realName: 'Dorade royale', trophic: 2, movement: 'wideband',
+    nursery: 'shallow',
+    depthBand: [120, 800], size: 16, speed: 78,
+    schooling: true, groupSize: [7, 11], popCap: 26,
+    favoriteFood: 'generic', eatsFood: true,
+    colors: ['#f2d98a', '#b9a15a'],
+    bodyRatio: 0.6, tail: 'lunate', sizeVar: 0.14,
+    lifespan: [280, 430],
+  },
+
+  // Cubique. Il nage mal. C'est tout le gag.
+  coffre: {
+    name: 'Poisson Coffre-au-Trésor', realName: 'Poisson-coffre', trophic: 2, movement: 'strata',
+    nursery: 'reef',
+    depthBand: [180, 1000], size: 13, speed: 26,
+    schooling: false, groupSize: [1, 3], popCap: 9,
+    favoriteFood: 'plancton_dore', eatsFood: true,
+    colors: ['#f0c04a', '#6b4a1e'],
+    bodyRatio: 1, tail: 'fan', sizeVar: 0.1,
+    lifespan: [360, 540],
+    gag: (e, dt, t) => GAGS.coffre(e, dt, t),
+  },
+
+  // LE SEUL BROUTEUR MOBILE : les autres T1 sont tous fixes. Et l'animal le
+  // plus coloré de la mer.
+  nudibranche: {
+    name: 'Nudibranche Fluo', realName: 'Limace de mer', trophic: 1, movement: 'crawl',
+    nursery: 'reef',
+    depthBand: [100, 1300], size: 8, speed: 14,
+    schooling: false, groupSize: [2, 4], popCap: 16,
+    favoriteFood: 'plancton_dore', eatsFood: true,
+    colors: ['#ff5ec4', '#7de8ff'],
+    render: 'worm', sizeVar: 0.2,
+    lifespan: [380, 560],
+    gag: (e, dt, t) => GAGS.nudibranche(e, dt, t),
+  },
+
+  // Second refuge de ponte, à côté de l'anémone.
+  corail: {
+    name: 'Corail Viva', realName: 'Corail branchu', trophic: 1, movement: 'fixed',
+    nursery: 'reef',
+    depthBand: [140, 900], size: 20, speed: 0,
+    schooling: false, groupSize: [1, 2], popCap: 10,
+    favoriteFood: 'plancton_dore', eatsFood: true,
+    colors: ['#ff8fb1', '#ffd0dd'],
+    render: 'anemone', refuge: true,
+    lifespan: [1200, 1900],
+  },
+
+  // ========================================================================
+  // LA SURFACE
+  // ========================================================================
+
+  // LE TROU LE PLUS BÉANT DE LA CHAÎNE : seuls le Poisson-lune et la Murène
+  // mangeaient des méduses. Elle traverse toute la colonne d'eau, remonte
+  // respirer, et elle est lente — parfaite à regarder.
+  tortue: {
+    name: 'Tortue Papi', realName: 'Tortue caouanne', trophic: 3, movement: 'free',
+    nursery: 'beach',                  // elle pond sur la plage, comme les vraies
+    depthBand: [40, 1400], size: 34, speed: 32, sprintSpeed: 78,
+    schooling: false, groupSize: [1, 2], popCap: 7, metabolism: 0.6,
+    prey: ['meduse'], missChance: 0.25, senseRange: 1100,
+    breathes: true, grazes: true,
+    colors: ['#6d8f5a', '#3f5a34'],
+    render: 'turtle', sizeVar: 0.14,
+    lifespan: [1100, 1700],
+    gag: (e, dt, t) => GAGS.tortue(e, dt, t),
+  },
+
+  // Le sprinteur : rien n'allait vite en surface.
+  espadon: {
+    name: 'Espadon Voilier', realName: 'Voilier / espadon', trophic: 4, movement: 'wideband',
+    nursery: 'shallow',
+    depthBand: [60, 700], size: 46, speed: 120, sprintSpeed: 460,
+    offshore: 900,
+    schooling: false, groupSize: [1, 2], popCap: 6,
+    prey: ['dorade', 'bulle_fofolle', 'maquereau'], missChance: 0.4, senseRange: 1500,
+    colors: ['#3f6fa8', '#cfe4f5'],
+    bodyRatio: 0.3, tail: 'lunate', sizeVar: 0.12,
+    lifespan: [600, 900],
+    gag: (e, dt, t) => GAGS.espadon(e, dt, t),
+  },
+
+  // La surface n'avait que deux espèces contre neuf en eau claire.
+  maquereau: {
+    name: 'Maquereau Métronome', realName: 'Maquereau', trophic: 2, movement: 'wideband',
+    nursery: 'shallow',
+    depthBand: [30, 500], size: 14, speed: 96,
+    offshore: 800,
+    schooling: true, groupSize: [9, 13], popCap: 30,
+    favoriteFood: 'micro_crevettes', eatsFood: true,
+    colors: ['#5c8fb8', '#e7f0f7'],
+    bodyRatio: 0.45, tail: 'lunate', sizeVar: 0.1,
+    lifespan: [220, 340],
+  },
+
+  // Base de chaîne en EAU CLAIRE : la Crevette Guirlande est abyssale.
+  crevette_claire: {
+    name: 'Crevette Sauteuse', realName: 'Crevette de récif', trophic: 2, movement: 'wideband',
+    nursery: 'reef',
+    depthBand: [120, 900], size: 6, speed: 40,
+    schooling: true, groupSize: [7, 10], popCap: 32,
+    favoriteFood: 'micro_crevettes', eatsFood: true,
+    colors: ['#ffb3a0', '#ffe3d8'],
+    render: 'shrimp', sizeVar: 0.2,
+    lifespan: [260, 400],
+  },
+
+  // ========================================================================
+  // LE CIEL
+  // ========================================================================
+
+  // IL NE PÊCHE PAS : IL VOLE LA PRISE DES AUTRES. Un gag qui se raconte tout
+  // seul, et il ne consomme aucune proie de son côté — c'est ce qui permet
+  // d'ajouter un troisième oiseau sans vider les bancs de surface.
+  goeland: {
+    name: 'Goéland Chapardeur', realName: 'Goéland argenté', trophic: 3, movement: 'free', aerial: true,
+    nursery: 'beach',
+    depthBand: [0, 0],
+    size: 20, speed: 130, sprintSpeed: 340,
+    schooling: false, groupSize: [1, 3], popCap: 6,
+    grazes: true,                      // il se débrouille, et il chaparde
+    colors: ['#f6f6f2', '#9aa8b5'],
+    render: 'bird', sizeVar: 0.1,
+    lifespan: [520, 780],
+    gag: (e, dt, t) => GAGS.goeland(e, dt, t),
+  },
+
+  // Il plonge et NAGE SOUS L'EAU, contrairement au Fou qui ne fait que piquer.
+  cormoran: {
+    name: 'Cormoran Sous-Marin', realName: 'Cormoran', trophic: 4, movement: 'free', aerial: true,
+    nursery: 'beach',
+    depthBand: [0, 0],
+    size: 21, speed: 100, sprintSpeed: 260,
+    schooling: false, groupSize: [1, 2], popCap: 5,
+    prey: ['maquereau', 'crevette_claire'], missChance: 0.35, grazes: true,
+    plongeur: true,                    // il descend BIEN plus bas que les autres oiseaux
+    colors: ['#2e3b45', '#66798a'],
+    render: 'bird', sizeVar: 0.1,
+    lifespan: [520, 780],
+    gag: (e, dt, t) => GAGS.cormoran(e, dt, t),
+  },
+
+  // ========================================================================
+  // LE FOND
+  // ========================================================================
+
+  // Une colonie de tubes qui ondulent et RENTRENT DANS LE SABLE D'UN COUP
+  // quand un prédateur passe. Aucun effet de groupe équivalent ailleurs.
+  jardiniere: {
+    name: 'Anguille Jardinière', realName: 'Anguille-jardinière', trophic: 2, movement: 'fixed',
+    nursery: 'reef',
+    depthBand: [400, 1600], size: 11, speed: 0,
+    schooling: false, groupSize: [5, 8], popCap: 22,
+    favoriteFood: 'plancton_dore', eatsFood: true,
+    colors: ['#cbbfa2', '#7d735c'],
+    render: 'eel', sizeVar: 0.12,
+    lifespan: [500, 750],
+    gag: (e, dt, t) => GAGS.jardiniere(e, dt, t),
+  },
+
+  // Il change de coquille — et il peut disputer la sienne au Coquillage Rieur.
+  bernard: {
+    name: 'Bernard-l’Ermite Déménageur', realName: 'Pagure', trophic: 'scavenger', movement: 'crawl',
+    nursery: 'reef',
+    depthBand: [0, 1400], size: 11, speed: 24,
+    schooling: false, groupSize: [2, 4], popCap: 14,
+    favoriteFood: 'generic', eatsFood: true, eatsBones: true,
+    colors: ['#d98a5a', '#f0d8b8'],
+    render: 'crab', sizeVar: 0.15,
+    lifespan: [400, 620],
+    gag: (e, dt, t) => GAGS.bernard(e, dt, t),
+  },
+
+  // Il mange les cacas en râlant : il rend visible le mécanisme de trop-plein,
+  // et il nettoie vraiment le fond.
+  concombre: {
+    name: 'Concombre Aspirateur', realName: 'Holothurie', trophic: 1, movement: 'crawl',
+    nursery: 'deep',
+    depthBand: [300, 2600], size: 14, speed: 10,
+    schooling: false, groupSize: [2, 3], popCap: 12,
+    favoriteFood: 'generic', eatsFood: true, eatsPoop: true,
+    colors: ['#8a6a86', '#c9a8c4'],
+    render: 'worm', sizeVar: 0.16,
+    lifespan: [600, 900],
+    gag: (e, dt, t) => GAGS.concombre(e, dt, t),
+  },
+
+  // Embusquée, immobile, venimeuse. On ne s'y frotte pas deux fois.
+  rascasse: {
+    name: 'Rascasse Épineuse', realName: 'Poisson-scorpion', trophic: 4, movement: 'fixed',
+    nursery: 'reef',
+    depthBand: [250, 1500], size: 18, speed: 0,
+    schooling: false, groupSize: [1, 2], popCap: 7, metabolism: 0.4,
+    prey: ['confetti', 'crevette_claire', 'papillon'],
+    ambush: { range: 130, missChance: 0.25 }, senseRange: 420,
+    piquant: { range: 60 },
+    colors: ['#b04a4a', '#f0c8a0'],
+    bodyRatio: 0.8, tail: 'fan', sizeVar: 0.14,
+    lifespan: [650, 950],
+    gag: (e, dt, t) => GAGS.rascasse(e, dt, t),
+  },
+
+  // Fixe, intouchable, il pique qui le bouscule.
+  oursin: {
+    name: 'Oursin Pic-Pic', realName: 'Oursin', trophic: 1, movement: 'fixed',
+    nursery: 'reef',
+    depthBand: [80, 1400], size: 10, speed: 0,
+    schooling: false, groupSize: [3, 5], popCap: 14,
+    favoriteFood: 'plancton_dore', eatsFood: true,
+    piquant: { range: 55 },
+    colors: ['#3a2b52', '#6d5a8a'],
+    render: 'urchin', sizeVar: 0.18,
+    lifespan: [800, 1300],
+  },
+
+  // ========================================================================
+  // LE LARGE
+  // ========================================================================
+
+  // IL FONCE À TRAVERS LES FUGUS ET LES FAIT EXPLOSER : le seul à pouvoir les
+  // manger sans se piquer.
+  barracuda: {
+    name: 'Barracuda Perce-Ballon', realName: 'Barracuda', trophic: 4, movement: 'wideband',
+    nursery: 'shallow',
+    depthBand: [150, 1200], size: 40, speed: 110, sprintSpeed: 420,
+    schooling: false, groupSize: [1, 3], popCap: 7,
+    prey: ['fugu', 'dorade', 'maquereau'], missChance: 0.3, senseRange: 1400,
+    perceBallon: true,                 // il crève les piquants sans en souffrir
+    colors: ['#8d9aa8', '#e2ecf4'],
+    bodyRatio: 0.28, tail: 'lunate', sizeVar: 0.12,
+    lifespan: [600, 900],
+    gag: (e, dt, t) => GAGS.barracuda(e, dt, t),
+  },
+
+  // La Baleine et la Raie filtraient du plancton ABSTRAIT. Un krill visible
+  // donne un sens à leur passage.
+  krill: {
+    name: 'Krill Étincelle', realName: 'Krill', trophic: 1, movement: 'wideband',
+    nursery: 'shallow',
+    depthBand: [200, 2000], size: 4, speed: 30,
+    schooling: true, groupSize: [12, 18], popCap: 46,
+    favoriteFood: 'plancton_dore', eatsFood: true,
+    colors: ['#ffd9a8', '#ffeed8'],
+    render: 'shrimp', sizeVar: 0.2, glowAtNight: true,
+    lifespan: [200, 320],
+  },
 };
 
 // ===========================================================================

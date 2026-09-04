@@ -46,7 +46,7 @@ qu'elle bougeait.
 
 - `config.js` — constantes monde, zones écologiques, types de nourriture. 1 m = 40 px, surface à y=300.
 - `utils.js` — helpers math/couleur (`U`).
-- `species.js` — **espèces 100 % data-driven**. Chaque fiche a un `name` rigolo **contenant la vraie espèce** ("Baleine Gros Dodo", "Poisson Confetti") et un `realName` affiché en sous-titre de la fiche d'identité. Ajouter une espèce = ajouter une entrée `SPECIES` (mouvement, bande de profondeur, proies, nourriture favorite, silhouette). **Roster complet : 30 espèces + anémones-refuges.** Chaque fiche porte aussi une **`phrase`** et un **faux nom `latin`**, affichés uniquement dans la fiche d'identité (bloc `FICHES` en fin de fichier, séparé pour que les données de simulation restent lisibles). Flags génériques documentés en tête du fichier (`refuge`, `anchorToRefuge`, `ambush`, `lure`, `ink`, `aerial`, `jumps`, `stealthy`, `trickster`, `nocturnal`, `sizeVar`, `spanRatio`, `offshore`, `piquant`, `gonflable`, `snatch`, `shock`, `pouch`, `gag(e,dt,t)`).
+- `species.js` — **espèces 100 % data-driven**. Chaque fiche a un `name` rigolo **contenant la vraie espèce** ("Baleine Gros Dodo", "Poisson Confetti") et un `realName` affiché en sous-titre de la fiche d'identité. Ajouter une espèce = ajouter une entrée `SPECIES` (mouvement, bande de profondeur, proies, nourriture favorite, silhouette). **Roster complet : 51 espèces.** Chaque fiche porte aussi une **`phrase`** et un **faux nom `latin`**, affichés uniquement dans la fiche d'identité (bloc `FICHES` en fin de fichier, séparé pour que les données de simulation restent lisibles). Flags génériques documentés en tête du fichier (`refuge`, `anchorToRefuge`, `ambush`, `lure`, `ink`, `aerial`, `jumps`, `stealthy`, `trickster`, `nocturnal`, `sizeVar`, `spanRatio`, `offshore`, `piquant`, `gonflable`, `snatch`, `shock`, `pouch`, `intouchable`, `perceBallon`, `plongeur`, `eatsPoop`, `gag(e,dt,t)`).
 - `world.js` — triangle de profondeur en grille "profondeur max par colonne" (reco GDD §14), zones, fond sableux.
 - `camera.js` — scroll bi-axial borné par le triangle (impossible d'atteindre les abysses près de la plage).
 - `particles.js` — socle feedback réutilisable : splash, nuage de sable, bulles, sillage, **bulles d'action comiques** (`Particles.comic/hearts/stars`).
@@ -610,6 +610,8 @@ Deux corrections aux chiffres qui figuraient ici : le décor coûte **trois fois
 les créatures (trois `fillRect` plein écran en dégradé — un dégradé coûte 16 fois
 un aplat), et l'ancienne mesure « décor 0,6 ms » ne comptait que l'émission des
 commandes canvas, pas leur rastérisation.
+
+**À 51 espèces et ~690 entités : simulation 6,0 ms** (contre 4,8 à 490 entités — la montée est super-linéaire). Les espèces d'AMBIANCE, celles qu'on regarde en masse sans les suivre (krill, maquereau, dorade, crevette de récif), sont donc dimensionnées à la moitié de ce qu'on croirait : elles remplissent l'eau aussi bien à 30 qu'à 60, et chaque individu coûte.
 
 Le rendu procédural n'est donc **pas** le goulot — passer à des sprites optimiserait la partie déjà la moins chère. Le coût est dans les recherches de voisinage. Utiliser systématiquement `Ecosystem.neighbors()` (grille spatiale) et `Ecosystem.bySpecies[id]` plutôt que de balayer `entities`.
 - `input.js` — molette (vertical) / shift+molette + drag (bi-axial), clic = nourrir + splash/sable, clic maintenu = bulles, souris rapide = remous + fuite des petits.

@@ -5,7 +5,7 @@ let ENTITY_ID = 0;
 
 // Silhouettes qui reposent sur le sable : elles suivent la pente du fond
 // (la murène n'y est pas : seul SON ROCHER suit la pente, cf. drawEel)
-const GROUND_RENDERS = new Set(['worm', 'crab', 'shell', 'star', 'anemone']);
+const GROUND_RENDERS = new Set(['worm', 'crab', 'shell', 'star', 'anemone', 'urchin']);
 
 // Le modele du sable (background.js) dessine des bandes qui suivent le contour
 // du fond : une bande etroite au contact de l'eau (0-26 px), puis une plus
@@ -591,6 +591,9 @@ class Entity {
     for (const o of Ecosystem.neighbors(this.x, this.y)) {
       if (o === this || o.dead || o.stage === 'egg') continue;
       if (o.speciesId === this.speciesId) continue;      // entre eux, ça ne pique pas
+      // `perceBallon` : le Barracuda fonce à travers les piquants sans en
+      // souffrir. C'est tout son intérêt — il est le seul régulateur du Fugu.
+      if (o.def.perceBallon) continue;
       const d2 = U.dist2(this.x, this.y, o.x, o.y);
       if (d2 > menace * menace) continue;
       proche = Math.max(proche, 1 - Math.sqrt(d2) / menace);
@@ -1130,7 +1133,10 @@ class Entity {
         }
         // Trop profond : abandonne et remonte, trempé et vexé. Le happeur ne
         // touche jamais l'eau : sa limite est la surface elle-même.
-        if (this.y > CONFIG.SURFACE_Y + (def.snatch ? 4 : 130)) {
+        // `plongeur` (Cormoran) : il ne se contente pas de piquer, il NAGE
+        // sous l'eau. Sa limite est cinq fois plus basse que celle du Fou.
+        const fond = def.snatch ? 4 : (def.plongeur ? 620 : 130);
+        if (this.y > CONFIG.SURFACE_Y + fond) {
           this.state = 'wander'; this.target = null; this.wet = 3;
           Particles.splash(this.x);
         }

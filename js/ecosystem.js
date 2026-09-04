@@ -52,6 +52,31 @@ const Ecosystem = {
     this.spawnGroups('pelican', 2);
     this.spawnGroups('anguille', 3);
 
+    // --- La grande vague : le récif se peuple, la surface se remplit, et la
+    // chaîne gagne ses maillons manquants. Ordre important : les bases de
+    // chaîne AVANT ce qui les mange, sinon les prédateurs démarrent à jeun.
+    this.spawnGroups('corail', 5);          // second refuge de ponte
+    this.spawnGroups('oursin', 4);
+    this.spawnGroups('nudibranche', 3);
+    this.spawnGroups('krill', 2);
+    this.spawnGroups('crevette_claire', 3);
+    this.spawnGroups('maquereau', 2);
+    this.spawnGroups('dorade', 2);
+    this.spawnGroups('papillon', 4);
+    this.spawnGroups('coffre', 3);
+    this.spawnGroups('jardiniere', 3);      // colonies de tubes
+    this.spawnGroups('concombre', 3);
+    this.spawnGroups('bernard', 3);
+    this.spawnGroups('dentiste', 4);        // la station de nettoyage
+    this.spawnGroups('police', 3);
+    this.spawnGroups('tortue', 3);
+    this.spawnGroups('merou', 3);
+    this.spawnGroups('rascasse', 3);
+    this.spawnGroups('barracuda', 2);
+    this.spawnGroups('espadon', 2);
+    this.spawnGroups('goeland', 2);
+    this.spawnGroups('cormoran', 2);
+
   },
 
 
@@ -59,7 +84,7 @@ const Ecosystem = {
     const def = SPECIES[speciesId];
     for (let g = 0; g < count; g++) {
       const n = U.randInt(def.groupSize[0], def.groupSize[1]);
-      const bottomDweller = ['shell', 'star', 'anemone', 'eel', 'worm', 'crab'].includes(def.render);
+      const bottomDweller = ['shell', 'star', 'anemone', 'eel', 'worm', 'crab', 'urchin'].includes(def.render);
       let x, y;
       // Espèces ancrées à une anémone : on répartit les groupes sur des refuges
       // DIFFÉRENTS (le moins peuplé d'un tirage), sinon tout le monde s'installe
@@ -244,7 +269,7 @@ const Ecosystem = {
         const bande = def.render === 'eel' ? 0
           : U.clamp((rang + U.rand(-0.28, 0.28)) / 2.6 * SABLE_BANDE, 0, SABLE_BANDE);
         e._sable = bande;
-        if (['shell', 'star', 'anemone', 'eel', 'worm'].includes(def.render)) {
+        if (['shell', 'star', 'anemone', 'eel', 'worm', 'urchin'].includes(def.render)) {
           e.y = World.floorY(e.x) - def.size * 0.4 + bande;
         } else if (def.movement === 'crawl') {
           e.y = World.floorY(e.x) - def.size * 0.6 + bande;
@@ -397,6 +422,10 @@ const Ecosystem = {
         // à l'eau ne l'intéresse pas — c'est tout ce qui le distingue du Fou
         // Moustachu, qui plonge dedans.
         if (def.snatch && e.jumpState !== 'air') continue;
+        // `intouchable` : le Poisson Dentiste n'est jamais attaqué. Le contrat
+        // de la station de nettoyage vaut même pour un prédateur affamé — c'est
+        // justement ce qui rend l'espèce drôle.
+        if (e.def.intouchable) continue;
         if (e.y < yMin || e.y > yMax) continue;
         const d = U.dist2(pred.x, pred.y, e.x, e.y);
         if (d > r2) continue;

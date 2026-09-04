@@ -545,13 +545,21 @@ class Entity {
 
       // Rien de comestible en vue ? Un caca, de loin, ressemble beaucoup à une
       // grosse graine. Il fonce dessus… et le regrette aussitôt.
-      if (def.eatsFood && this.hunger > 0.4) {
+      if ((def.eatsFood || def.eatsPoop) && this.hunger > 0.4) {
         const c = Food.nearestPoop(this.x, this.y, 220);
         if (c) {
           this.state = 'seekFood'; this.targetFood = c; this.targetIsBone = false;
           if (U.dist2(this.x, this.y, c.x, c.y) < (this.size + 8) ** 2) {
             Food.removePoop(c);
-            this.malaise(1, c.x, c.y);
+            // `eatsPoop` : le Poisson-Tapis, lui, s'en régale. C'est la seule
+            // exception au malaise, et elle a une vraie utilité d'écosystème :
+            // il nettoie le fond.
+            if (def.eatsPoop) {
+              this.hunger = Math.max(0, this.hunger - 0.2);
+              this.emote('happy', 1.8);
+            } else {
+              this.malaise(1, c.x, c.y);
+            }
             this.state = 'wander'; this.targetFood = null;
           }
           return;

@@ -285,7 +285,7 @@ const SPECIES = {
     // se faisait pas cueillir sans broncher) : sans ça deux modes d'échec se
     // cumulaient et la murène mourait de faim. Le raté se raconte mieux ainsi —
     // c'est la victime qui l'esquive, pas la murène qui vise mal.
-    prey: ['confetti', 'perroquet', 'meduse'], ambush: { range: 140, missChance: 0.22 },
+    prey: ['confetti', 'perroquet', 'meduse', 'hippocampe'], ambush: { range: 140, missChance: 0.22 },
     colors: ['#7a8a6a'],
     render: 'eel',
     lifespan: [700, 1000],
@@ -338,7 +338,8 @@ const SPECIES = {
     schooling: false, groupSize: [2, 3], popCap: 10,
     // `senseRange` porte bien plus loin que `ambush.range` : la première distance
     // sert à REPÉRER (et à ramper vers), la seconde à jaillir.
-    prey: ['lanterne', 'crevette'], senseRange: 950,
+    prey: ['lanterne', 'crevette', 'crabe'], senseRange: 950,
+    eatsPoop: true,                    // il avale les cacas SANS être malade
     ambush: { range: 175, missChance: 0.3 },   // idem murène : la proie esquive désormais toute seule
     colors: ['#a0785a'],
     render: 'worm', sizeVar: 0.16,
@@ -348,10 +349,12 @@ const SPECIES = {
   poisson_lune: {
     name: 'Poisson-lune Bada-boum', realName: 'Môle / poisson-lune', trophic: 3, movement: 'free',
     nursery: 'shallow',
-    depthBand: [200, 1600], size: 50, speed: 18, sprintSpeed: 65,
+    // Descend à 1900 : sinon il ne croise jamais la Crevette Guirlande (1500+),
+    // qui vient d'entrer à son menu.
+    depthBand: [200, 1900], size: 50, speed: 18, sprintSpeed: 65,
     // Géant placide : métabolisme lent, il ne meurt pas de faim entre deux méduses
     schooling: false, groupSize: [1, 2], popCap: 8, metabolism: 0.5,
-    prey: ['meduse'],   // régime ultra-spécialisé : seul régulateur des méduses (GDD §13)
+    prey: ['meduse', 'crevette'],   // principal régulateur des méduses (GDD §13)
     colors: ['#e0d8c8'],
     render: 'sunfish', sleeps: true,
     lifespan: [800, 1100],
@@ -362,14 +365,17 @@ const SPECIES = {
     name: 'Orque Echo', realName: 'Orque', trophic: 4, movement: 'wideband',
     breathes: true,   // remonte souffler en surface
     nursery: 'shallow',
-    depthBand: [450, 1500], size: 70, speed: 90, sprintSpeed: 340,
+    // Bande étendue à 2400 : à 1500 elle ne pouvait matériellement pas atteindre
+    // les calmars qu'elle est censée chasser (1200–3400). Une proie hors bande
+    // est une proie inatteignable, et le prédateur meurt de faim en la suivant.
+    depthBand: [450, 2400], size: 70, speed: 90, sprintSpeed: 340,
     schooling: false, groupSize: [2, 2], popCap: 5,   // apex : doit rester rare (GDD §14)
     // Le Thon reste sa cible favorite ; le Dauphin en secours évite que l'Orque
     // s'éteigne dès que les Thons baissent (GDD : « niveau 2-3 accepté »).
     // Comme le dauphin : une blagueuse ne fait pas la sieste en plein jour.
     // Elle dort la nuit avec tout le monde (`sleeps` = siestes a toute heure,
     // reserve au Gros Dodo et au Poisson-lune Zen, pour qui c'est le gag).
-    prey: ['thon', 'dauphin'], trickster: true,
+    prey: ['thon', 'dauphin', 'calamar', 'calamar_geant'], trickster: true,
     colors: ['#1c2733'],
     bodyRatio: 0.42, tail: 'whale',
     lifespan: [850, 1150],
@@ -386,7 +392,7 @@ const SPECIES = {
     schooling: false, groupSize: [1, 2], popCap: 4, metabolism: 0.5, senseRange: 2200,
     // Toute la faune céphalopode des grands fonds : c'est SA raison de plonger,
     // et ça donne enfin une scène aux abysses (le duel avec le Calamar Géant).
-    prey: ['poulpe', 'calamar', 'calamar_geant'],
+    prey: ['calamar', 'calamar_geant'],   // le Poulpe sort du menu : le Calamar Géant s'en charge
     colors: ['#4a5866'],
     bodyRatio: 0.38, tail: 'whale',
     lifespan: [1500, 2500],

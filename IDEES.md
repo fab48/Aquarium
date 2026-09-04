@@ -259,7 +259,7 @@ ce sont elles qui tiennent l'équilibre : elles sont en **gras**.
 | Poisson-lune Zen | môle | T3 | 50 | trouble | méduse |
 | Orque Blagueuse | orque | T4 | 70 | trouble | thon, dauphin |
 | **Poisson-lanterne Allumeur** | baudroie abyssale | T2 | 16 | abysses | crevette |
-| **Poisson-Tapis Câlin** | requin-tapis | T4 | 20 | abysses | lanterne, crevette |
+| **Poisson-Tapis Grande-Bouche** | requin-tapis | T4 | 20 | abysses | lanterne, crevette |
 | **Cachalot Profond** | cachalot | T3 | 100 | profond → abysses | poulpe, calamars |
 | Crevette Guirlande | crevette abyssale | T2 | 7 | abysses | plancton |
 | Calamar Fusée | encornet | T3 | 19 | abysses | crevette, lanterne |

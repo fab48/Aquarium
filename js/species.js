@@ -36,12 +36,13 @@ const SPECIES = {
     depthBand: [80, 750], size: 11, speed: 70,
     // Espèce clé de voûte du niveau 2 : plusieurs prédateurs en dépendent,
     // il lui faut donc un plafond de population élevé.
-    schooling: true, groupSize: [26, 32], popCap: 96,
+    schooling: true, groupSize: [26, 32], popCap: 64,
     favoriteFood: 'plancton_dore', eatsFood: true,
     colors: ['#ff6b8a', '#ffb84d', '#5ecfff', '#a3e64c', '#c78aff'],
     bodyRatio: 0.62, tail: 'fan', sizeVar: 0.26,   // un banc de confettis, ça dépareille
     lifespan: [180, 300],
     gag: (e, dt, t) => GAGS.confetti(e, dt, t),
+    fraiRapide: true,   // le nourrir fait des bébés TOUT DE SUITE (bas de chaîne)
   },
 
   bulle_fofolle: {
@@ -52,24 +53,26 @@ const SPECIES = {
     // de colonne d'eau : poursuivie par le Fou Moustachu, elle finissait
     // plaquée dans le ressac, et ses sauts la déposaient carrément sur le sable.
     offshore: 950,
-    schooling: true, groupSize: [5, 8],
+    schooling: true, groupSize: [5, 8], popCap: 36,
     favoriteFood: 'plancton_dore', eatsFood: true,
     colors: ['#7fd8ff', '#a8e6ff'],
     bodyRatio: 0.75, tail: 'fan', jumps: true,
     lifespan: [180, 300],
     gag: (e, dt, t) => GAGS.bulle_fofolle(e, dt, t),
+    fraiRapide: true,   // le nourrir fait des bébés TOUT DE SUITE (bas de chaîne)
   },
 
   meduse: {
     name: 'Méduse Flottante', realName: 'Méduse', trophic: 2, movement: 'drift',
     nursery: 'shallow',
     depthBand: [150, 1600], size: 16, speed: 12,
-    schooling: false, groupSize: [4, 6], popCap: 70,   // proie de 2 prédateurs, dérive lentement
+    schooling: false, groupSize: [4, 6], popCap: 44,   // proie de 2 prédateurs, dérive lentement
     favoriteFood: 'plancton_dore', eatsFood: true,
     colors: ['#e8b3ff', '#b3d9ff'],
     render: 'jelly', glowAtNight: true,
     lifespan: [200, 350],
     gag: (e, dt, t) => GAGS.meduse(e, dt, t),
+    fraiRapide: true,   // le nourrir fait des bébés TOUT DE SUITE (bas de chaîne)
   },
 
   thon: {
@@ -180,12 +183,13 @@ const SPECIES = {
     nursery: 'shallow',
     depthBand: [10, 100], size: 14, speed: 95,
     offshore: 950,   // même raison que la Sardine Bulle-fofolle : le haut-fond la piégeait
-    schooling: true, groupSize: [4, 6],
+    schooling: true, groupSize: [4, 6], popCap: 34,
     favoriteFood: 'plancton_dore', eatsFood: true,
     colors: ['#5ecfff', '#9be8ff'],
     bodyRatio: 0.6, tail: 'fan', jumps: true,
     lifespan: [180, 300],
     gag: (e, dt, t) => GAGS.volant(e, dt, t),
+    fraiRapide: true,   // le nourrir fait des bébés TOUT DE SUITE (bas de chaîne)
   },
 
   moustachu: {
@@ -233,7 +237,7 @@ const SPECIES = {
     name: 'Poisson-perroquet Pétomane', realName: 'Poisson-perroquet', trophic: 2, movement: 'strata',
     nursery: 'reef',
     depthBand: [220, 1100], size: 20, speed: 60,   // broute la roche jusqu'au haut de la zone trouble
-    schooling: false, groupSize: [3, 5],
+    schooling: false, groupSize: [3, 5], popCap: 20,
     favoriteFood: 'plancton_dore', eatsFood: true,
     colors: ['#4cd980', '#ff5ea8', '#5ea8ff'],
     bodyRatio: 0.55, tail: 'fan',
@@ -267,7 +271,7 @@ const SPECIES = {
     // Il DESCEND jusqu'au fond des abysses : c'est un des rares habitants mobiles
     // des grands fonds, et la proie de base du Cachalot comme du Calamar Géant.
     depthBand: [400, 3400], size: 24, speed: 45,
-    schooling: false, groupSize: [2, 3], popCap: 34,   // proie du Cachalot ET du Calamar Géant
+    schooling: false, groupSize: [2, 3], popCap: 24,   // proie du Cachalot ET du Calamar Géant
     favoriteFood: 'generic', eatsBones: true, eatsFood: true, stealthy: true, ink: true,
     colors: ['#8a5ea8', '#6a4a8a'],
     render: 'octopus', sizeVar: 0.2,
@@ -313,7 +317,7 @@ const SPECIES = {
     depthBand: [1800, 3000], size: 16, speed: 40,
     // Abysse : le plancton y est plus rare, il faut donc vivre plus longtemps
     // pour avoir le temps de se reproduire (proie du Poisson-Tapis et du Calamar).
-    schooling: false, groupSize: [3, 4], popCap: 40,
+    schooling: false, groupSize: [3, 4], popCap: 28,
     // PÊCHE À LA LAMPE (GDD §12) : il allume, ce qui traîne dans le noir vient
     // droit sur la lumière, et il croque. `grazes` reste explicite : sans lui,
     // avoir des proies le priverait du plancton ambiant et il crèverait de faim
@@ -370,16 +374,15 @@ const SPECIES = {
     breathes: true,   // remonte souffler en surface
     nursery: 'shallow',
     // Bande étendue à 2400 : à 1500 elle ne pouvait matériellement pas atteindre
-    // les calmars qu'elle est censée chasser (1200–3400). Une proie hors bande
-    // est une proie inatteignable, et le prédateur meurt de faim en la suivant.
+    // le Calmar Violette qu'elle est censée chasser (1200–3400). Une proie hors
+    // bande est une proie inatteignable, et le prédateur meurt de faim en la suivant.
     depthBand: [450, 2400], size: 70, speed: 90, sprintSpeed: 340,
     schooling: false, groupSize: [2, 2], popCap: 5,   // apex : doit rester rare (GDD §14)
-    // Le Thon reste sa cible favorite ; le Dauphin en secours évite que l'Orque
-    // s'éteigne dès que les Thons baissent (GDD : « niveau 2-3 accepté »).
-    // Comme le dauphin : une blagueuse ne fait pas la sieste en plein jour.
-    // Elle dort la nuit avec tout le monde (`sleeps` = siestes a toute heure,
-    // reserve au Gros Dodo et au Poisson-lune Zen, pour qui c'est le gag).
-    prey: ['thon', 'dauphin', 'calamar', 'calamar_geant'], trickster: true,
+    // Le Thon reste sa cible favorite, le Calmar Violette en secours (2026-09-04).
+    // Le Calamar Géant est réservé au Cachalot (c'est lui qui plonge pour lui) et
+    // le Dauphin est sorti du menu : il n'a plus aucun prédateur, voulu — c'est
+    // le sommet de sa propre chaîne, au même titre que le Requin.
+    prey: ['thon', 'calamar'], trickster: true,
     colors: ['#1c2733'],
     bodyRatio: 0.42, tail: 'whale',
     lifespan: [850, 1150],
@@ -416,7 +419,7 @@ const SPECIES = {
     depthBand: [1500, 3400], size: 7, speed: 46,
     // Base de la chaîne abyssale : trois espèces la mangent, il lui faut donc
     // un plafond élevé et des essaims nombreux (même rôle que le Confetti en haut).
-    schooling: true, groupSize: [12, 18], popCap: 96,
+    schooling: true, groupSize: [12, 18], popCap: 62,
     favoriteFood: 'micro_crevettes', eatsFood: true,
     colors: ['#ff9d8a', '#ffc2a8', '#e88fb0'],
     render: 'shrimp', glowAtNight: true, nocturnal: true, sizeVar: 0.22,
@@ -426,15 +429,20 @@ const SPECIES = {
     // d'UNE portée (donc une demi-descendance par individu, les couples se
     // partageant la ponte) et l'espèce passait de 70 à 2 en huit minutes,
     // entraînant le Calamar avec elle. Il lui faut trois à quatre pontes.
-    lifespan: [420, 640],
+    // `fertile` en plus (2026-09-04) : base de toute la chaîne abyssale avec
+    // quatre prédateurs recensés (lanterne, tapis, calamar, poisson-lune), un
+    // seul levier de longévité ne suffit plus — portées plus grosses (2-6 au
+    // lieu de 1-3) et cooldown de ponte réduit.
+    lifespan: [420, 640], fertile: true,
     gag: (e, dt, t) => GAGS.crevette(e, dt, t),
+    fraiRapide: true,   // le nourrir fait des bébés TOUT DE SUITE (bas de chaîne)
   },
 
   calamar: {
     name: 'Calmar Violette', realName: 'Calmar (encornet)', trophic: 3, movement: 'wideband',
     nursery: 'deep',
     depthBand: [1200, 3400], size: 19, speed: 55, sprintSpeed: 230,
-    schooling: true, groupSize: [3, 5], popCap: 24,
+    schooling: true, groupSize: [3, 5], popCap: 18,
     // Il fonce en marche arrière et dépasse souvent sa cible : le raté est
     // comique, et il allège la pression sur le Poisson-lanterne, dont il est
     // de loin le premier prédateur (45 prises en 12 min sans ce garde-fou).
@@ -445,6 +453,7 @@ const SPECIES = {
     render: 'squid', glowAtNight: true, sizeVar: 0.18,
     lifespan: [280, 430],
     gag: (e, dt, t) => GAGS.calamar(e, dt, t),
+    fraiRapide: true,   // le nourrir fait des bébés TOUT DE SUITE (bas de chaîne)
   },
 
   calamar_geant: {
@@ -502,16 +511,19 @@ const SPECIES = {
 
   // --- L'Anguille : la première créature qui TUE SANS MANGER. Elle électrocute
   // tout son voisinage ; les touchés sont sonnés, les alevins n'y survivent pas.
+  // Chasse aussi le Crabe (2026-09-05) : il vit sur tout le fond, donc largement
+  // à portée, et n'avait qu'un seul prédateur (Poisson-Tapis) — contrairement à
+  // la Crevette Guirlande, il y avait de la marge.
   anguille: {
     name: 'Anguille Coup-de-Jus', realName: 'Anguille électrique', trophic: 3, movement: 'strata',
     nursery: 'deep',
     depthBand: [900, 2200], size: 26, speed: 34,
     schooling: false, groupSize: [1, 2], popCap: 6, metabolism: 0.7,
-    grazes: true,                      // elle ne chasse pas : elle assomme et broute
+    prey: ['crabe'], missChance: 0.4, grazes: true,   // grazes : le plancton couvre les creux entre deux crabes
     shock: { range: 150, cooldown: 9 },
     piquant: { range: 60 },            // même à l'arrêt, on ne la touche pas impunément
     colors: ['#6f7fa8', '#b9d4f0'],
-    render: 'eel', sizeVar: 0.15, glowAtNight: true,
+    render: 'ribbon', sizeVar: 0.15, glowAtNight: true,
     lifespan: [600, 900],
     gag: (e, dt, t) => GAGS.anguille(e, dt, t),
   },
@@ -557,7 +569,7 @@ const SPECIES = {
     nursery: 'reef',
     depthBand: [250, 1200], size: 38, speed: 34, sprintSpeed: 150,
     schooling: false, groupSize: [1, 2], popCap: 6, metabolism: 0.7,
-    prey: ['clown', 'confetti', 'fugu'], missChance: 0.35, senseRange: 700,
+    prey: ['clown', 'fugu'], missChance: 0.35, senseRange: 700, grazes: true,
     ambush: { range: 190, missChance: 0.3 },
     colors: ['#7d5a3c', '#c9a06a'],
     bodyRatio: 0.72, tail: 'fan', sizeVar: 0.16,
@@ -583,11 +595,12 @@ const SPECIES = {
     name: 'Dorade Dorée', realName: 'Dorade royale', trophic: 2, movement: 'wideband',
     nursery: 'shallow',
     depthBand: [120, 800], size: 16, speed: 78,
-    schooling: true, groupSize: [7, 11], popCap: 26,
+    schooling: true, groupSize: [7, 11], popCap: 20,
     favoriteFood: 'generic', eatsFood: true,
     colors: ['#f2d98a', '#b9a15a'],
     bodyRatio: 0.6, tail: 'lunate', sizeVar: 0.14,
     lifespan: [280, 430],
+    fraiRapide: true,   // le nourrir fait des bébés TOUT DE SUITE (bas de chaîne)
   },
 
   // Cubique. Il nage mal. C'est tout le gag.
@@ -656,7 +669,7 @@ const SPECIES = {
     depthBand: [60, 700], size: 46, speed: 120, sprintSpeed: 460,
     offshore: 900,
     schooling: false, groupSize: [1, 2], popCap: 6,
-    prey: ['dorade', 'bulle_fofolle', 'maquereau'], missChance: 0.4, senseRange: 1500,
+    prey: ['dorade', 'bulle_fofolle', 'maquereau'], missChance: 0.4, senseRange: 1500, grazes: true,
     colors: ['#3f6fa8', '#cfe4f5'],
     bodyRatio: 0.3, tail: 'lunate', sizeVar: 0.12,
     lifespan: [600, 900],
@@ -669,11 +682,12 @@ const SPECIES = {
     nursery: 'shallow',
     depthBand: [30, 500], size: 14, speed: 96,
     offshore: 800,
-    schooling: true, groupSize: [9, 13], popCap: 30,
+    schooling: true, groupSize: [9, 13], popCap: 22,
     favoriteFood: 'micro_crevettes', eatsFood: true,
     colors: ['#5c8fb8', '#e7f0f7'],
     bodyRatio: 0.45, tail: 'lunate', sizeVar: 0.1,
     lifespan: [220, 340],
+    fraiRapide: true,   // le nourrir fait des bébés TOUT DE SUITE (bas de chaîne)
   },
 
   // Base de chaîne en EAU CLAIRE : la Crevette Guirlande est abyssale.
@@ -681,11 +695,12 @@ const SPECIES = {
     name: 'Crevette Sauteuse', realName: 'Crevette de récif', trophic: 2, movement: 'wideband',
     nursery: 'reef',
     depthBand: [120, 900], size: 6, speed: 40,
-    schooling: true, groupSize: [7, 10], popCap: 32,
+    schooling: true, groupSize: [7, 10], popCap: 24,
     favoriteFood: 'micro_crevettes', eatsFood: true,
     colors: ['#ffb3a0', '#ffe3d8'],
     render: 'shrimp', sizeVar: 0.2,
     lifespan: [260, 400],
+    fraiRapide: true,   // le nourrir fait des bébés TOUT DE SUITE (bas de chaîne)
   },
 
   // ========================================================================
@@ -733,10 +748,10 @@ const SPECIES = {
     name: 'Anguille Jardinière', realName: 'Anguille-jardinière', trophic: 2, movement: 'fixed',
     nursery: 'reef',
     depthBand: [400, 1600], size: 11, speed: 0,
-    schooling: false, groupSize: [5, 8], popCap: 22,
+    schooling: false, groupSize: [5, 8], popCap: 18,
     favoriteFood: 'plancton_dore', eatsFood: true,
     colors: ['#cbbfa2', '#7d735c'],
-    render: 'eel', sizeVar: 0.12,
+    render: 'gardeneel', sizeVar: 0.12,
     lifespan: [500, 750],
     gag: (e, dt, t) => GAGS.jardiniere(e, dt, t),
   },
@@ -774,7 +789,7 @@ const SPECIES = {
     nursery: 'reef',
     depthBand: [250, 1500], size: 18, speed: 0,
     schooling: false, groupSize: [1, 2], popCap: 7, metabolism: 0.4,
-    prey: ['confetti', 'crevette_claire', 'papillon'],
+    prey: ['crevette_claire', 'papillon'],
     ambush: { range: 130, missChance: 0.25 }, senseRange: 420,
     piquant: { range: 60 },
     colors: ['#b04a4a', '#f0c8a0'],
@@ -807,7 +822,7 @@ const SPECIES = {
     nursery: 'shallow',
     depthBand: [150, 1200], size: 40, speed: 110, sprintSpeed: 420,
     schooling: false, groupSize: [1, 3], popCap: 7,
-    prey: ['fugu', 'dorade', 'maquereau'], missChance: 0.3, senseRange: 1400,
+    prey: ['fugu', 'dorade', 'maquereau'], missChance: 0.3, senseRange: 1400, grazes: true,
     perceBallon: true,                 // il crève les piquants sans en souffrir
     colors: ['#8d9aa8', '#e2ecf4'],
     bodyRatio: 0.28, tail: 'lunate', sizeVar: 0.12,
@@ -821,11 +836,15 @@ const SPECIES = {
     name: 'Krill Étincelle', realName: 'Krill', trophic: 1, movement: 'wideband',
     nursery: 'shallow',
     depthBand: [200, 2000], size: 4, speed: 30,
-    schooling: true, groupSize: [12, 18], popCap: 46,
+    schooling: true, groupSize: [12, 18], popCap: 30,
     favoriteFood: 'plancton_dore', eatsFood: true,
     colors: ['#ffd9a8', '#ffeed8'],
     render: 'shrimp', sizeVar: 0.2, glowAtNight: true,
-    lifespan: [200, 320],
+    // Même leçon que la Crevette Guirlande : une base de chaîne à longévité
+    // courte n'a le temps que d'UNE portée et s'éteint. Relevé : 28 → 8 en
+    // 4 min avec [200, 320].
+    lifespan: [420, 620],
+    fraiRapide: true,   // le nourrir fait des bébés TOUT DE SUITE (bas de chaîne)
   },
 };
 

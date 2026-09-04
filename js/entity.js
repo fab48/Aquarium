@@ -5,7 +5,7 @@ let ENTITY_ID = 0;
 
 // Silhouettes qui reposent sur le sable : elles suivent la pente du fond
 // (la murène n'y est pas : seul SON ROCHER suit la pente, cf. drawEel)
-const GROUND_RENDERS = new Set(['worm', 'crab', 'shell', 'star', 'anemone', 'urchin']);
+const GROUND_RENDERS = new Set(['worm', 'crab', 'shell', 'star', 'anemone', 'urchin', 'gardeneel']);
 
 // Le modele du sable (background.js) dessine des bandes qui suivent le contour
 // du fond : une bande etroite au contact de l'eau (0-26 px), puis une plus
@@ -35,6 +35,14 @@ class Entity {
     this.phase = Math.random() * Math.PI * 2;
     this.groupId = opts.groupId ?? null;
     this.anchorX = opts.anchorX ?? x; this.anchorY = opts.anchorY ?? y;
+    // `habitat: 'weed'` : l'hippocampe s'accroche AU BOUT des herbes. Fait ici
+    // et pas seulement au spawn, sinon les petits nés par ponte s'ancraient
+    // n'importe où dans la colonne d'eau.
+    if (this.def.habitat === 'weed' && opts.anchorY == null && typeof Background !== 'undefined') {
+      const h = Background.hauteurHerbier(x);
+      this.anchorY = World.floorY(x) - h * U.rand(0.72, 1) - this.def.size * 0.4;
+      this.y = this.anchorY;
+    }
 
     // Cycle de vie
     this.stage = opts.stage ?? 'adult';   // 'egg' | 'fry' | 'adult'
@@ -626,11 +634,11 @@ class Entity {
   // ===========================================================================
   // Elle électrocute TOUT ce qui traîne autour, pas un seul individu : c'est
   // une décharge, pas une morsure. Les touchés sont SONNÉS (`assomme`, qui
-  // existe déjà et se lit déjà : vrille, étoiles, hébétude) ; seuls les très
-  // faibles en meurent — les alevins et les œufs.
+  // existe déjà et se lit déjà : vrille, étoiles, hébétude) — jamais tués,
+  // exactement comme un poisson qui percute un colosse (voir `move`, ligne
+  // ~1608) : ça sonne, ça ne tue pas. Décision du 2026-09-05, annule la
+  // première version où œufs et alevins mouraient sur le coup.
   //
-  // C'est la première mécanique du jeu qui TUE SANS MANGER : elle échappe donc
-  // au report de prédation et aux plafonds, qui ne comptent que la prédation.
   // D'où deux brides : un cooldown franc (sans lui elle vide son voisinage en
   // quelques secondes, la leçon de la murène « ping-pong »), et une décharge
   // qui ne part QUE si quelqu'un est assez près pour la justifier.
@@ -652,8 +660,6 @@ class Entity {
     Particles.eclairs(this.x, this.y, portee, 6);
     this.emote('smug', 1.8, false);
     for (const o of cibles) {
-      // Les très faibles n'y survivent pas : œufs et alevins.
-      if (o.stage === 'egg' || o.stage === 'fry') { o.die(); continue; }
       o.assomme(null, Math.random() < 0.25);
       const dx = o.x - this.x, dy = o.y - this.y, d = Math.hypot(dx, dy) || 1;
       o.vx += dx / d * 140; o.vy += dy / d * 140;
@@ -763,8 +769,23 @@ class Entity {
     Ecosystem.feedBoost(this.speciesId, fav ? 0.035 : 0.01);
     this.emote(fav ? 'happy' : 'eating', fav ? 2.2 : 1.4);
     if (fav) Particles.sparkles(this.x, this.y - this.size, 6);
-    // La reproduction ne se déclenche plus en mangeant : il faut RENCONTRER
-    // un partenaire lui aussi bien nourri (cf. tryMate).
+    // FRAI ÉCLAIR (`fraiRapide`). Règle générale : la reproduction demande de
+    // RENCONTRER un partenaire (cf. tryMate). Le bas de la chaîne y échappe —
+    // crevettes, krill, méduses, calmars, sardines : ce sont eux qu'on mange,
+    // et le joueur doit pouvoir les renflouer TOUT DE SUITE en les nourrissant.
+    // C'est le geste le plus naturel du jeu (« ils se font tous manger, je vais
+    // les aider »), et il n'avait aucun effet visible avant la minute suivante.
+    if (this.def.fraiRapide && this.stage === 'adult'
+        && Ecosystem.countSpecies(this.speciesId) < Ecosystem.popCap(this.def)) {
+      this._fraiT = (this._fraiT ?? 0) + (fav ? 1 : 0.45);
+      if (this._fraiT >= 1) {
+        this._fraiT = 0;
+        Ecosystem.layEgg(this, this.x + U.rand(-18, 18), this.y + U.rand(-10, 10));
+        this.wellFed = Math.max(0, this.wellFed - 0.3);
+        Particles.hearts(this.x, this.y - this.size);
+        this.emote('love', 1.6, false);
+      }
+    }
   }
 
   // Portion de littoral où un rampant a le droit de se traîner : celle dont le
@@ -775,7 +796,10 @@ class Entity {
     // (depthBand) et le relief ne change pas — le cache par individu refaisait
     // le même balayage pour chacun des ~490 animaux.
     if (this.def._bornesRep) return this.def._bornesRep;
-    const [dMin, dMax] = this.def.depthBand;
+    // Même plancher d'eau qu'au spawn : un crabe a `depthBand [0, 99999]`, il
+    // rampait donc jusqu'au rivage exact et se retrouvait sur le sable sec.
+    const dMin = Math.max(this.def.depthBand[0], this.def.size * 3 + 40);
+    const dMax = this.def.depthBand[1];
     let xMin = null, xMax = null;
     for (let x = World.shoreX; x < CONFIG.WORLD_WIDTH - 50; x += CONFIG.DEPTH_COLUMN_WIDTH / 2) {
       const d = World.depthAt(x);
@@ -799,8 +823,18 @@ class Entity {
     // qu'ils tiennent dans la colonne d'eau sans racler ni dépasser. Une espèce
     // peut exiger davantage (`offshore`) : les petits nageurs de surface tiennent
     // dans 30 px d'eau, donc leur barrière tombait littéralement dans le ressac.
+    // PLANCHER GÉNÉRIQUE, la vraie leçon : calculer la barrière sur la seule
+    // TAILLE ne protège personne. Un Confetti de 11 px pouvait descendre
+    // jusqu'à 46 px d'eau, une Méduse et un Clown aussi, un Thon jusqu'à 112 —
+    // c'est-à-dire le ressac. En simulation à vide personne n'y va ; dès qu'un
+    // prédateur ou le curseur du joueur les pousse vers la côte, tout le monde
+    // s'y entasse et ne peut plus repartir. C'est l'effet d'entonnoir.
+    // Aucun nageur ne va donc là où il y a moins de 150 px d'eau, et un colosse
+    // en exige 900 : une baleine de 190 (soit ~400 px dessinés) tenait dans
+    // 548 px d'eau, ce qui la ramenait beaucoup trop près de la plage.
     const besoin = Math.max(this.def.offshore ?? 0,
-                            this.def.size * (this.def.size >= 70 ? 2.6 : 2.2));
+                            this.def.size * (this.def.size >= 70 ? 2.6 : 2.2),
+                            this.def.size >= 70 ? 900 : 150);
     let x = World.shoreX;
     const pas = CONFIG.DEPTH_COLUMN_WIDTH / 2;
     while (x < CONFIG.WORLD_WIDTH && World.floorY(x) - CONFIG.SURFACE_Y < besoin) x += pas;
@@ -1044,7 +1078,7 @@ class Entity {
         // récif fixe s'y met), un cœur à chaque fois noyait l'écran.
         Particles.sparkles(this.x, this.y - this.size, 3);
         Ecosystem.layEgg(this, this.x + U.rand(-15, 15), this.y - 6);
-        this.wellFed = 0; this._mateCd = 30; this._broadcastTried = false;
+        this.wellFed = 0; this._mateCd = this.def.fertile ? 12 : 30; this._broadcastTried = false;
         return;
       }
     }
@@ -1064,7 +1098,9 @@ class Entity {
       // Un seul des deux pond, sinon la portée est doublée
       if (this._matingT > 1.6 && this.id < p.id) {
         const forme = (1 - this.hunger) + (1 - p.hunger);     // 0..2
-        const eggs = U.clamp(1 + Math.floor(forme * 1.2), 1, 3);
+        const eggs = this.def.fertile
+          ? U.clamp(2 + Math.floor(forme * 2), 2, 6)
+          : U.clamp(1 + Math.floor(forme * 1.2), 1, 3);
         const mx = (this.x + p.x) / 2, my = (this.y + p.y) / 2;
         Particles.loveBurst(mx, my - this.size * 0.4, 7);
         for (let i = 0; i < eggs; i++) Ecosystem.layEgg(this, mx + U.rand(-12, 12), my);
@@ -1091,7 +1127,7 @@ class Entity {
 
   endMating() {
     this.wellFed = 0;
-    this._mateCd = 18;          // pas de ponte en rafale
+    this._mateCd = this.def.fertile ? 8 : 18;          // pas de ponte en rafale
     this._matingWith = null;
     this._faceAt = null;
   }
@@ -1222,7 +1258,10 @@ class Entity {
       // 195 px du voisinage, et les deux espèces s'éteignaient doucement.
       else if (this.state === 'court' && this.target && !this.target.dead) dir = Math.sign(this.target.x - this.x);
       else if (Math.random() < dt * 0.3) this._crawlDir = U.pick([-1, 0, 1]);
-      dir = dir || (this._crawlDir ?? 0);
+      // Endormi, il ne rampe plus du tout — la branche `crawl` ne passe pas
+      // par le steering, elle aurait continué sa marche toute la nuit.
+      if (this.state === 'sleep') dir = 0;
+      dir = dir || (this.state === 'sleep' ? 0 : (this._crawlDir ?? 0));
       this.vx = dir * def.speed;
       this.x += this.vx * dt;
       // Bornes de reptation : un rampant reste sur la portion de fond qui
@@ -1438,7 +1477,14 @@ class Entity {
       maxSpeed = def.speed * 1.35;   // en route vers la frayère
       this.steerVers(this._nursery.x, this._nursery.y, maxSpeed, 2.2);
     } else if (this.state === 'sleep') {
-      maxSpeed = def.speed * 0.05;
+      // UN DORMEUR NE BOUGE PLUS. `speed * 0,05` laissait une dérive lente, et
+      // l'errance continuait de le pousser : un crabe endormi traversait sa
+      // bande de sable pendant la nuit. On coupe la vitesse ET on annule
+      // l'accélération accumulée, sinon l'errance le fait glisser quand même.
+      maxSpeed = 0;
+      this._axAcc = 0; this._ayAcc = 0;
+      ax = 0; ay = 0;
+      this.vx *= 0.82; this.vy *= 0.82;
     }
 
     // Fuite du curseur rapide (remous). Position monde du curseur : calculée

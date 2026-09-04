@@ -96,6 +96,20 @@ const Background = {
     return [];
   },
 
+  // Hauteur de l'herbier le plus proche d'un x, en px au-dessus du sable.
+  // L'hippocampe s'accroche AU BOUT des herbes : sans cette hauteur il
+  // s'ancrait n'importe où dans la colonne d'eau (relevé : de 6 à 316 px
+  // au-dessus du sol pour une herbe qui n'en fait que 27 à 192).
+  hauteurHerbier(x) {
+    let best = null, bestD = Infinity;
+    for (const f of this.flora) {
+      if (f.kind === 'tube') continue;
+      const d = Math.abs(f.x - x);
+      if (d < bestD) { bestD = d; best = f; }
+    }
+    return best ? best.h : 90;
+  },
+
   // Couleur de l'eau selon profondeur (px sous la surface) et nuit.
   // MÉMOÏSÉE en quantifiant profondeur (pas de 16 px) et nuit (1/40) : la
   // fonction faisait jusqu'à quatre mixColor par appel, pour des couleurs qui

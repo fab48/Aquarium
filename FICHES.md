@@ -136,6 +136,14 @@ Légende des frayères : **récif** = anémones · **haut-fond** = près du riva
 - **Nourriture** — Micro-crevettes · **Frayère** — récif
 - **Mangé par** — ✅ **Mérou Patatras** *(validé — c'était la seule espèce de récif que rien ne mangeait)*
 
+### ✅ Mérou Patatras — *mérou* — *Epinephelus patatras*
+- **Phrase** — « Chut… je ne suis pas là. »
+- **Action** — ✅ **codée** : embusqué (`ambush`), il **aspire** sa proie d'un coup de bouche — visage `eating` et bulle au moment de la gorgée.
+- **Nourriture** — ❌ aucune renseignée · **Frayère** — récif
+- **Mange** — Poisson-clown, Confetti, Fugu
+- **Mangé par** — personne
+- **À compléter** — c'est lui qui donne enfin un prédateur au Poisson-clown ; son nom « Patatras » ne se voit pas encore à l'écran, tout se joue dans l'embuscade et l'aspiration.
+
 ### Hippocampe Zen — *hippocampe* — *Hippocampus rougissimus*
 *(renommé : « Timide » → « Zen »)*
 - **Phrase** — « Ne me regardez pas… »
@@ -197,8 +205,7 @@ Légende des frayères : **récif** = anémones · **haut-fond** = près du riva
 - **Action** — ✅ **son nom devient sa mécanique** : quand il mange, **il perd ses dents**. Il ne peut alors plus manger du tout, et doit aller voir le ✅ **Poisson Dentiste** pour qu'elles repoussent.
 - **Nourriture** — ❌ aucune · **Frayère** — ✅ **bas-fond** *(aujourd'hui : haut-fond)*
 - **Mangé par** — personne (apex)
-- **À compléter** — **la plus belle boucle de tout le document** : elle relie un prédateur existant à une espèce à créer, et donne au Poisson Dentiste une vraie fonction d'écosystème plutôt qu'un gag isolé.
-- **⚠️ Garde-fou obligatoire** — « il ne peut plus manger » **tue le requin** s'il n'y a pas de dentiste à portée. Il faut soit une repousse naturelle lente en secours, soit une immunité à la faim tant qu'il est édenté. C'est exactement le piège qui a affamé la Murène : deux modes d'échec cumulés (voir `CLAUDE.md`).
+- **✅ Codée** — **la plus belle boucle de tout le document**, et le garde-fou est en place : édenté, il **repousse automatiquement au bout de 12 à 22 s** (le filet de sécurité, exactement comme la leçon de la Murène), mais croiser le ✅ **Poisson Dentiste** fait repousser ses dents **instantanément** — le dentiste est un raccourci narratif, pas une dépendance vitale. Le Requin n'a donc jamais faim sans porte de sortie.
 
 ### Murène du Récif — *murène* — *Muraena monrocherus*
 - **Phrase** — « C'est MON rocher. »
@@ -228,11 +235,9 @@ Légende des frayères : **récif** = anémones · **haut-fond** = près du riva
 - **Phrase** — « Attends, attends, j'en ai une bonne. »
 - **Action** — ✅ elle lance des **échos la nuit**, qui **réveillent les poissons des profondeurs**. Beau contrepoint au sommeil général de la nuit (GDD §10), et ça donne enfin un sens au nom « Echo ».
 - **Nourriture** — ❌ aucune · **Frayère** — haut-fond
-- **Mange** — ✅ **Calamar Géant, Thon** *(remplace : Thon, Dauphin)*
+- **Mange** — ✅ **Thon, Calmar Violette** *(tranché — le Calamar Géant sort de son menu, le Dauphin aussi)*
 - **Mangé par** — personne (apex)
-- **⚠️ Deux problèmes à trancher** :
-  1. L'Orque vit à **450–1500 px**, le Calamar Géant à **1900–3400** : **aucun recouvrement**. Elle ne pourrait jamais l'atteindre — il faut descendre la bande de l'Orque, ou renoncer.
-  2. Retirer le Dauphin de son menu **laisse le Dauphin sans aucun prédateur**. Voulu ?
+- **✅ Tranché** — le Calamar Géant est réservé au **Cachalot**, seul assez profond (et seul à plonger-remonter respirer) pour justifier la chasse ; l'Orque descend jusqu'à 2400 px, ce qui suffit à croiser le Calmar Violette (1200–3400). Le Dauphin sort du menu et **reste sans prédateur** : sommet de sa propre chaîne, comme le Requin.
 
 ---
 
@@ -252,6 +257,7 @@ Légende des frayères : **récif** = anémones · **haut-fond** = près du riva
 - **Nourriture** — Micro-crevettes · **Frayère** — profond
 - **Mangé par** — Baudroie-lanterne, Poisson-Tapis, Calmar Violette · ✅ + Poisson-lune *(sous réserve, voir sa fiche)*
 - **À compléter** — base de toute la chaîne abyssale, longévité rallongée exprès (420–640). **Quatre prédateurs, c'est beaucoup** : c'est elle qui s'effondre en premier si on ajoute encore.
+- **✅ Tranché** — reproduction accélérée (`fertile: true`) : portées de 2 à 6 œufs au lieu de 1 à 3, et délai entre deux pontes réduit (12 s en diffusion, 8 s en couple, contre 30 s et 18 s pour les autres espèces). En plus de la longévité déjà rallongée, ça compense les quatre prédateurs sans y toucher.
 
 ### Calmar Violette — *encornet* — *Loligo violetta*
 *(renommé : « Calamar Fusée » → « Calmar Violette »)*
@@ -259,25 +265,23 @@ Légende des frayères : **récif** = anémones · **haut-fond** = près du riva
 - **Action** — ✅ **3, 2, 1** — il s'envole comme une fusée, puis **retombe dans les profondeurs**.
 - **Nourriture** — Micro-crevettes · **Frayère** — profond
 - **Mange** — Crevette Guirlande, Baudroie-lanterne
-- **Mangé par** — Cachalot, Calamar Géant · ✅ **+ Orque**
-- **⚠️ Contradiction à trancher** — la fiche de l'Orque dit qu'elle mange « Calamar Géant et Thon », celle-ci dit qu'elle mange le Calmar Violette. Les deux ne peuvent pas être vrais. *(Et le Calmar Violette vit à 1200–3400, l'Orque à 450–1500 : même problème de bande que pour le Calamar Géant.)*
+- **Mangé par** — Cachalot · ✅ **+ Orque** *(tranché — le Calamar Géant sort du menu de l'Orque)*
 
 ### Calamar Géant Timide — *Architeuthis* — *Architeuthis timidissimus*
 - **Phrase** — « …vous m'avez vu ? Zut. »
-- **Action** — **rien de plus** : il reste bien, bien au fond du fond.
+- **Action** — ✅ **il garde sa timidité** : on l'approche, il rentre ses bras, rougit et se laisse couler. C'est tout — il reste bien, bien au fond du fond, et c'est ce silence qui le définit.
 - **Nourriture** — ❌ aucune · **Frayère** — profond
 - **Mange** — Calmar Violette, Poulpe
-- **Mangé par** — Cachalot · ✅ + Orque *(sous réserve, voir sa fiche)*
-- **À trancher** — une timidité **est déjà codée** (on l'approche, il rentre ses bras, rougit et se laisse couler). On la garde, ou on la retire pour qu'il ne fasse vraiment plus rien ?
+- **Mangé par** — ✅ **Cachalot uniquement** *(tranché — c'est lui, et lui seul, qui plonge le chercher et remonte respirer ensuite)*
 
-### Poisson-Tapis — *requin-tapis (wobbegong)* — *Orectolobus grandebouche*
-*(renommé : « Poisson-Tapis Câlin » → à trancher, le câlin disparaît)*
+### Poisson-Tapis Grande-Bouche — *requin-tapis (wobbegong)* — *Orectolobus grandebouche*
+*(renommé : « Poisson-Tapis Câlin » → « Poisson-Tapis Grande-Bouche », le câlin a disparu)*
 - **Phrase** — « …………… »  *(il ne dit rien, il attend)*
-- **Action** — ✅ **plus de câlin** : il **embusque**, immobile sur le sable, et **ouvre une énorme bouche** quand une proie s'approche du fond.
+- **Action** — ✅ **plus aucun câlin** : il **embusque**, immobile sur le sable, et **ouvre une énorme bouche** quand une proie s'approche du fond.
 - **Nourriture** — ✅ Micro-crevettes · **Frayère** — profond
 - **Mange** — Baudroie-lanterne, Crevette Guirlande · ✅ **+ Crabe Disco** · ✅ **+ les cacas, sans être malade**
 - **Mangé par** — personne
-- **À compléter** — il faut **un nouveau nom** : « Câlin » ne va plus du tout. Et son immunité aux cacas est la première exception à `Entity.malaise()`.
+- **✅ Tranché** — nom et gag mis à jour dans le code (`species.js` / `gags.js`) : « Grande-Bouche » remplace « Câlin » partout, y compris dans le nom affiché. Son immunité aux cacas reste la première exception à `Entity.malaise()`.
 
 ### Poulpe Ninja — *poulpe* — *Octopus ninjaticus*
 - **Phrase** — « Vous ne m'avez jamais vu. »
@@ -289,7 +293,7 @@ Légende des frayères : **récif** = anémones · **haut-fond** = près du riva
 - **Phrase** — « Ça pince ET ça danse ! »
 - **Action** — ✅ **codée** : il plante ses pinces, s'arrête net et **danse** sur place en changeant de couleur.
 - **Nourriture** — Graines (et les arêtes) · **Frayère** — récif
-- **Mangé par** — ✅ **Poisson-Tapis** *(il n'avait aucun prédateur)*
+- **Mangé par** — ✅ **Poisson-Tapis** · ✅ **+ Anguille** *(il n'avait aucun prédateur)*
 - **À compléter** — le seul sans bande de profondeur (`[0, 99999]`) : il vit sur tout le fond, donc certains crabes sont bien à portée du Poisson-Tapis abyssal. C'est lui qui fera le **crabe magicien** (`IDEES.md` §2).
 
 ### Cachalot Profond — *cachalot* — *Physeter profundissimus*
@@ -298,7 +302,7 @@ Légende des frayères : **récif** = anémones · **haut-fond** = près du riva
 - **Nourriture** — ❌ aucune · **Frayère** — haut-fond
 - **Mange** — ✅ **Calamar Géant, Calmar Violette** *(le Poulpe sort du menu)*
 - **Mangé par** — personne (apex)
-- **À vérifier** — retirer le Poulpe ne laisse au Poulpe qu'**un seul** prédateur, le Calamar Géant. Acceptable, mais c'est le dernier.
+- **✅ Tranché** — c'est bien le Cachalot, et lui seul, qui chasse le Calamar Géant : ses plongées répétées (`breathes`, cycle air/profondeur) sont la mise en scène qui justifie la chasse. Retirer le Poulpe ne lui laisse qu'**un seul** prédateur, le Calamar Géant — acceptable, c'est le dernier maillon.
 
 ### Baleine Gros Dodo — *baleine à fanons* — *Balaena roupillonus*
 - **Phrase** — « Encore cinq minutes… »
@@ -309,29 +313,25 @@ Légende des frayères : **récif** = anémones · **haut-fond** = près du riva
 
 ### ✅ Anguille Coup-de-Jus — *anguille électrique* — *Electrophorus zzzap* — **codée**
 - **Phrase** — « Touche pas, ça pique fort ! »
-- **Action** — elle **électrocute** ce qui l'approche : des **éclairs** partent d'elle, et les touchés sont **sonnés** — exactement l'effet du choc contre un gros (`Entity.assomme` : il part en vrille, voit des étoiles, reste hébété quelques secondes). **Les très faibles en meurent.**
-- **Nourriture** — à décider · **Frayère** — profond
+- **Action** — elle **électrocute** ce qui l'approche : des **éclairs** partent d'elle, et les touchés sont **sonnés**, jamais tués — exactement l'effet du choc contre un colosse (`Entity.assomme` : il part en vrille, voit des étoiles, reste hébété quelques secondes). *(2026-09-05 : elle ne tuait au premier coup que les œufs et alevins — retiré, elle ne fait plus qu'assommer, tout le monde, sans exception.)*
+- **Nourriture** — ✅ **Crabe Disco** (+ broute le plancton entre deux prises, `grazes: true`) · **Frayère** — profond
 - **Mangé par** — personne (comme tous les piquants)
 - **Fait** — une mécanique générique `shock: { range, cooldown }` :
   - la décharge frappe **tous** les voisins dans le rayon, pas seulement un ;
-  - effet par défaut : `assomme()`, qui existe déjà et se lit déjà (vrille + étoiles) ;
-  - **la mort ne frappe que les très faibles** — à définir précisément : les **alevins** (`stage === 'fry'`), et/ou en dessous d'une taille, et/ou déjà affamés. C'est le seul point à trancher avant de coder ;
+  - effet : `assomme()`, qui existe déjà et se lit déjà (vrille + étoiles) — **aucune mort**, quel que soit l'âge ou la taille de la cible ;
   - un **cooldown franc** entre deux décharges, sinon elle vide son voisinage en quelques secondes — la leçon de la murène « ping-pong » et du `_snapCd` de la Baudroie ;
-  - les éclairs sont un nouveau VFX dans `particles.js`.
-- **⚠️ Attention** — c'est la première mécanique du jeu qui **tue sans manger**. Elle échappe donc à tous les garde-fous d'équilibre (report de prédation, `refugeFloor`), qui ne comptent que la prédation. À surveiller en simulation longue.
+  - les éclairs sont un VFX dans `particles.js`.
+- **✅ Tranché** — ce n'est donc **pas** une mécanique qui tue : elle reste hors des garde-fous d'équilibre (report de prédation, `refugeFloor`) parce qu'elle ne tue jamais, pas parce qu'elle les contournerait.
 
 ---
 
-## Ce qui reste à trancher
+## Ce qui restait à trancher — tout est fait (2026-09-04)
 
-Six points, dans l'ordre où ils bloquent :
+1. **✅ L'Orque mange le Calmar Violette**, pas le Calamar Géant : `prey: ['thon', 'calamar']`. Sa bande passe à 450–2400 px, assez pour croiser le Calmar Violette (1200–3400).
+2. **✅ Bande réglée** avec le point 1 : plus aucune proie inatteignable sur son menu.
+3. **✅ Le Dauphin reste sans prédateur**, assumé — sommet de sa propre chaîne, comme le Requin.
+4. **✅ Le Requin édenté** a son garde-fou : repousse automatique en 12–22 s, le Poisson Dentiste ne fait qu'accélérer la guérison. Il ne peut plus mourir de faim édenté.
+5. **✅ La Crevette Guirlande** garde ses quatre prédateurs mais devient `fertile: true` : portées doublées (2–6 œufs) et cooldown de ponte réduit de moitié.
+6. **✅ Le Poisson-Tapis** est renommé **Poisson-Tapis Grande-Bouche**, plus aucune trace de « câlin » dans le code ou les fiches.
 
-1. **L'Orque mange-t-elle le Calmar Violette ?** Sa fiche dit « Calamar Géant + Thon », celle du Calmar Violette dit qu'elle le mange aussi. À choisir.
-2. **La bande de profondeur de l'Orque.** À 450–1500 px, elle ne peut atteindre **ni** le Calamar Géant (1900–3400) **ni** le Calmar Violette (1200–3400, à peine). Soit on la descend, soit ces proies sont décoratives.
-3. **Le Dauphin sans prédateur.** Le retirer du menu de l'Orque le laisse seul au monde.
-4. **Le Requin édenté.** Sans garde-fou, « il ne peut plus manger » le tue.
-5. **La Crevette Guirlande à quatre prédateurs.** C'est la base de la chaîne abyssale ; elle a déjà failli s'éteindre une fois.
-6. **Le nom du Poisson-Tapis.** « Câlin » ne décrit plus rien.
-
-Et deux petites choses sans risque : trouver la nourriture de l'Anguille, et
-décider si le Calamar Géant garde sa timidité déjà codée.
+Et les deux petites choses : l'**Anguille chasse le Crabe** (2026-09-05) — seul maillon avec de la marge, aucune pression sur une chaîne déjà tendue ; le **Calamar Géant garde sa timidité** déjà codée, décrite dans sa fiche ci-dessus.

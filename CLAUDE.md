@@ -226,6 +226,45 @@ Quatre règles évitent les tas de poissons, apprises à la dure :
 
 Les groupes d'espèces de fond sont répartis **régulièrement** sur leur bande valide (un tirage au sort les agglutine).
 
+### La plage : l'effet d'entonnoir (corrigé le 5 septembre 2026)
+
+Tout finissait par s'entasser contre le rivage. La cause : `limiteLarge()`
+calculait la barrière sur la seule **taille**. Un Confetti de 11 px pouvait donc
+descendre jusqu'à **46 px d'eau**, une Méduse et un Clown aussi, un Thon jusqu'à
+112 — c'est-à-dire le ressac. En simulation à vide personne n'y va, ce qui masque
+complètement le problème ; dès qu'un prédateur ou le **curseur du joueur** les
+pousse vers la côte, tout le monde s'y écrase et ne peut plus repartir.
+
+Trois planchers génériques, tous mesurés :
+
+- **Aucun nageur** ne va là où il y a moins de **150 px d'eau** — barrière du
+  Confetti portée de 46 à 180 px d'eau, et 0 échoué après 15 s de souris
+  balayée le long du rivage (contre un entassement systématique avant).
+- **Un colosse en exige 900** : la Baleine tenait dans 548 px d'eau, ce qui la
+  ramenait beaucoup trop près de la plage. Sa barrière passe de x=1790 à 2420.
+- **Les créatures de fond** aussi : coquillage, étoile, oursin et crabe ont une
+  bande qui commence à 0, ils se posaient donc jusqu'au rivage exact et on en
+  trouvait sur le **sable sec**. Il leur faut désormais `size * 3 + 40` px d'eau,
+  au spawn (`spawnGroups`) **et** en reptation (`bornesReptation`).
+
+### Un dormeur ne bouge plus
+
+`maxSpeed = speed * 0,05` laissait une dérive lente, et l'errance continuait de
+pousser : un crabe endormi traversait sa bande de sable pendant la nuit. Le
+sommeil coupe maintenant la vitesse **et** l'accélération accumulée. Attention,
+il faut le faire **deux fois** : la branche `crawl` court-circuite le steering,
+un rampant continuait sa marche toute la nuit. Mesuré : **0 dormeur de fond en
+mouvement** sur 226 dormeurs.
+
+### Frai éclair (`fraiRapide`)
+
+La reproduction demande normalement de **rencontrer** un partenaire. Le bas de la
+chaîne y échappe : crevettes, krill, méduses, calmars, sardines, confettis,
+maquereaux, dorades. Les nourrir fait des œufs **immédiatement**. C'est le geste
+le plus naturel du jeu — « ils se font tous manger, je vais les aider » — et il
+n'avait aucun effet visible avant la minute suivante. Borné par `popCap`, donc
+sans risque de débordement.
+
 ### Créatures de fond : la bande de sable
 
 Le modelé du sable dessine des bandes qui suivent le contour du fond. Les

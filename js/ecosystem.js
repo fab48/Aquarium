@@ -19,23 +19,23 @@ const Ecosystem = {
     this.spawnGroups('coquillage', 3);
     this.spawnGroups('etoile', 4);
     this.spawnGroups('crabe', 3);
-    this.spawnGroups('confetti', 3);   // 2-3 GROS bancs plutot que des poignees
-    this.spawnGroups('bulle_fofolle', 5);
-    this.spawnGroups('volant', 5);
-    this.spawnGroups('meduse', 7);
+    this.spawnGroups('confetti', 2);   // 2-3 GROS bancs plutot que des poignees
+    this.spawnGroups('bulle_fofolle', 4);
+    this.spawnGroups('volant', 4);
+    this.spawnGroups('meduse', 5);
     this.spawnGroups('clown', 3);
     this.spawnGroups('hippocampe', 3);
-    this.spawnGroups('perroquet', 5);
+    this.spawnGroups('perroquet', 4);
     this.spawnGroups('poisson_lune', 3);
-    this.spawnGroups('lanterne', 6);
+    this.spawnGroups('lanterne', 4);
     this.spawnGroups('thon', 6);
     this.spawnGroups('raie', 3);
-    this.spawnGroups('poulpe', 4);
+    this.spawnGroups('poulpe', 3);
     this.spawnGroups('murene', 3);   // groupes de 1, tres espacees : chacune son rocher
     this.spawnGroups('poisson_tapis', 3);
     // Les grands fonds : sans eux la zone abyssale n'est qu'un decor noir.
     // La crevette d'abord (base de la chaine), puis ce qui la mange.
-    this.spawnGroups('crevette', 7);
+    this.spawnGroups('crevette', 4);
     this.spawnGroups('calamar', 4);
     this.spawnGroups('calamar_geant', 2);
     this.spawnGroups('moustachu', 3);
@@ -64,7 +64,7 @@ const Ecosystem = {
     this.spawnGroups('dorade', 2);
     this.spawnGroups('papillon', 4);
     this.spawnGroups('coffre', 3);
-    this.spawnGroups('jardiniere', 3);      // colonies de tubes
+    this.spawnGroups('jardiniere', 2);      // colonies de tubes
     this.spawnGroups('concombre', 3);
     this.spawnGroups('bernard', 3);
     this.spawnGroups('dentiste', 4);        // la station de nettoyage
@@ -84,7 +84,7 @@ const Ecosystem = {
     const def = SPECIES[speciesId];
     for (let g = 0; g < count; g++) {
       const n = U.randInt(def.groupSize[0], def.groupSize[1]);
-      const bottomDweller = ['shell', 'star', 'anemone', 'eel', 'worm', 'crab', 'urchin'].includes(def.render);
+      const bottomDweller = ['shell', 'star', 'anemone', 'eel', 'worm', 'crab', 'urchin', 'gardeneel'].includes(def.render);
       let x, y;
       // Espèces ancrées à une anémone : on répartit les groupes sur des refuges
       // DIFFÉRENTS (le moins peuplé d'un tirage), sinon tout le monde s'installe
@@ -99,10 +99,16 @@ const Ecosystem = {
           // Colonnes dont le FOND est dans la bande de l'espèce, puis répartition
           // RÉGULIÈRE des groupes sur toute la plage valide : un tirage au sort
           // les regroupe par hasard et crée des grappes (récifs entassés).
+          // PLANCHER D'EAU pour tout ce qui se pose au fond. Plusieurs espèces
+          // ont une bande qui commence à 0 (coquillage, étoile, oursin, crabe) :
+          // elles se posaient donc jusqu'au rivage exact, et on en trouvait sur
+          // le sable SEC, au-dessus de la ligne d'eau. Il faut au moins de quoi
+          // les recouvrir.
+          const fondMin = Math.max(def.depthBand[0], def.size * 3 + 40);
           const valid = [];
           for (let cx = World.shoreX; cx < CONFIG.WORLD_WIDTH - 100; cx += 120) {
             const d = World.depthAt(cx);
-            if (d >= def.depthBand[0] && d <= def.depthBand[1]) valid.push(cx);
+            if (d >= fondMin && d <= def.depthBand[1]) valid.push(cx);
           }
           // Les créatures à plat (ver-tapis) cherchent un replat : sur une forte
           // pente elles paraissent posées de travers.
@@ -266,13 +272,21 @@ const Ecosystem = {
         // Étalées sur les DEUX PREMIÈRES BANDES du modelé du sable plutôt que
         // toutes alignées sur la ligne de contour : le fond a de la largeur,
         // autant l'occuper. (La murène garde sa ligne : son rocher en dépend.)
-        const bande = def.render === 'eel' ? 0
+        const bande = (def.render === 'eel' || def.render === 'gardeneel') ? 0
           : U.clamp((rang + U.rand(-0.28, 0.28)) / 2.6 * SABLE_BANDE, 0, SABLE_BANDE);
         e._sable = bande;
-        if (['shell', 'star', 'anemone', 'eel', 'worm', 'urchin'].includes(def.render)) {
+        if (['shell', 'star', 'anemone', 'eel', 'worm', 'urchin', 'gardeneel'].includes(def.render)) {
           e.y = World.floorY(e.x) - def.size * 0.4 + bande;
         } else if (def.movement === 'crawl') {
           e.y = World.floorY(e.x) - def.size * 0.6 + bande;
+        }
+        // L'HIPPOCAMPE S'ACCROCHE AU BOUT DES HERBES. Son habitat lui donnait
+        // le bon x mais pas le bon y : il s'ancrait n'importe où dans la
+        // colonne d'eau (relevé de 6 à 316 px au-dessus du sol, pour des herbes
+        // qui n'en font que 27 à 192). On le pose à la cime.
+        if (def.habitat === 'weed') {
+          const h = Background.hauteurHerbier(e.x);
+          e.y = World.floorY(e.x) - h * U.rand(0.72, 1) - def.size * 0.4;
         }
         if (def.movement === 'fixed' || def.movement === 'anchored') {
           e.anchorX = e.x; e.anchorY = e.y;

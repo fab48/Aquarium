@@ -855,6 +855,118 @@ const FishBody = {
 
   // Murène : partie AVANT du corps seulement (le rocher est dessiné ailleurs).
   // e.strikeT ∈ [0,1] : 0 = rentrée dans le trou, 1 = jaillie au maximum.
+  // ANGUILLE ÉLECTRIQUE : un long ruban qui ondule sur TOUTE sa longueur, sans
+  // rocher — elle nage en pleine eau, contrairement à la murène qui vit dans un
+  // trou. L'onde COURT vers la queue (déphasage par segment) au lieu de battre
+  // d'un seul tenant : c'est ce qui distingue un corps-tentacule d'un poisson.
+  // Elle se charge visiblement avant sa décharge (`_shockCd`).
+  drawRibbon(ctx, e, t) {
+    const s = e.size;
+    const SEG = 16;
+    const L = s * 3.4;
+    // Charge : les liserés s'allument à mesure que la décharge approche
+    const cd = e._shockCd ?? 99;
+    const charge = U.clamp(1 - cd / 1.6, 0, 1);
+    const nage = U.clamp(e.speedNow / (e.def.speed || 30), 0.25, 1.6);
+
+    const pts = [];
+    for (let i = 0; i <= SEG; i++) {
+      const u = i / SEG;                       // 0 = tête, 1 = bout de queue
+      // Onde progressive : chaque segment est en retard sur le précédent.
+      const onde = Math.sin(t * 3.2 * nage - u * 5.4 + e.phase);
+      pts.push({ x: s * 0.9 - u * L, y: onde * s * 0.5 * (0.25 + u * 0.9) });
+    }
+    // Corps : un ruban dont l'épaisseur décroît vers la queue
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (let pass = 0; pass < 2; pass++) {
+      ctx.strokeStyle = pass ? e.color : e.colorDark;
+      ctx.beginPath();
+      for (let i = 0; i <= SEG; i++) {
+        const p = pts[i];
+        i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y);
+      }
+      ctx.lineWidth = s * (pass ? 0.72 : 0.95);
+      ctx.stroke();
+    }
+    // Nageoire ventrale continue, la signature de l'anguille électrique
+    ctx.fillStyle = e.colorDark;
+    ctx.beginPath();
+    for (let i = 0; i <= SEG; i++) ctx.lineTo(pts[i].x, pts[i].y + s * (0.34 - i / SEG * 0.2));
+    for (let i = SEG; i >= 0; i--) ctx.lineTo(pts[i].x, pts[i].y + s * (0.62 - i / SEG * 0.42));
+    ctx.closePath(); ctx.fill();
+
+    // Liserés électriques : deux traits pointillés le long du dos, qui
+    // s'allument quand la charge monte.
+    if (charge > 0.02) {
+      ctx.strokeStyle = `rgba(180,230,255,${0.25 + charge * 0.75})`;
+      ctx.lineWidth = Math.max(1, s * 0.13);
+      ctx.setLineDash([s * 0.3, s * 0.35]);
+      ctx.beginPath();
+      for (let i = 0; i <= SEG; i++) {
+        const p = pts[i];
+        i === 0 ? ctx.moveTo(p.x, p.y - s * 0.22) : ctx.lineTo(p.x, p.y - s * 0.22);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Tête, à l'avant du ruban
+    ctx.fillStyle = e.color;
+    ctx.beginPath();
+    ctx.ellipse(s * 0.85, pts[0].y, s * 0.62, s * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.save();
+    ctx.translate(s * 0.85, pts[0].y);
+    this.face(ctx, s * 0.62, e, t);
+    ctx.restore();
+  },
+
+  // ANGUILLE-JARDINIÈRE : un tube planté dans le sable, qui ondule doucement.
+  // `_rentre` (0 → 1) la fait redescendre dans son trou — toute la colonie
+  // disparaît d'un coup quand un prédateur passe, et c'est TOUT le gag.
+  drawGardenEel(ctx, e, t) {
+    const s = e.size;
+    const rentre = U.clamp(e._rentre ?? 0, 0, 1);
+    const sortie = 1 - rentre;
+    if (sortie < 0.03) {
+      // Rentrée : il ne reste que le trou dans le sable
+      ctx.fillStyle = 'rgba(60,52,40,0.55)';
+      ctx.beginPath(); ctx.ellipse(0, s * 0.55, s * 0.45, s * 0.18, 0, 0, Math.PI * 2); ctx.fill();
+      return;
+    }
+    const H = s * 3.2 * sortie;
+    const SEG = 10;
+    const pts = [];
+    for (let i = 0; i <= SEG; i++) {
+      const u = i / SEG;                       // 0 = pied (dans le sable), 1 = tête
+      const onde = Math.sin(t * 1.4 - u * 2.2 + e.phase) * s * 0.42 * u;
+      pts.push({ x: onde, y: s * 0.5 - u * H });
+    }
+    // Trou
+    ctx.fillStyle = 'rgba(60,52,40,0.55)';
+    ctx.beginPath(); ctx.ellipse(0, s * 0.55, s * 0.45, s * 0.18, 0, 0, Math.PI * 2); ctx.fill();
+    // Tube
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = e.color;
+    ctx.lineWidth = s * 0.44;
+    ctx.beginPath();
+    for (let i = 0; i <= SEG; i++) { const p = pts[i]; i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y); }
+    ctx.stroke();
+    // Mouchetures
+    ctx.fillStyle = e.colorDark;
+    for (let i = 2; i < SEG; i += 2) {
+      ctx.beginPath(); ctx.arc(pts[i].x, pts[i].y, s * 0.1, 0, Math.PI * 2); ctx.fill();
+    }
+    // Tête au sommet
+    const tete = pts[SEG];
+    ctx.save();
+    ctx.translate(tete.x, tete.y);
+    ctx.fillStyle = e.color;
+    ctx.beginPath(); ctx.ellipse(0, 0, s * 0.34, s * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+    this.face(ctx, s * 0.34, e, t);
+    ctx.restore();
+  },
+
   drawEel(ctx, e, t) {
     const s = e.size;
     const strike = U.clamp(e.strikeT ?? 0, 0, 1);
@@ -1770,6 +1882,8 @@ const FishBody = {
       case 'octopus': this.drawOctopus(ctx, e, t); break;
       case 'seahorse': this.drawSeahorse(ctx, e, t); break;
       case 'eel': this.drawEel(ctx, e, t); break;
+      case 'ribbon': this.drawRibbon(ctx, e, t); break;
+      case 'gardeneel': this.drawGardenEel(ctx, e, t); break;
       case 'star': this.drawStar(ctx, e, t); break;
       case 'urchin': this.drawUrchin(ctx, e, t); break;
       case 'turtle': this.drawTurtle(ctx, e, t); break;

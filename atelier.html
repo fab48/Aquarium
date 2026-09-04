@@ -119,6 +119,7 @@
     <button data-outil="nageoires">Nageoires</button>
     <button data-outil="queue">Queue</button>
     <button data-outil="points">Points</button>
+    <button data-outil="forme">Forme</button>
     <span style="flex:1"></span>
     <button id="btnSilhouette">Partir de la silhouette du jeu</button>
     <button id="btnSVG">Importer un SVG…</button>
@@ -358,6 +359,15 @@ function poignees(sp) {
     ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
   });
 
+  // Contour de la forme sélectionnée, pour savoir ce qu'on va déplacer
+  if (outil === 'forme' && doc.shapes[formeSel]) {
+    const pts = doc.shapes[formeSel].points;
+    ctx.strokeStyle = '#1560d8'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    pts.forEach((p, i) => { const [x, y] = versEcran(p); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.closePath(); ctx.stroke(); ctx.setLineDash([]);
+  }
+
   // Points de la forme sélectionnée
   if (outil === 'points' && doc.shapes[formeSel]) {
     const pts = doc.shapes[formeSel].points;
@@ -488,6 +498,19 @@ function panneau() {
         <input type="range" id="sTB" min="0" max="${Math.round(doc.naturalW)}" value="${Math.round(doc.tailBlend)}">
         <label>Amplitude de la forme ${formeSel + 1} <span class="val" id="vAmp">${doc.shapes[formeSel].amp}</span></label>
         <input type="range" id="sAmp" min="0" max="60" value="${doc.shapes[formeSel].amp}">`;
+    } else if (outil === 'forme') {
+      h += `<h2>Forme entière</h2><p class="aide">Tire la forme sélectionnée pour la
+        déplacer. Les boutons agissent autour de son centre.</p>
+        <label>Taille</label>
+        <div class="rangee"><button id="bPlusPetit">− 5 %</button><button id="bPlusGrand">+ 5 %</button></div>
+        <label>Rotation</label>
+        <div class="rangee"><button id="bTourneG">↺ 3°</button><button id="bTourneD">↻ 3°</button></div>
+        <label>Miroir</label>
+        <div class="rangee"><button id="bMiroirX">↔ horizontal</button><button id="bMiroirY">↕ vertical</button></div>
+        <div class="rangee"><button id="bDupliquer">Dupliquer la forme</button></div>
+        <p class="aide">Un miroir horizontal sert à faire la nageoire de l'autre côté :
+          dupliquer, puis retourner, puis déplacer.<br>
+          <kbd>Ctrl</kbd>+<kbd>Z</kbd> annule chaque geste.</p>`;
     } else if (outil === 'points') {
       h += `<h2>Points</h2><p class="aide">Tire les carrés pour retoucher le contour de la
         forme sélectionnée. <kbd>clic</kbd> sur le trait pour insérer un point,
@@ -582,6 +605,13 @@ function cabler() {
   on('#sTB', 'input', e => { doc.tailBlend = +e.target.value; $('#vTB').textContent = e.target.value; marquer(); });
   on('#sAmp', 'input', e => { doc.shapes[formeSel].amp = +e.target.value; $('#vAmp').textContent = e.target.value; marquer(); });
   on('#cFill', 'input', e => { if (doc.shapes[formeSel]) { doc.shapes[formeSel].fill = e.target.value; marquer(); panneau(); } });
+  on('#bPlusPetit', 'click', () => echelleForme(0.95));
+  on('#bPlusGrand', 'click', () => echelleForme(1 / 0.95));
+  on('#bTourneG', 'click', () => tournerForme(-3));
+  on('#bTourneD', 'click', () => tournerForme(3));
+  on('#bMiroirX', 'click', () => miroirForme('x'));
+  on('#bMiroirY', 'click', () => miroirForme('y'));
+  on('#bDupliquer', 'click', dupliquerForme);
   on('#bMonte', 'click', () => bouger(-1));
   on('#bDesc', 'click', () => bouger(1));
   on('#bSup', 'click', () => {
@@ -608,6 +638,65 @@ function cabler() {
   on('#bRecadrer', 'click', cadrer);
 }
 
+// --- Transformations d'une forme entière ------------------------------------
+// Tirer les points un par un ne permet pas de RE-PLACER une nageoire ou de
+// redresser une pièce importée de travers. Tout passe donc par une seule
+// fonction : on applique la transformation aux points, et — c'est le détail qui
+// évite le piège — aux ancrages de nageoire qui visent cette forme, sinon le
+// disque d'influence reste derrière et la nageoire se déforme autour du vide.
+function transformer(fn) {
+  const sh = doc.shapes[formeSel];
+  if (!sh) return;
+  sh.points = sh.points.map(fn);
+  for (const f of doc.fins) {
+    if (f.layerIndex !== formeSel) continue;
+    const [x, y] = fn([f.x, f.y]);
+    f.x = x; f.y = y;
+  }
+  marquer();
+}
+
+// Centre de la boîte de la forme : repère des mises à l'échelle et rotations.
+function centreForme() {
+  const pts = doc.shapes[formeSel].points;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of pts) {
+    if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0];
+    if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1];
+  }
+  return [(x0 + x1) / 2, (y0 + y1) / 2];
+}
+
+function echelleForme(k) {
+  const [cx, cy] = centreForme();
+  instantane();
+  transformer(p => [cx + (p[0] - cx) * k, cy + (p[1] - cy) * k]);
+}
+function tournerForme(deg) {
+  const [cx, cy] = centreForme();
+  const a = deg * Math.PI / 180, co = Math.cos(a), si = Math.sin(a);
+  instantane();
+  transformer(p => {
+    const dx = p[0] - cx, dy = p[1] - cy;
+    return [cx + dx * co - dy * si, cy + dx * si + dy * co];
+  });
+}
+function miroirForme(axe) {
+  const [cx, cy] = centreForme();
+  instantane();
+  transformer(p => (axe === 'x' ? [2 * cx - p[0], p[1]] : [p[0], 2 * cy - p[1]]));
+}
+function dupliquerForme() {
+  instantane();
+  const sh = JSON.parse(JSON.stringify(doc.shapes[formeSel]));
+  sh.points = sh.points.map(p => [p[0] + doc.naturalW * 0.04, p[1] + doc.naturalH * 0.04]);
+  doc.shapes.splice(formeSel + 1, 0, sh);
+  // Les nageoires visant une forme au-delà du point d'insertion se décalent.
+  for (const f of doc.fins) if (f.layerIndex > formeSel) f.layerIndex++;
+  formeSel++;
+  marquer(); panneau();
+}
+
 function bouger(d) {
   const j = formeSel + d;
   if (j < 0 || j >= doc.shapes.length) return;
@@ -629,18 +718,22 @@ function marquer() { if (espece && doc) brouillons[espece] = doc; dessiner(); ra
 // `instantane()` s'appelle AVANT la modification, et une seule fois par geste —
 // pas à chaque `pointermove`, sinon un simple glissé remplit la pile.
 const histoire = [], futur = [];
+// La SÉLECTION fait partie de l'instantané. Sans elle, annuler une duplication
+// laissait la forme active sur un indice qui n'existe plus au même endroit : on
+// croyait tirer une nageoire et on en déplaçait une autre.
 function instantane() {
   if (!doc) return;
-  histoire.push(JSON.stringify(doc));
+  histoire.push(JSON.stringify({ doc, formeSel, finSel }));
   if (histoire.length > 40) histoire.shift();
   futur.length = 0;
 }
 function annuler(pile, autre) {
   if (!doc || !pile.length) return dire('rien à ' + (pile === histoire ? 'annuler' : 'rétablir'));
-  autre.push(JSON.stringify(doc));
-  doc = JSON.parse(pile.pop());
-  formeSel = Math.min(formeSel, doc.shapes.length - 1);
-  finSel = Math.min(finSel, Math.max(0, doc.fins.length - 1));
+  autre.push(JSON.stringify({ doc, formeSel, finSel }));
+  const e = JSON.parse(pile.pop());
+  doc = e.doc;
+  formeSel = Math.min(e.formeSel, doc.shapes.length - 1);
+  finSel = Math.min(e.finSel, Math.max(0, doc.fins.length - 1));
   marquer(); panneau();
   dire(pile === histoire ? 'annulé' : 'rétabli');
 }
@@ -693,7 +786,21 @@ function pres(sx, sy) {
       if (Math.hypot(sx - x, sy - y) < seuil) return { type: 'point', i };
     }
   }
+  if (outil === 'forme' && doc.shapes[formeSel]) {
+    const [wx, wy] = versDoc(sx, sy);
+    if (dansForme(doc.shapes[formeSel].points, wx, wy)) return { type: 'forme', wx, wy };
+  }
   return null;
+}
+
+// Le point est-il dans le polygone ? (lancer de rayon, pair/impair)
+function dansForme(pts, x, y) {
+  let dedans = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i], [xj, yj] = pts[j];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) dedans = !dedans;
+  }
+  return dedans;
 }
 
 // Point du contour le plus proche du curseur, s'il est à portée : renvoie
@@ -773,6 +880,12 @@ vue.addEventListener('pointermove', ev => {
   else if (a.type === 'fin') { doc.fins[a.i].x = x; doc.fins[a.i].y = y; }
   else if (a.type === 'queue') doc.tailBlend = x;
   else if (a.type === 'point') doc.shapes[formeSel].points[a.i] = [x, y];
+  else if (a.type === 'forme') {
+    const dx = x - a.wx, dy = y - a.wy;
+    a.wx = x; a.wy = y;
+    transformer(p => [p[0] + dx, p[1] + dy]);
+    return;                       // `transformer` a déjà appelé `marquer`
+  }
   else if (a.type === 'vue') { vueT.x = a.ox + (sx - a.sx); vueT.y = a.oy + (sy - a.sy); dessiner(); return; }
   marquer();
 });

@@ -46,7 +46,7 @@ orange = brouillon non enregistré, grise = silhouette procédurale.
 | Importer un SVG… | n'importe quel dessin vectoriel (Illustrator, Inkscape, l'éditeur d'ancrages…) |
 | Importer un JSON… | un document d'atelier déjà commencé |
 
-**Quatre outils**, dans la barre :
+**Cinq outils**, dans la barre :
 
 - **Ancres** — `center` (le point que le jeu place à la position de la créature),
   `nose`, `tail`, et surtout `eye` / `mouth` qui portent le visage commun.
@@ -65,14 +65,22 @@ orange = brouillon non enregistré, grise = silhouette procédurale.
 - **Queue** — la ligne verticale `tailBlend`. Tout ce qui est à sa gauche ondule.
 - **Points** — tirer les carrés retouche le contour ; clic sur le trait insère un
   point, <kbd>alt</kbd>+clic en supprime un.
+- **Forme** — la forme entière : on la tire pour la déplacer, et les boutons
+  l'agrandissent, la tournent, la retournent ou la dupliquent autour de son
+  centre. Un miroir horizontal sert à faire la nageoire de l'autre côté :
+  dupliquer, retourner, déplacer. **Les ancrages de nageoire suivent la forme**
+  qu'ils visent, sinon le disque d'influence reste derrière et la nageoire se
+  déforme autour du vide.
 
 Plus, dans le panneau : un curseur d'**échelle** et un bouton **silhouette
 d'origine**, qui superpose en gris la silhouette procédurale que le dessin
 remplace. C'est le repère pour juger d'une taille — surtout sur un dessin importé
 sans échelle déclarée, où le jeu suppose un poisson allongé.
 
-<kbd>Ctrl</kbd>+<kbd>Z</kbd> annule, partout. Molette pour zoomer, glissé du fond
-pour déplacer la vue.
+<kbd>Ctrl</kbd>+<kbd>Z</kbd> annule, partout — **la sélection fait partie de
+l'instantané**, sinon annuler une duplication laisse la forme active sur un
+indice qui a changé de sens, et on croit tirer une nageoire en en déplaçant une
+autre. Molette pour zoomer, glissé du fond pour déplacer la vue.
 
 **Le bandeau du bas** montre le dessin sous sept humeurs. Une calibration juste
 doit tenir sur toutes : `sleeping` (bouche du ronflement) et `angry` (sourcil

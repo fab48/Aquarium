@@ -62,8 +62,11 @@
            background: var(--panneau); border-bottom: 1px solid var(--bord); flex-wrap: wrap; }
   #plan { flex: 1; position: relative; min-height: 0; }
   #vue { position: absolute; inset: 0; width: 100%; height: 100%; }
-  #humeurs { height: 132px; border-top: 1px solid var(--bord); background: var(--panneau); }
-  #humeurs canvas { width: 100%; height: 100%; display: block; }
+  #humeurs { height: 158px; border-top: 1px solid var(--bord); background: var(--panneau);
+             display: flex; flex-direction: column; }
+  #humeurs canvas { width: 100%; flex: 1; min-height: 0; display: block; }
+  #humeursBarre { display: flex; gap: 5px; padding: 5px 10px 0; }
+  #humeursBarre button { padding: 2px 8px; font-size: 11.5px; }
 
   /* --- Panneau --- */
   #panneau { width: 322px; background: var(--panneau); border-left: 1px solid var(--bord);
@@ -115,6 +118,38 @@
   .calques input { flex: none; margin: 0; }
   .sep { border: 0; border-top: 1px solid var(--bord); margin: 0 4px; height: 18px; align-self: center; }
   #barre .grp2 { display: flex; gap: 4px; }
+
+  /* --- Panneau : l'outil en cours en haut, le reste replié -------------------
+     Tout était empilé d'un seul tenant : pour changer la couleur d'un calque il
+     fallait passer devant les ancres, la queue, l'échelle et l'enregistrement.
+     Chaque section est donc repliable, et se souvient de son état. */
+  #titreOutil { display: flex; align-items: center; gap: 8px; margin: 14px 0 2px;
+                padding: 7px 9px; border-radius: 7px; background: #eaf3fb;
+                border: 1px solid #cfe3f5; }
+  #titreOutil .ico { font-size: 17px; line-height: 1; }
+  #titreOutil b { font-size: 13px; }
+  #titreOutil .quoi { display: block; font-size: 11.5px; color: var(--doux); font-weight: 400; }
+  details.bloc { border: 1px solid var(--bord); border-radius: 7px; margin-top: 8px;
+                 background: #fbfdff; }
+  details.bloc > summary { cursor: pointer; padding: 7px 9px; font-size: 11px;
+                           text-transform: uppercase; letter-spacing: .07em; color: var(--doux);
+                           font-weight: 600; list-style: none; display: flex; align-items: center; gap: 6px; }
+  details.bloc > summary::-webkit-details-marker { display: none; }
+  details.bloc > summary::before { content: '▸'; font-size: 10px; transition: transform .12s; }
+  details.bloc[open] > summary::before { transform: rotate(90deg); }
+  details.bloc > summary .cpt { margin-left: auto; text-transform: none; letter-spacing: 0;
+                                font-weight: 400; color: #8ba2b4; font-size: 11px; }
+  details.bloc .dedans { padding: 0 9px 10px; }
+  details.bloc .dedans h2:first-child { margin-top: 4px; }
+  .puce { display: flex; align-items: center; gap: 6px; font-weight: 400; font-size: 12.5px; }
+  .puce input { flex: none; width: auto; }
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-items: center; }
+  .pastilles { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .pastilles input[type=color] { width: 30px; height: 26px; padding: 1px; }
+  .pastilles .sup { padding: 2px 5px; font-size: 11px; }
+  #filtre { width: 100%; margin-top: 7px; padding: 4px 7px; border: 1px solid var(--bord);
+            border-radius: 5px; font: inherit; font-size: 12px; }
+  #barre .aideOff { opacity: .55; }
 </style>
 </head>
 <body>
@@ -123,18 +158,21 @@
   <header>
     <h1>Atelier des créatures</h1>
     <div class="sous"><span id="compte">—</span></div>
+    <input id="filtre" type="text" placeholder="filtrer les espèces…" autocomplete="off">
   </header>
   <div id="liste"></div>
 </div>
 
 <div id="scene">
   <div id="barre">
-    <button id="tOutils" class="on" data-outil="ancres" title="Repères du visage (1)">📍 Ancres</button>
-    <button data-outil="nageoires" title="Nageoires, pattes, tentacules (2)">🖐 Appendices</button>
-    <button data-outil="queue" title="Ondulation du corps (3)">〰 Queue</button>
-    <button data-outil="forme" title="Déplacer / tourner un calque (4)">⬛ Calque</button>
-    <button data-outil="points" title="Retoucher le contour (5)">◻ Points</button>
-    <button data-outil="dessiner" title="Tracer un nouveau calque (6)">✏️ Dessiner</button>
+    <button id="tOutils" class="on" data-outil="ancres" title="Repères du dessin (1)">📍 Ancres</button>
+    <button data-outil="visage" title="Taille, forme et couleurs du visage (2)">🙂 Visage</button>
+    <button data-outil="nageoires" title="Nageoires, pattes, tentacules (3)">🖐 Appendices</button>
+    <button data-outil="queue" title="Ondulation du corps (4)">〰 Queue</button>
+    <button data-outil="forme" title="Déplacer / tourner / colorer un calque (5)">⬛ Calque</button>
+    <button data-outil="points" title="Retoucher le contour (6)">◻ Points</button>
+    <button data-outil="dessiner" title="Tracer un nouveau calque (7)">✏️ Dessiner</button>
+    <button id="bAide" class="on" title="Afficher / masquer les explications du panneau">💡</button>
     <span style="flex:1"></span>
     <button id="btnNeuf">Nouveau dessin</button>
     <button id="btnFond">Image de repérage…</button>
@@ -145,7 +183,14 @@
     <input type="file" id="fichierFond" accept="image/*" hidden>
   </div>
   <div id="plan"><canvas id="vue"></canvas></div>
-  <div id="humeurs"><canvas id="cHumeurs"></canvas></div>
+  <div id="humeurs">
+    <div id="humeursBarre">
+      <button data-bandeau="cles" class="on">9 humeurs clés</button>
+      <button data-bandeau="toutes">les 18</button>
+      <button data-bandeau="individus" title="Le même dessin sur six individus : c'est là qu'on juge une couleur tirée au sort">6 individus</button>
+    </div>
+    <canvas id="cHumeurs"></canvas>
+  </div>
   <div id="etat">Choisis une espèce à gauche.</div>
 </div>
 
@@ -202,7 +247,17 @@ let REPERES = {};           // espèce -> { w, h, rang } : la planche découpée
 let vueT = { x: 0, y: 0, k: 1 };
 let anime = false;
 let fantome = false;    // superposition de la silhouette procédurale
+let nuit = false;       // force la nuit : sans ça une luminescence est invisible ici
 let attrape = null;     // ce que la souris tient en ce moment
+let filtreTxt = '';     // filtre du rail — 51 espèces, on ne les parcourt plus à l'œil
+// Le bandeau du bas : les humeurs, ou le MÊME dessin sur plusieurs individus.
+// C'est le seul endroit où se juge une couleur tirée au sort.
+let bandeauMode = 'cles';
+// Le panneau montrait tout d'un seul tenant. Chaque section est repliable et se
+// souvient de son état — sinon elle se rouvre à chaque re-rendu, c'est-à-dire à
+// chaque mouvement de curseur.
+let aide = localStorage.getItem('atelier.aide') !== '0';
+const ouverts = JSON.parse(localStorage.getItem('atelier.blocs') || '{}');
 
 // `eye2` n'est présente que si l'espèce a deux yeux : la liste effective est
 // donc lue depuis le document, pas figée.
@@ -296,44 +351,73 @@ function gabarit(genre) {
 // ---------------------------------------------------------------------------
 // Rail des espèces
 // ---------------------------------------------------------------------------
+// Le rail listait les 51 espèces dans l'ordre de `SPECIES`, ce qui ne dit rien
+// de l'état d'avancement : on cherchait « celles qu'il reste à faire » à l'œil,
+// une par une. Il les RANGE désormais par état, et un filtre coupe la liste dès
+// qu'on sait ce qu'on cherche.
+//
+// La rubrique « sans dessin de référence » est la plus utile des cinq : c'est
+// la liste, tenue à jour toute seule, des espèces qui n'ont encore rien —
+// ni dessin actif, ni brouillon, ni vignette dans la planche du design.
 function rail() {
   const l = $('#liste');
   l.innerHTML = '';
   let nSprite = 0;
-  const titre = txt => {
+  const titre = (txt, n) => {
     const d = document.createElement('div');
-    d.className = 'rubrique'; d.textContent = txt; l.appendChild(d);
+    d.className = 'rubrique'; d.textContent = n != null ? `${txt} · ${n}` : txt;
+    l.appendChild(d);
   };
+  const f = filtreTxt.trim().toLowerCase();
+  const passe = id => !f || id.includes(f) || SPECIES[id].name.toLowerCase().includes(f)
+                    || (SPECIES[id].realName || '').toLowerCase().includes(f);
 
-  titre('Espèces du jeu');
+  const groupes = { actif: [], brouillon: [], planche: [], rien: [] };
   for (const id of Object.keys(SPECIES)) {
+    if (manifeste[id]) nSprite++;
+    if (!passe(id)) continue;
+    if (manifeste[id]) groupes.actif.push(id);
+    else if (brouillons[id]) groupes.brouillon.push(id);
+    else if (aRepere(id)) groupes.planche.push(id);
+    else groupes.rien.push(id);
+  }
+
+  const ligne = (id) => {
     const d = document.createElement('div');
     d.className = 'esp' + (id === espece && !fichierOuvert ? ' actif' : '');
     const aSprite = !!manifeste[id];
-    if (aSprite) nSprite++;
     d.innerHTML = `<span class="pastille ${brouillons[id] ? 'brouillon' : (aSprite ? 'sprite' : '')}"></span>`
                 + `<span class="nom">${SPECIES[id].name}</span>`
                 + (aRepere(id) ? `<span class="fic" title="dessin de référence">🎨</span>` : '')
                 + (aSprite ? `<span class="fic">${manifeste[id]}</span>` : '');
     d.title = (aSprite ? `dessin : ${manifeste[id]}.json` : 'silhouette procédurale')
-            + (aRepere(id) ? ' · planche du design disponible' : '');
+            + (aRepere(id) ? ' · planche du design disponible' : ' · aucun dessin de référence');
     d.onclick = () => { fichierOuvert = null; choisir(id); };
     l.appendChild(d);
-  }
+  };
+  const rubrique = (cle, txt) => {
+    if (!groupes[cle].length) return;
+    titre(txt, groupes[cle].length);
+    groupes[cle].forEach(ligne);
+  };
+  rubrique('actif', 'Dessin actif dans le jeu');
+  rubrique('brouillon', 'Brouillons non enregistrés');
+  rubrique('planche', 'Planche du design disponible');
+  rubrique('rien', 'Sans dessin de référence');
 
   // Tout dessin présent dans Assets/ mais rattaché à aucune espèce. Sans cette
   // rubrique, un fichier enregistré puis désactivé devenait introuvable : il
   // existait sur le disque et nulle part dans l'outil.
   const rattaches = new Set(Object.values(manifeste));
-  const libres = fichiers.filter(f => !rattaches.has(f));
+  const libres = fichiers.filter(x => !rattaches.has(x) && (!f || x.toLowerCase().includes(f)));
   if (libres.length) {
-    titre('Dessins non rattachés');
-    for (const f of libres) {
+    titre('Dessins non rattachés', libres.length);
+    for (const x of libres) {
       const d = document.createElement('div');
-      d.className = 'esp' + (f === fichierOuvert ? ' actif' : '');
-      d.innerHTML = `<span class="pastille brouillon"></span><span class="nom">${f}</span>`;
-      d.title = `Assets/${f}.json — pas encore rattaché à une espèce`;
-      d.onclick = () => ouvrirFichier(f);
+      d.className = 'esp' + (x === fichierOuvert ? ' actif' : '');
+      d.innerHTML = `<span class="pastille brouillon"></span><span class="nom">${x}</span>`;
+      d.title = `Assets/${x}.json — pas encore rattaché à une espèce`;
+      d.onclick = () => ouvrirFichier(x);
       l.appendChild(d);
     }
   }
@@ -475,13 +559,18 @@ function apres() {
 // ---------------------------------------------------------------------------
 function defEspece() { return SPECIES[espece] || SPECIES.requin; }
 
-function poser(expr, t) {
+// `ind` : le numéro d'individu du bandeau. Deux individus d'une même espèce ne
+// partagent ni identifiant ni couleur — c'est ce qui rend visible une couleur
+// tirée au sort, invisible tant qu'on ne regarde qu'un seul poisson.
+function poser(expr, t, ind = 0) {
   const def = defEspece();
   const e = new Entity(espece || 'requin', 0, 0);
+  e.id = 1000 + ind * 7;
   e.stage = 'adult'; e.growth = 1; e.gabarit = 1; e.age = e.maxAge * 0.5;
   e.expression = expr || 'idle'; e._held = true; e.exprTimer = 9; e.emoteDur = 9;
   e._facing = 1; e._flipX = 1; e._tilt = 0; e._chew = 0; e._sable = 0;
-  e.speedNow = def.speed; e.phase = 0; e._color = def.colors[0];
+  e.speedNow = def.speed; e.phase = 0;
+  e._color = def.colors[ind % def.colors.length];
   e.stealth = 0; e.strikeT = 0; e._repli = 0;
   return e;
 }
@@ -708,7 +797,7 @@ function poignees(sp) {
   // tous. Dans tous les outils qui travaillent SUR un calque : sans repère
   // permanent on ne sait pas sur lequel on agit. Pas dans « Ancres », où on
   // regarde un visage et où le pointillé ne fait que gêner.
-  if (doc.shapes[formeSel] && outil !== 'ancres' && outil !== 'dessiner') {
+  if (doc.shapes[formeSel] && outil !== 'ancres' && outil !== 'visage' && outil !== 'dessiner') {
     const lot = groupeDe(formeSel);
     ctx.setLineDash([6, 4]);
     for (const j of lot) {
@@ -742,7 +831,9 @@ function poignees(sp) {
   for (const cle of ancres()) {
     const a = doc.points[cle]; if (!a) continue;
     const [x, y] = versEcran([a.x, a.y]);
-    const vif = outil === 'ancres';
+    // L'outil Visage travaille sur les mêmes deux ancres : leurs cercles de
+    // taille doivent y rester saisissables, sinon on règle un œil à l'aveugle.
+    const vif = outil === 'ancres' || (outil === 'visage' && (cle.startsWith('eye') || cle === 'mouth'));
     // Cercle de taille : l'œil, et la bouche. La bouche n'a pas toujours de `r`
     // enregistré — on montre alors la valeur qu'elle suit.
     const rayon = cle === 'mouth' ? tailleBouche() : a.r;
@@ -765,10 +856,18 @@ function poignees(sp) {
   }
 }
 
-// --- Bandeau d'humeurs : une calibration juste doit tenir sur TOUTES les
-// expressions. `sleeping` (bouche du ronflement) et `angry` (sourcil lourd)
-// sont les deux qui débordent en premier d'une tête trop petite.
-const HUMEURS = ['idle', 'happy', 'angry', 'sleeping', 'scared', 'kiss', 'disgust'];
+// --- Bandeau du bas ---------------------------------------------------------
+// Une calibration juste doit tenir sur TOUTES les expressions. Il n'en montrait
+// que 7 sur les 18 de `FishBody.EMOTIONS` : on réglait donc un visage sur sept
+// cas et le jeu en jouait dix-huit. La plus gênante des absentes était `eating`,
+// celle qui ouvre la bouche en grand — donc celle qui met le plus à l'épreuve
+// l'ancre de bouche et son rayon, le réglage le plus délicat de l'atelier.
+//
+// Trois modes : les neuf humeurs clés, les dix-huit, et le même dessin sur six
+// INDIVIDUS — le seul endroit où se juge une couleur tirée au sort.
+const HUMEURS_CLES = ['idle', 'happy', 'eating', 'angry', 'sleeping', 'scared',
+                      'surprise', 'kiss', 'disgust'];
+const HUMEURS_TOUTES = Object.keys(FishBody.EMOTIONS);
 function bandeau() {
   const W = cHum.clientWidth, H = cHum.clientHeight, dpr = Math.min(devicePixelRatio || 1, 2);
   if (cHum.width !== W * dpr || cHum.height !== H * dpr) { cHum.width = W * dpr; cHum.height = H * dpr; }
@@ -778,17 +877,28 @@ function bandeau() {
   const sp = brancher(); const def = defEspece();
   const b = bornes(sp);
   const kJeu = echelleRendu(sp, def);
-  const pas = W / HUMEURS.length;
-  const k = Math.min((pas - 16) / (sp.w * kJeu), (H - 34) / Math.max(1, (b.y1 - b.y0) * kJeu));
   const t = anime ? performance.now() / 1000 : 1.2;
-  HUMEURS.forEach((ex, i) => {
+  const cases = bandeauMode === 'individus'
+    ? [0, 1, 2, 3, 4, 5].map(i => ({ ex: 'idle', ind: i, txt: 'n° ' + (i + 1) }))
+    : (bandeauMode === 'toutes' ? HUMEURS_TOUTES : HUMEURS_CLES).map(ex => ({ ex, ind: 0, txt: ex }));
+  // Au-delà de neuf vignettes, une seule rangée les rend minuscules : on passe
+  // à deux, chacune à la moitié de la hauteur.
+  const lignes = cases.length > 9 ? 2 : 1;
+  const parLigne = Math.ceil(cases.length / lignes);
+  const pas = W / parLigne, hLigne = H / lignes;
+  const k = Math.min((pas - 14) / (sp.w * kJeu), (hLigne - 26) / Math.max(1, (b.y1 - b.y0) * kJeu));
+  cases.forEach((c, i) => {
+    const li = Math.floor(i / parLigne), co = i % parLigne;
+    const cx = pas * (co + 0.5), cy = hLigne * li + hLigne / 2 + 7;
     gHum.save();
-    gHum.translate(pas * (i + 0.5), H / 2 + 8);
+    gHum.translate(cx, cy);
     gHum.scale(k, k);
-    try { FishBody.draw(gHum, poser(ex, t), t); } catch (err) { /* ignore */ }
+    // Un individu différent = un identifiant différent : c'est lui, et lui
+    // seul, qui décide de la couleur tirée au sort.
+    try { FishBody.draw(gHum, poser(c.ex, t, c.ind), t); } catch (err) { /* ignore */ }
     gHum.restore();
     gHum.fillStyle = '#5b7186'; gHum.font = '11px system-ui'; gHum.textAlign = 'center';
-    gHum.fillText(ex, pas * (i + 0.5), 15);
+    gHum.fillText(c.txt, cx, hLigne * li + 13);
   });
   gHum.textAlign = 'left';
   debrancher();
@@ -797,6 +907,37 @@ function bandeau() {
 // ---------------------------------------------------------------------------
 // Panneau contextuel
 // ---------------------------------------------------------------------------
+// Il montrait TOUT, tout le temps, d'un seul tenant : pour changer la couleur
+// d'un calque il fallait défiler devant les ancres, la queue, l'échelle et
+// l'enregistrement, et rien ne disait sur quoi l'outil courant agissait.
+//
+// Trois règles depuis :
+//  1. le haut du panneau appartient à l'OUTIL sélectionné, et il est annoncé ;
+//  2. tout le reste est en sections REPLIABLES qui se souviennent de leur état
+//     (`ouverts`), donc un réglage rangé une fois reste rangé ;
+//  3. les explications sont un CALQUE (bouton 💡) : elles occupaient les deux
+//     tiers de la colonne, ce qui est bien la première fois et jamais après.
+const OUTILS = {
+  ancres:    { ico: '📍', nom: 'Ancres',     quoi: 'Les repères du dessin : centre, museau, œil, bouche, queue.' },
+  visage:    { ico: '🙂', nom: 'Visage',     quoi: 'Taille, forme de bouche et couleurs du visage commun.' },
+  nageoires: { ico: '🖐', nom: 'Appendices', quoi: 'Nageoires, pattes, antennes, bras.' },
+  queue:     { ico: '〰', nom: 'Queue',      quoi: 'Ce qui ondule, et à partir d\'où.' },
+  forme:     { ico: '⬛', nom: 'Calque',     quoi: 'Déplacer, tourner, retourner un calque entier.' },
+  points:    { ico: '◻', nom: 'Points',      quoi: 'Retoucher le contour, point par point.' },
+  dessiner:  { ico: '✏️', nom: 'Dessiner',   quoi: 'Tracer un nouveau calque au clic.' },
+};
+
+// Une explication ne s'affiche que si l'aide est allumée.
+const A = h => (aide ? `<p class="aide">${h}</p>` : '');
+
+// Une section repliable, dont l'état est retenu d'un rendu à l'autre.
+function bloc(cle, titre, contenu, parDefaut, compte) {
+  const o = ouverts[cle] != null ? ouverts[cle] : !!parDefaut;
+  return `<details class="bloc" data-bloc="${cle}"${o ? ' open' : ''}>
+    <summary>${titre}${compte ? `<span class="cpt">${compte}</span>` : ''}</summary>
+    <div class="dedans">${contenu}</div></details>`;
+}
+
 // Amplitude effective d'un appendice : la sienne, ou à défaut celle du premier
 // calque qu'il entraîne (le comportement d'avant, pour les dessins déjà calés).
 function ampDe(f) {
@@ -813,241 +954,336 @@ function listeCalques(attr, choisies) {
     `<span class="pastel" style="background:${sh.fill || sh.stroke || '#888'}"></span>` +
     `forme ${i + 1}${sh.groupe ? ' · ' + sh.groupe : ''}</label>`).join('') + `</div>`;
 }
-function panneau() {
-  const p = $('#panneau');
-  if (!espece) { p.innerHTML = '<p class="aide">Choisis une espèce dans la liste.</p>'; return; }
-  // Un document rechargé peut avoir moins de formes : une case cochée sur un
-  // indice disparu ferait planter « Aplatir ».
-  if (doc) for (const i of [...coches]) if (i >= doc.shapes.length) coches.delete(i);
-  const def = SPECIES[espece];
-  const nom = manifeste[espece] || (doc && doc.nom) || espece;
 
-  let h = `<h2>${fichierOuvert ? fichierOuvert + '.json' : def.name}</h2>
-    <p class="aide">${fichierOuvert
-        ? `dessin non rattaché · mis à l'échelle de <b>${def.name}</b>`
-        : (def.realName || '')}<br>
-    taille de jeu <b>${def.size}</b> · ${doc ? doc.shapes.length + ' forme(s)' : 'silhouette procédurale'}</p>`;
+// --- Les sections, une fonction par sujet -----------------------------------
 
-  if (doc) {
-    if (outil === 'ancres') {
-      const deux = doc.points.eye.ecart != null || !!doc.points.eye2;
-      h += `<h2>Ancres</h2><p class="aide">Tire les croix sur le dessin, ou saisis les
-        coordonnées : sur une petite tête elles se chevauchent et deviennent
-        impossibles à viser à la souris.<br>
-        <b>center</b> est le point que le jeu place à la position de la créature ;
-        <b>eye</b> et <b>mouth</b> portent le visage commun.</p>
-        <div class="coord">` +
-        ancres().map(cle => `
-          <label><span class="pt" style="background:${COUL[cle]}"></span>${cle}</label>
-          <input type="number" step="0.5" data-anc="${cle}" data-axe="x" value="${doc.points[cle].x.toFixed(1)}">
-          <input type="number" step="0.5" data-anc="${cle}" data-axe="y" value="${doc.points[cle].y.toFixed(1)}">`).join('')
-        + `</div>
-        <label>Taille de l'œil <span class="val" id="vR">${(doc.points.eye.r || 0).toFixed(1)}</span></label>
-        <input type="range" id="sR" min="1" max="${Math.round(doc.naturalW * 0.3)}" step="0.5" value="${doc.points.eye.r || 10}">
-        <div class="rangee"><button id="bAutoOeil">Déduire du dessin</button></div>
-        <label>Taille de la bouche <span class="val" id="vBR">${tailleBouche().toFixed(1)}</span></label>
-        <input type="range" id="sBR" min="1" max="${Math.round(doc.naturalW * 0.3)}" step="0.5" value="${tailleBouche()}">
-        <p class="aide">${doc.points.mouth.r == null
-          ? 'Suit la taille de l\'œil tant qu\'on n\'y touche pas.'
-          : 'Réglée à part de l\'œil.'} Le cercle bleu sur le dessin : tire sa poignée droite.</p>
+function sectionAncres() {
+  const deux = doc.points.eye.ecart != null || !!doc.points.eye2;
+  return A(`Tire les croix sur le dessin, ou saisis les coordonnées : sur une petite
+      tête elles se chevauchent et deviennent impossibles à viser à la souris.<br>
+      <b>center</b> est le point que le jeu place à la position de la créature ;
+      <b>eye</b> et <b>mouth</b> portent le visage commun.`)
+    + `<div class="coord">`
+    + ancres().map(cle => `
+      <label><span class="pt" style="background:${COUL[cle]}"></span>${cle}</label>
+      <input type="number" step="0.5" data-anc="${cle}" data-axe="x" value="${doc.points[cle].x.toFixed(1)}">
+      <input type="number" step="0.5" data-anc="${cle}" data-axe="y" value="${doc.points[cle].y.toFixed(1)}">`).join('')
+    + `</div>
 
-        <h2>Gabarit</h2>
-        <div class="rangee">
-          <button data-gab="profil">Poisson</button>
-          <button data-gab="face">De face</button>
-          <button data-gab="rampant">Rampant</button>
-        </div>
-        <p class="aide">Replace les ancres d'un coup. Un poisson se voit de
-          <b>profil</b> : un œil, bouche au museau, queue qui bat. Un crabe ou une
-          étoile se voient de <b>dessus</b> : deux yeux, <b>bouche au milieu</b>,
-          et <b>pas de queue</b> du tout.</p>
+    <h2>Gabarit</h2>
+    <div class="rangee">
+      <button data-gab="profil">Poisson</button>
+      <button data-gab="face">De face</button>
+      <button data-gab="rampant">Rampant</button>
+    </div>`
+    + A(`Replace les ancres d'un coup. Un poisson se voit de <b>profil</b> : un œil,
+        bouche au museau, queue qui bat. Un crabe ou une étoile se voient de
+        <b>dessus</b> : deux yeux, <b>bouche au milieu</b>, et <b>pas de queue</b>.`)
+    + `<h2>Nombre d'yeux</h2>
+    <div class="rangee"><button id="bDeuxYeux" class="${deux ? 'on' : ''}">${deux ? 'Revenir à un œil' : 'Passer à deux yeux'}</button></div>`
+    + (deux && doc.points.eye.ecart != null ? `
+      <label>Écartement <span class="val" id="vEcart">${doc.points.eye.ecart.toFixed(1)}</span></label>
+      <input type="range" id="sEcart" min="0" max="${Math.round(doc.naturalW * 0.8)}" step="0.5" value="${doc.points.eye.ecart}">`
+      + A(`Le second œil est le symétrique du premier, décalé vers la queue : une
+           seule ancre à placer.`)
+      + `<div class="rangee"><button id="bLibererOeil">Le placer librement</button></div>` : '')
+    + (doc.points.eye2 ? A(`Second œil <b>placé librement</b> : son ancre <code>eye2</code>
+        est dans la liste ci-dessus.`) : '')
+    + A(`Le visage commun est de <b>profil</b> : un seul œil, ce qui va à un poisson vu
+        de côté. Tout ce qui se voit de face ou de dessus — crabe, raie, coquillage,
+        poulpe — en veut deux.`);
+}
 
-        <h2>Nombre d'yeux</h2>
-        <div class="rangee"><button id="bDeuxYeux" class="${deux ? 'on' : ''}">${deux ? 'Revenir à un œil' : 'Passer à deux yeux'}</button></div>
-        ${deux && doc.points.eye.ecart != null ? `
-          <label>Écartement <span class="val" id="vEcart">${doc.points.eye.ecart.toFixed(1)}</span></label>
-          <input type="range" id="sEcart" min="0" max="${Math.round(doc.naturalW * 0.8)}" step="0.5" value="${doc.points.eye.ecart}">
-          <p class="aide">Le second œil est le symétrique du premier, décalé vers la queue :
-            une seule ancre à placer.</p>
-          <div class="rangee"><button id="bLibererOeil">Le placer librement</button></div>` : ''}
-        ${doc.points.eye2 ? `<p class="aide">Second œil <b>placé librement</b> : son ancre
-          <code>eye2</code> est dans la liste ci-dessus.</p>` : ''}
-        <p class="aide">Le visage commun est de <b>profil</b> : un seul œil, ce qui va
-          à un poisson vu de côté. Tout ce qui se voit de face ou de dessus —
-          crabe, raie, coquillage, poulpe — en veut deux.</p>`;
-    } else if (outil === 'nageoires') {
-      h += `<h2>Appendices</h2><p class="aide">Nageoire, patte, antenne, bras de poulpe.
-        <kbd>clic</kbd> dans le vide en pose un sur le calque sélectionné.</p>`;
-      if (!doc.fins.length) h += '<p class="aide"><i>aucun appendice</i></p>';
-      else {
-        const f = doc.fins[finSel], tt = TYPE(f);
-        const tent = tt === 'tentacule';
-        h += `<select id="selFin">${doc.fins.map((o, i) => {
-            const c = calquesDe(o);
-            return `<option value="${i}" ${i === finSel ? 'selected' : ''}>${i + 1}. ${TYPE(o)}`
-                 + ` → ${c.length > 1 ? c.length + ' formes' : 'forme ' + (c[0] + 1)}</option>`;
-          }).join('')}</select>
+// LE VISAGE. Il était éparpillé : la taille de l'œil et de la bouche vivaient
+// dans « Ancres », la forme de la bouche et ses couleurs n'existaient pas du
+// tout. C'est pourtant le seul élément que TOUTES les créatures partagent.
+function sectionVisage() {
+  const v = doc.visage || {};
+  const st = doc.boucheStyle || 'standard';
+  const c = (cle, defaut, titre) =>
+    `<label>${titre}<span class="val">${v[cle] ? '' : 'défaut'}</span></label>
+     <div class="rangee">
+       <input type="color" data-vis="${cle}" value="${v[cle] && v[cle][0] === '#' ? v[cle] : defaut}">
+       <button data-visraz="${cle}" ${v[cle] ? '' : 'disabled'} title="Revenir à la valeur commune">↺</button>
+     </div>`;
+  return `<h2>Taille</h2>
+    <label>Œil <span class="val" id="vR">${(doc.points.eye.r || 0).toFixed(1)}</span></label>
+    <input type="range" id="sR" min="1" max="${Math.round(doc.naturalW * 0.3)}" step="0.5" value="${doc.points.eye.r || 10}">
+    <div class="rangee"><button id="bAutoOeil">Déduire du dessin</button></div>
+    <label>Bouche <span class="val" id="vBR">${tailleBouche().toFixed(1)}</span></label>
+    <input type="range" id="sBR" min="1" max="${Math.round(doc.naturalW * 0.3)}" step="0.5" value="${tailleBouche()}">`
+    + A(`${doc.points.mouth.r == null
+          ? 'La bouche suit la taille de l\'œil tant qu\'on n\'y touche pas.'
+          : 'Bouche réglée à part de l\'œil.'}
+        Sur le dessin : le cercle rouge est l'œil, le bleu la bouche — tire leur poignée droite.`)
 
-          <h2>Type</h2>
-          <div class="rangee">
-            <button data-typeapp="nageoire" class="${tent ? '' : 'on'}">Nageoire</button>
-            <button data-typeapp="tentacule" class="${tent ? 'on' : ''}">Tentacule</button>
-          </div>
-          <p class="aide">${tent
-            ? 'Une <b>onde court</b> de l\'ancre vers la pointe de la flèche : la base ne bouge pas, le bout parcourt toute l\'amplitude. C\'est ce qu\'il faut pour une patte, une antenne, un bras — un pivot les rend raides.'
-            : 'La forme <b>pivote</b> autour de l\'ancre : plein effet au centre du disque, plus rien à son bord.'}</p>
+    + `<h2>Forme de la bouche</h2>
+    <select id="selBouche">${Object.keys(FishBody.BOUCHES).map(k =>
+        `<option value="${k}"${k === st ? ' selected' : ''}>${FishBody.BOUCHES[k].nom}</option>`).join('')}</select>`
+    + A(`Ce que la bouche <b>exprime</b> reste piloté par les émotions, communes à tout
+        l'aquarium. Ce réglage-ci dit à quoi elle <b>ressemble</b> : un bec de pélican
+        et une gueule de requin ne jouent pas la colère avec la même bouche. Le bandeau
+        du bas montre le résultat sur toutes les humeurs.`)
 
-          <label>${tent ? 'Longueur' : 'Rayon d\'influence'} <span class="val" id="vFR">${Math.round(f.r)}</span></label>
-          <input type="range" id="sFR" min="10" max="${Math.round(doc.naturalW * 0.9)}" value="${Math.round(f.r)}">`;
-        if (tent) h += `
-          <label>Direction <span class="val" id="vFA">${Math.round(f.ang != null ? f.ang : 180)}°</span></label>
-          <input type="range" id="sFA" min="-180" max="180" value="${Math.round(f.ang != null ? f.ang : 180)}">
-          <label>Ondes sur la longueur <span class="val" id="vFO">${(f.ondes != null ? f.ondes : 1).toFixed(2)}</span></label>
-          <input type="range" id="sFO" min="0" max="2" step="0.05" value="${f.ondes != null ? f.ondes : 1}">
-          <p class="aide">Tire la <b>pointe de la flèche</b> sur le dessin : direction et
-            longueur d'un seul geste. 0 onde = le membre se balance d'un bloc ;
-            1 onde = il se déroule.</p>`;
-        h += `
-          <label>Amplitude <span class="val" id="vFAm">${ampDe(f)}</span>${tent ? ' %' : '°'}</label>
-          <input type="range" id="sFAm" min="0" max="${tent ? 80 : 60}" value="${ampDe(f)}">
-          <label>Déphasage <span class="val" id="vFPh">${Math.round(f.phase || 0)}°</span></label>
-          <input type="range" id="sFPh" min="0" max="360" value="${Math.round(f.phase || 0)}">
-          <label>Vitesse <span class="val" id="vFV">${(f.vitesse || 1).toFixed(2)}</span>×</label>
-          <input type="range" id="sFV" min="0.2" max="2.5" step="0.05" value="${f.vitesse || 1}">
-          <p class="aide">Déphasage et vitesse <b>propres à cet appendice</b> : sans eux,
-            les huit pattes d'un crabe battent toutes ensemble, ce qui se lit comme un
-            tressaillement et pas comme une marche.</p>
+    + `<h2>Couleurs</h2>`
+    + c('encre',   '#1c2733', 'Trait (contour, œil fermé)')
+    + c('sourcil', '#1c2733', 'Sourcil')
+    + c('pupille', '#1c2733', 'Pupille')
+    + c('blanc',   '#ffffff', 'Blanc de l\'œil')
+    + c('gorge',   '#5a2d3d', 'Intérieur de la bouche')
+    + c('langue',  '#ff8fa3', 'Langue')
+    + c('levres',  '#e8607f', 'Lèvres / ventouse')
+    + c('dent',    '#ffffff', 'Dents')
+    + c('bec',     '#f0a83c', 'Bec')
+    + `<div class="rangee"><button id="bVisRaz" ${doc.visage ? '' : 'disabled'}>Tout remettre par défaut</button></div>`
+    + A(`Le visage est dessiné <b>par-dessus</b> le dessin : le repeindre dans le calque
+        ne change rien. C'est ici que le trait d'encre, la pupille ou le bec prennent
+        la couleur de la créature.`);
+}
 
-          <div class="rangee"><button id="bMiroirFin" class="${f.miroir ? 'on' : ''}">${f.miroir ? 'Symétrique ✓' : 'Rendre symétrique'}</button></div>
-          <p class="aide">Un crabe, une raie, un poulpe ont des appendices des <b>deux</b>
-            côtés : un seul ancrage n'en anime qu'une moitié. En symétrique, un second est
-            posé en miroir de l'axe vertical du dessin et joue en sens inverse — les deux
-            côtés battent comme une paire de pattes.</p>
+function sectionAppendices() {
+  let h = A(`Nageoire, patte, antenne, bras de poulpe. <kbd>clic</kbd> dans le vide en
+      pose un sur le calque sélectionné.`);
+  if (!doc.fins.length) return h + '<p class="aide"><i>aucun appendice</i></p>';
+  const f = doc.fins[finSel], tent = TYPE(f) === 'tentacule';
+  h += `<select id="selFin">${doc.fins.map((o, i) => {
+      const cl = calquesDe(o);
+      return `<option value="${i}" ${i === finSel ? 'selected' : ''}>${i + 1}. ${TYPE(o)}`
+           + ` → ${cl.length > 1 ? cl.length + ' formes' : 'forme ' + (cl[0] + 1)}</option>`;
+    }).join('')}</select>
 
-          <h2>Formes entraînées</h2>
-          ${listeCalques('cal', calquesDe(f))}
-          <div class="rangee"><button id="bFinGroupe">Tout le groupe de la forme ${formeSel + 1}</button></div>
-          <p class="aide">Un appendice peut entraîner <b>plusieurs formes</b> : une patte
-            dessinée en trois pièces bat alors d'un seul geste, sans déchirure au
-            raccord. C'est l'« aplatissement » — voir la liste des formes plus bas.</p>
-          <div class="rangee"><button id="bSupFin">Supprimer cet appendice</button></div>`;
-      }
-    } else if (outil === 'queue') {
-      h += `<h2>Queue</h2>
-        <div class="rangee"><button id="bSansQueue" class="${doc.sansQueue ? 'on' : ''}">${doc.sansQueue ? 'Sans queue ✓' : 'Cette créature n\'a pas de queue'}</button></div>
-        <p class="aide">Un crabe, une étoile, un coquillage n'ont rien à faire onduler :
-          la valeur par défaut faisait tortiller un tiers du crabe. Leurs membres
-          s'animent avec des <b>appendices</b>, pas avec la queue.</p>`;
-      if (!doc.sansQueue) h += `
-        <p class="aide">Tout ce qui est <b>à gauche</b> de la ligne ondule, d'autant plus
-          qu'on approche du bout. Tire la ligne sur le dessin.</p>
-        <label>Départ de la queue <span class="val" id="vTB">${Math.round(doc.tailBlend)}</span></label>
-        <input type="range" id="sTB" min="0" max="${Math.round(doc.naturalW)}" value="${Math.round(doc.tailBlend)}">
-        <label>Ondes le long du corps <span class="val" id="vTO">${(doc.tailOndes || 0).toFixed(2)}</span></label>
-        <input type="range" id="sTO" min="0" max="3" step="0.05" value="${doc.tailOndes || 0}">
-        <p class="aide">0 = la queue bat <b>d'un seul tenant</b>, comme un poisson.
-          1 ou 2 = l'onde <b>court</b> vers le bout : c'est une murène ou une anguille,
-          dont le corps entier est un tentacule. Pour celles-là, pousse aussi le départ
-          de la queue jusqu'au museau.</p>
-        ${doc.shapes[formeSel] ? `
-          <label>Amplitude de la forme ${formeSel + 1} <span class="val" id="vAmp">${doc.shapes[formeSel].amp}</span></label>
-          <input type="range" id="sAmp" min="0" max="60" value="${doc.shapes[formeSel].amp}">` : ''}
-        <h2>Formes qui ondulent</h2>
-        <div class="rangee"><button id="bQTout" class="${doc.queueCalques ? '' : 'on'}">Toutes${doc.queueCalques ? '' : ' ✓'}</button></div>
-        ${doc.queueCalques ? listeCalques('qcal', doc.queueCalques) : ''}
-        <p class="aide">Par défaut la queue déforme tout le dessin. Restreindre est utile
-          quand un élément doit rester <b>rigide</b> — une carapace, un œil posé sur le
-          corps, un coquillage porté sur le dos.</p>
-        ${doc.queueCalques ? '' : '<div class="rangee"><button id="bQChoisir">Choisir les formes…</button></div>'}`;
-    } else if (outil === 'forme') {
-      h += `<h2>Forme entière</h2><p class="aide">Tire la forme sélectionnée pour la
-        déplacer. Les boutons agissent autour de son centre.</p>
-        <label>Taille</label>
-        <div class="rangee"><button id="bPlusPetit">− 5 %</button><button id="bPlusGrand">+ 5 %</button></div>
-        <label>Rotation</label>
-        <div class="rangee"><button id="bTourneG">↺ 3°</button><button id="bTourneD">↻ 3°</button></div>
-        <label>Miroir</label>
-        <div class="rangee"><button id="bMiroirX">↔ horizontal</button><button id="bMiroirY">↕ vertical</button></div>
-        <div class="rangee"><button id="bDupliquer">Dupliquer la forme</button></div>
-        <p class="aide">Un miroir horizontal sert à faire la nageoire de l'autre côté :
-          dupliquer, puis retourner, puis déplacer.<br>
-          <kbd>Ctrl</kbd>+<kbd>Z</kbd> annule chaque geste.</p>`;
-    } else if (outil === 'dessiner') {
-      h += `<h2>Dessiner une forme</h2><p class="aide">Clique pour poser les sommets.
-        <kbd>double-clic</kbd> ou <b>Fermer</b> termine la forme,
-        <kbd>Échap</kbd> l'abandonne, <kbd>retour arrière</kbd> retire le dernier point.</p>
-        <label>Couleur</label>
-        <input type="color" id="cTrace" value="${couleurTrace}">
-        <label class="puce"><input type="checkbox" id="cLisse" ${lisseTrace ? 'checked' : ''}> contour lissé</label>
-        <div class="rangee">
-          <button id="bFermer" ${trace && trace.length > 2 ? '' : 'disabled'}>Fermer la forme</button>
-          <button id="bAnnulerTrace" ${trace && trace.length ? '' : 'disabled'}>Abandonner</button>
-        </div>
-        <p class="aide">${trace ? `${trace.length} sommet(s) posé(s)` : 'aucun tracé en cours'}</p>`;
-    } else if (outil === 'points') {
-      h += `<h2>Points</h2><p class="aide">Tire les carrés pour retoucher le contour de la
-        forme sélectionnée. <kbd>clic</kbd> sur le trait pour insérer un point,
-        <kbd>alt</kbd>+clic sur un point pour le supprimer.<br>
-        <kbd>Ctrl</kbd>+<kbd>Z</kbd> annule, partout dans l'atelier.</p>`;
-    }
+    <h2>Type</h2>
+    <div class="rangee">
+      <button data-typeapp="nageoire" class="${tent ? '' : 'on'}">Nageoire</button>
+      <button data-typeapp="tentacule" class="${tent ? 'on' : ''}">Tentacule</button>
+    </div>`
+    + A(tent
+      ? 'Une <b>onde court</b> de l\'ancre vers la pointe de la flèche : la base ne bouge pas, le bout parcourt toute l\'amplitude. C\'est ce qu\'il faut pour une patte, une antenne, un bras — un pivot les rend raides.'
+      : 'La forme <b>pivote</b> autour de l\'ancre : plein effet au centre du disque, plus rien à son bord.')
+    + `<label>${tent ? 'Longueur' : 'Rayon d\'influence'} <span class="val" id="vFR">${Math.round(f.r)}</span></label>
+    <input type="range" id="sFR" min="10" max="${Math.round(doc.naturalW * 0.9)}" value="${Math.round(f.r)}">`;
+  if (tent) h += `
+    <label>Direction <span class="val" id="vFA">${Math.round(f.ang != null ? f.ang : 180)}°</span></label>
+    <input type="range" id="sFA" min="-180" max="180" value="${Math.round(f.ang != null ? f.ang : 180)}">
+    <label>Ondes sur la longueur <span class="val" id="vFO">${(f.ondes != null ? f.ondes : 1).toFixed(2)}</span></label>
+    <input type="range" id="sFO" min="0" max="2" step="0.05" value="${f.ondes != null ? f.ondes : 1}">`
+    + A(`Tire la <b>pointe de la flèche</b> sur le dessin : direction et longueur d'un
+        seul geste. 0 onde = le membre se balance d'un bloc ; 1 onde = il se déroule.`);
+  h += `
+    <label>Amplitude <span class="val" id="vFAm">${ampDe(f)}</span>${tent ? ' %' : '°'}</label>
+    <input type="range" id="sFAm" min="0" max="${tent ? 80 : 60}" value="${ampDe(f)}">
+    <label>Déphasage <span class="val" id="vFPh">${Math.round(f.phase || 0)}°</span></label>
+    <input type="range" id="sFPh" min="0" max="360" value="${Math.round(f.phase || 0)}">
+    <label>Vitesse <span class="val" id="vFV">${(f.vitesse || 1).toFixed(2)}</span>×</label>
+    <input type="range" id="sFV" min="0.2" max="2.5" step="0.05" value="${f.vitesse || 1}">`
+    + A(`Déphasage et vitesse <b>propres à cet appendice</b> : sans eux, les huit pattes
+        d'un crabe battent toutes ensemble, ce qui se lit comme un tressaillement et pas
+        comme une marche.`)
+    + `<div class="rangee"><button id="bMiroirFin" class="${f.miroir ? 'on' : ''}">${f.miroir ? 'Symétrique ✓' : 'Rendre symétrique'}</button></div>`
+    + A(`Un crabe, une raie, un poulpe ont des appendices des <b>deux</b> côtés : un seul
+        ancrage n'en anime qu'une moitié. En symétrique, un second est posé en miroir de
+        l'axe vertical et joue en sens inverse.`)
+    + `<h2>Formes entraînées</h2>
+    ${listeCalques('cal', calquesDe(f))}
+    <div class="rangee"><button id="bFinGroupe">Tout le groupe de la forme ${formeSel + 1}</button></div>`
+    + A(`Un appendice peut entraîner <b>plusieurs formes</b> : une patte dessinée en trois
+        pièces bat alors d'un seul geste, sans déchirure au raccord.`)
+    + `<div class="rangee"><button id="bSupFin">Supprimer cet appendice</button></div>`;
+  return h;
+}
 
-    h += `<h2>Taille</h2>
-      <label>Échelle <span class="val" id="vEch">${(doc.spriteScale || 1).toFixed(2)}</span>×</label>
-      <input type="range" id="sEch" min="0.3" max="3" step="0.01" value="${doc.spriteScale || 1}">
-      <p class="aide">${doc.echelle
-        ? 'Le document déclare son échelle : ce curseur ne fait que la corriger.'
-        : '<b>Dessin sans échelle déclarée.</b> Le jeu suppose alors un poisson allongé (largeur ≈ 2,5 × taille), ce qui est faux sur une créature verticale.'}</p>
-      <div class="rangee"><button id="bFantome" class="${fantome ? 'on' : ''}">Silhouette d'origine</button></div>
-      <p class="aide">Superpose en gris la silhouette procédurale que ce dessin remplace : c'est le repère pour juger de la taille.</p>
+function sectionQueue() {
+  let h = `<div class="rangee"><button id="bSansQueue" class="${doc.sansQueue ? 'on' : ''}">${doc.sansQueue ? 'Sans queue ✓' : 'Cette créature n\'a pas de queue'}</button></div>`
+    + A(`Un crabe, une étoile, un coquillage n'ont rien à faire onduler : la valeur par
+        défaut faisait tortiller un tiers du crabe. Leurs membres s'animent avec des
+        <b>appendices</b>, pas avec la queue.`);
+  if (doc.sansQueue) return h;
+  h += A(`Tout ce qui est <b>à gauche</b> de la ligne ondule, d'autant plus qu'on approche
+      du bout. Tire la ligne sur le dessin.`)
+    + `<label>Départ de la queue <span class="val" id="vTB">${Math.round(doc.tailBlend)}</span></label>
+    <input type="range" id="sTB" min="0" max="${Math.round(doc.naturalW)}" value="${Math.round(doc.tailBlend)}">
+    <label>Ondes le long du corps <span class="val" id="vTO">${(doc.tailOndes || 0).toFixed(2)}</span></label>
+    <input type="range" id="sTO" min="0" max="3" step="0.05" value="${doc.tailOndes || 0}">`
+    + A(`0 = la queue bat <b>d'un seul tenant</b>, comme un poisson. 1 ou 2 = l'onde
+        <b>court</b> vers le bout : c'est une murène ou une anguille, dont le corps entier
+        est un tentacule. Pour celles-là, pousse aussi le départ de la queue jusqu'au museau.`)
+    + (doc.shapes[formeSel] ? `
+      <label>Amplitude de la forme ${formeSel + 1} <span class="val" id="vAmp">${doc.shapes[formeSel].amp}</span></label>
+      <input type="range" id="sAmp" min="0" max="60" value="${doc.shapes[formeSel].amp}">` : '')
+    + `<h2>Formes qui ondulent</h2>
+    <div class="rangee"><button id="bQTout" class="${doc.queueCalques ? '' : 'on'}">Toutes${doc.queueCalques ? '' : ' ✓'}</button></div>
+    ${doc.queueCalques ? listeCalques('qcal', doc.queueCalques) : ''}`
+    + A(`Par défaut la queue déforme tout le dessin. Restreindre est utile quand un
+        élément doit rester <b>rigide</b> — une carapace, un coquillage porté sur le dos.`)
+    + (doc.queueCalques ? '' : '<div class="rangee"><button id="bQChoisir">Choisir les formes…</button></div>');
+  return h;
+}
 
-      <h2>Formes</h2><div class="formes">` + doc.shapes.map((sh, i) => {
-      const anime = doc.fins.filter(f => calquesDe(f).includes(i)).length;
+function sectionCalque() {
+  return A('Tire la forme sélectionnée pour la déplacer. Les boutons agissent autour de son centre.')
+    + `<label>Taille</label>
+    <div class="rangee"><button id="bPlusPetit">− 5 %</button><button id="bPlusGrand">+ 5 %</button></div>
+    <label>Rotation</label>
+    <div class="rangee"><button id="bTourneG">↺ 3°</button><button id="bTourneD">↻ 3°</button></div>
+    <label>Miroir</label>
+    <div class="rangee"><button id="bMiroirX">↔ horizontal</button><button id="bMiroirY">↕ vertical</button></div>
+    <div class="rangee"><button id="bDupliquer">Dupliquer la forme</button></div>`
+    + A(`Un miroir horizontal sert à faire la nageoire de l'autre côté : dupliquer, puis
+        retourner, puis déplacer.<br><kbd>Ctrl</kbd>+<kbd>Z</kbd> annule chaque geste.`);
+}
+
+function sectionDessiner() {
+  return A(`Clique pour poser les sommets. <kbd>double-clic</kbd> ou <b>Fermer</b> termine
+      la forme, <kbd>Échap</kbd> l'abandonne, <kbd>retour arrière</kbd> retire le dernier point.`)
+    + `<label>Couleur</label>
+    <input type="color" id="cTrace" value="${couleurTrace}">
+    <label class="puce"><input type="checkbox" id="cLisse" ${lisseTrace ? 'checked' : ''}> contour lissé</label>
+    <div class="rangee">
+      <button id="bFermer" ${trace && trace.length > 2 ? '' : 'disabled'}>Fermer la forme</button>
+      <button id="bAnnulerTrace" ${trace && trace.length ? '' : 'disabled'}>Abandonner</button>
+    </div>
+    <p class="aide">${trace ? `${trace.length} sommet(s) posé(s)` : 'aucun tracé en cours'}</p>`;
+}
+
+// APPARENCE d'un calque : remplissage, dégradé, contour, opacité,
+// bioluminescence, et la couleur TIRÉE AU SORT par individu.
+// Tout cela existait déjà en rendu procédural (`def.colors` et `Entity.color`
+// donnent sa nuance à chaque poisson d'un banc, `glowAtNight` allume la méduse)
+// et un dessin fait main n'y avait pas droit : quarante confettis dessinés
+// sortaient tous du même moule.
+function sectionApparence() {
+  const sh = doc.shapes[formeSel];
+  if (!sh) return '<p class="aide"><i>aucune forme sélectionnée</i></p>';
+  const deg = sh.degrade, cont = !!sh.stroke, cl = sh.couleur || {};
+  const modes = [['fixe', 'Fixe (la couleur ci-dessus)'],
+                 ['espece', 'Couleur de l\'individu (def.colors)'],
+                 ['especeSombre', 'Couleur de l\'individu, foncée'],
+                 ['palette', 'Tirée dans une palette'],
+                 ['teinte', 'Teinte décalée au hasard']];
+  let h = `<h2>Forme ${formeSel + 1}</h2>
+    <label>Remplissage</label>
+    <div class="rangee">
+      <input type="color" id="cFill" value="${(sh.fill && sh.fill[0] === '#') ? sh.fill : '#888888'}">
+      <button id="bSansFill" class="${sh.fill === null ? 'on' : ''}" title="Trait seul, sans remplissage">Trait seul</button>
+    </div>
+    <label class="puce"><input type="checkbox" id="cSmooth" ${sh.smooth ? 'checked' : ''}> contour lissé</label>
+
+    <h2>Dégradé</h2>
+    <label class="puce"><input type="checkbox" id="cDeg" ${deg ? 'checked' : ''}> dégradé sur cette forme</label>`;
+  if (deg) h += `
+    <div class="rangee">
+      <button data-degtype="lineaire" class="${deg.type === 'radial' ? '' : 'on'}">Linéaire</button>
+      <button data-degtype="radial" class="${deg.type === 'radial' ? 'on' : ''}">Radial</button>
+    </div>
+    <label>Vers <span class="val">${deg.vers || 'auto'}</span></label>
+    <div class="rangee">
+      <input type="color" id="cDegVers" value="${(deg.vers && deg.vers[0] === '#') ? deg.vers : '#243447'}">
+      <button id="bDegAuto" class="${deg.vers ? '' : 'on'}" title="La couleur de la forme, assombrie">auto</button>
+    </div>`
+    + (deg.type === 'radial' ? '' : `
+    <label>Angle <span class="val" id="vDegAng">${deg.ang == null ? 90 : deg.ang}°</span></label>
+    <input type="range" id="sDegAng" min="-180" max="180" value="${deg.ang == null ? 90 : deg.ang}">`)
+    + `<label>Étalement <span class="val" id="vDegPos">${(deg.pos == null ? 1 : deg.pos).toFixed(2)}</span></label>
+    <input type="range" id="sDegPos" min="0.05" max="1" step="0.05" value="${deg.pos == null ? 1 : deg.pos}">`
+    + A(`Le premier arrêt est <b>la couleur de la forme</b> — donc celle de l'individu
+        quand elle est tirée au sort plus bas. Un dégradé à deux couleurs fixes annulerait
+        cette variation.`);
+
+  h += `<h2>Contour</h2>
+    <label class="puce"><input type="checkbox" id="cCont" ${cont ? 'checked' : ''}> tracer un contour</label>`;
+  if (cont) h += `
+    <div class="rangee">
+      <input type="color" id="cContC" value="${(sh.stroke && sh.stroke[0] === '#') ? sh.stroke : '#1c2733'}">
+    </div>
+    <label>Épaisseur <span class="val" id="vContW">${(sh.lineWidth || 2).toFixed(1)}</span></label>
+    <input type="range" id="sContW" min="0.5" max="20" step="0.5" value="${sh.lineWidth || 2}">`
+    + A(`Le même champ sert au <b>trait seul</b> (un tentacule, une antenne : décoche
+        « remplissage ») et au <b>liseré</b> d'une forme pleine.`);
+
+  h += `<h2>Matière</h2>
+    <label>Opacité <span class="val" id="vAlpha">${(sh.alpha == null ? 1 : sh.alpha).toFixed(2)}</span></label>
+    <input type="range" id="sAlpha" min="0.05" max="1" step="0.05" value="${sh.alpha == null ? 1 : sh.alpha}">
+    <label>Luminescence <span class="val" id="vLueur">${(sh.lueur ? (sh.lueur === true ? 1 : sh.lueur) : 0).toFixed(2)}</span></label>
+    <input type="range" id="sLueur" min="0" max="1" step="0.05" value="${sh.lueur ? (sh.lueur === true ? 1 : sh.lueur) : 0}">`
+    + A(`La luminescence pose un <b>halo</b> de la couleur de la forme. Si l'espèce déclare
+        <code>glowAtNight</code> — méduse, lanterne, calamar — il ne s'allume que la nuit :
+        le bouton 🌙 du bandeau permet de le voir.`);
+
+  h += `<h2>Couleur par individu</h2>
+    <select id="selCoul">${modes.map(([k, t]) =>
+      `<option value="${k}"${(cl.mode || 'fixe') === k ? ' selected' : ''}>${t}</option>`).join('')}</select>`;
+  if (cl.mode === 'palette') {
+    const l = cl.couleurs || [];
+    h += `<div class="pastilles">` + l.map((c, i) =>
+        `<input type="color" data-pal="${i}" value="${c}">`).join('')
+      + `<button class="sup" id="bPalPlus">+</button>`
+      + (l.length ? `<button class="sup" id="bPalMoins">−</button>` : '') + `</div>`
+      + `<div class="rangee"><button id="bPalEspece">Reprendre les couleurs de l'espèce</button></div>`;
+  } else if (cl.mode === 'teinte') {
+    h += `<label>Amplitude <span class="val" id="vTeinte">${cl.amplitude == null ? 30 : cl.amplitude}°</span></label>
+      <input type="range" id="sTeinte" min="0" max="180" value="${cl.amplitude == null ? 30 : cl.amplitude}">`;
+  }
+  h += A(`Chaque individu garde SA couleur toute sa vie, tirée d'après son identifiant :
+      deux frames de suite donnent la même. C'est exactement ce que fait déjà
+      <code>Entity.color</code> pour les silhouettes — le bouton <b>6 individus</b> du
+      bandeau montre le résultat.`);
+  return h;
+}
+
+function sectionFormes() {
+  return `<div class="formes">` + doc.shapes.map((sh, i) => {
+      const n = doc.fins.filter(f => calquesDe(f).includes(i)).length;
+      const marques = (sh.degrade ? '▨' : '') + (sh.stroke ? '◌' : '')
+                    + (sh.lueur ? '✦' : '') + (sh.couleur && sh.couleur.mode && sh.couleur.mode !== 'fixe' ? '🎲' : '');
       return `<div class="forme ${i === formeSel ? 'sel' : ''}" data-i="${i}">
          <input type="checkbox" data-coche="${i}" ${coches.has(i) ? 'checked' : ''}>
          <span class="pastel" style="background:${sh.fill || sh.stroke || '#888'}"></span>
-         <span class="info">forme ${i + 1} · ${sh.points.length} pts${anime ? ' · 🖐' + anime : ''}</span>
+         <span class="info">forme ${i + 1} · ${sh.points.length} pts${n ? ' · 🖐' + n : ''} ${marques}</span>
          ${sh.groupe ? `<span class="grp">${sh.groupe}</span>` : ''}
        </div>`; }).join('') + `</div>
-      <div class="rangee">
-        <input type="color" id="cFill" value="${(doc.shapes[formeSel] && doc.shapes[formeSel].fill) || '#888888'}">
-        <button id="bMonte" title="Vers le fond">▲</button>
-        <button id="bDesc" title="Vers l'avant">▼</button>
-        <button id="bSup" title="Supprimer">✕</button>
-      </div>
-      <label class="puce"><input type="checkbox" id="cSmooth"
-        ${doc.shapes[formeSel] && doc.shapes[formeSel].smooth ? 'checked' : ''}> contour lissé</label>
-      <div class="rangee">
-        <button id="bAplatir">Aplatir les cochées (${coches.size})</button>
-        <button id="bDegrouper" ${groupeDe(formeSel).length > 1 ? '' : 'disabled'}>Dégrouper</button>
-      </div>
-      <p class="aide"><b>Aplatir</b> ne fond pas les tracés — un corps et sa rayure n'ont
-        pas la même couleur. Les formes cochées deviennent un <b>seul bloc</b> : elles se
-        déplacent, tournent et s'animent ensemble, et un seul appendice les entraîne
-        toutes. C'est ce qu'il faut pour un corps peint en plusieurs couches, et pour une
-        patte dessinée en trois pièces.<br>
+    <div class="rangee">
+      <button id="bMonte" title="Vers le fond">▲</button>
+      <button id="bDesc" title="Vers l'avant">▼</button>
+      <button id="bSup" title="Supprimer">✕</button>
+    </div>
+    <div class="rangee">
+      <button id="bAplatir">Aplatir les cochées (${coches.size})</button>
+      <button id="bDegrouper" ${groupeDe(formeSel).length > 1 ? '' : 'disabled'}>Dégrouper</button>
+    </div>`
+    + A(`<b>Aplatir</b> ne fond pas les tracés — un corps et sa rayure n'ont pas la même
+        couleur. Les formes cochées deviennent un <b>seul bloc</b> : elles se déplacent,
+        tournent et s'animent ensemble, et un seul appendice les entraîne toutes.<br>
         L'ordre est l'ordre de dessin : la première forme est au fond.
-        <kbd>🖐n</kbd> = nombre d'appendices qui animent la forme.</p>`;
+        <kbd>🖐n</kbd> appendices · <kbd>▨</kbd> dégradé · <kbd>◌</kbd> contour ·
+        <kbd>✦</kbd> luminescence · <kbd>🎲</kbd> couleur par individu.`);
+}
 
-    h += `<h2>Enregistrer</h2>
-      <label>Nom du fichier</label>
-      <input type="text" id="nomFichier" value="${nom}">
-      <p class="aide">Écrit dans <code>Assets/&lt;nom&gt;.json</code> par le serveur de dev.</p>
-      <div class="rangee"><button class="plein" id="bEnreg">Enregistrer</button></div>
-      <div class="rangee">
-        <button id="bActiver">${manifeste[espece] ? 'Réactiver' : 'Activer dans le jeu'}</button>
-        <button id="bDesactiver" ${manifeste[espece] ? '' : 'disabled'}>Revenir au procédural</button>
-      </div>
-      <p class="aide">« Revenir au procédural » garde le fichier : c'est ce qu'on fait pour
-      les espèces dont la silhouette actuelle convient déjà, comme la murène.</p>`;
-  }
+function sectionTaille() {
+  return `<label>Échelle <span class="val" id="vEch">${(doc.spriteScale || 1).toFixed(2)}</span>×</label>
+    <input type="range" id="sEch" min="0.3" max="3" step="0.01" value="${doc.spriteScale || 1}">`
+    + A(doc.echelle
+      ? 'Le document déclare son échelle : ce curseur ne fait que la corriger.'
+      : '<b>Dessin sans échelle déclarée.</b> Le jeu suppose alors un poisson allongé (largeur ≈ 2,5 × taille), ce qui est faux sur une créature verticale.')
+    + `<div class="rangee">
+      <button id="bFantome" class="${fantome ? 'on' : ''}">Silhouette d'origine</button>
+      <button id="bNuit" class="${nuit ? 'on' : ''}" title="Voir la luminescence et les couleurs de nuit">🌙 Nuit</button>
+    </div>
+    <div class="rangee">
+      <button id="bAnime" class="${anime ? 'on' : ''}">${anime ? 'Animation en cours' : 'Animer'}</button>
+      <button id="bRecadrer">Recadrer</button>
+    </div>`
+    + A(`La silhouette d'origine se superpose en gris : c'est le repère pour juger d'une
+        taille. Le mode nuit force <code>Main.nightAmount()</code> à 1 — c'est la seule
+        façon de voir une luminescence dans l'atelier.`);
+}
 
-  if (doc && doc.fond) {
+function sectionFond() {
+  if (doc.fond) {
     const f = doc.fond;
-    h += `<h2>Calque de repérage</h2>
-      <p class="aide">${f.planche
-        ? `planche du design — <code>Assets/Reperes/${f.planche}.png</code>`
-        : 'image importée, embarquée dans le fichier'} (${f.w}×${f.h})</p>
-      <label>Opacité <span class="val" id="vOpac">${f.opacite.toFixed(2)}</span></label>
+    return A(f.planche
+        ? `planche du design — <code>Assets/Reperes/${f.planche}.png</code> (${f.w}×${f.h})`
+        : `image importée, embarquée dans le fichier (${f.w}×${f.h})`)
+      + `<label>Opacité <span class="val" id="vOpac">${f.opacite.toFixed(2)}</span></label>
       <input type="range" id="sOpac" min="0" max="1" step="0.05" value="${f.opacite}">
       <label>Échelle <span class="val" id="vFk">${(f.k || 1).toFixed(2)}</span></label>
       <input type="range" id="sFk" min="0.1" max="4" step="0.01" value="${f.k || 1}">
@@ -1060,20 +1296,73 @@ function panneau() {
         <button id="bMiroirFond" title="Le dessin du jeu regarde toujours vers la droite">↔ Retourner</button>
       </div>
       <div class="rangee">
-        <button id="bDessusFond" title="Sous le dessin pour calquer, dessus pour comparer">${doc.fond.dessus ? 'Passer dessous' : 'Passer dessus'}</button>
+        <button id="bDessusFond" title="Sous le dessin pour calquer, dessus pour comparer">${f.dessus ? 'Passer dessous' : 'Passer dessus'}</button>
         <button id="bSansFond">Retirer l'image</button>
-      </div>
-      <p class="aide">${f.planche
+      </div>`
+      + A(f.planche
         ? 'La planche est référencée par son chemin : elle n\'alourdit pas le fichier.'
-        : 'Elle est embarquée dans le fichier, qui reste donc autonome — mais elle l\'alourdit : à retirer avant l\'enregistrement final.'}</p>`;
-  } else if (doc && aRepere(espece)) {
-    h += `<h2>Calque de repérage</h2>
-      <div class="rangee"><button id="bPlanche">Poser la planche du design</button></div>`;
+        : 'Elle est embarquée dans le fichier, qui reste donc autonome — mais elle l\'alourdit : à retirer avant l\'enregistrement final.');
   }
+  if (aRepere(espece)) return `<div class="rangee"><button id="bPlanche">Poser la planche du design</button></div>`;
+  return A('Cette espèce n\'a pas de dessin dans la planche du design. « Image de repérage… » en charge une du disque.');
+}
 
-  h += `<h2>Aperçu</h2>
-    <div class="rangee"><button id="bAnime" class="${anime ? 'on' : ''}">${anime ? 'Animation en cours' : 'Animer'}</button>
-    <button id="bRecadrer">Recadrer</button></div>`;
+function sectionEnregistrer(nom) {
+  return `<label>Nom du fichier</label>
+    <input type="text" id="nomFichier" value="${nom}">`
+    + A('Écrit dans <code>Assets/&lt;nom&gt;.json</code> par le serveur de dev.')
+    + `<div class="rangee"><button class="plein" id="bEnreg">Enregistrer</button></div>
+    <div class="rangee">
+      <button id="bActiver">${manifeste[espece] ? 'Réactiver' : 'Activer dans le jeu'}</button>
+      <button id="bDesactiver" ${manifeste[espece] ? '' : 'disabled'}>Revenir au procédural</button>
+    </div>`
+    + A(`« Revenir au procédural » garde le fichier : c'est ce qu'on fait pour les espèces
+        dont la silhouette actuelle convient déjà, comme la murène.`);
+}
+
+function panneau() {
+  const p = $('#panneau');
+  if (!espece) { p.innerHTML = '<p class="aide">Choisis une espèce dans la liste.</p>'; return; }
+  // Un document rechargé peut avoir moins de formes : une case cochée sur un
+  // indice disparu ferait planter « Aplatir ».
+  if (doc) for (const i of [...coches]) if (i >= doc.shapes.length) coches.delete(i);
+  const def = SPECIES[espece];
+  const nom = manifeste[espece] || (doc && doc.nom) || espece;
+  const O = OUTILS[outil] || OUTILS.ancres;
+
+  let h = `<h2>${fichierOuvert ? fichierOuvert + '.json' : def.name}</h2>
+    <p class="aide">${fichierOuvert
+        ? `dessin non rattaché · mis à l'échelle de <b>${def.name}</b>`
+        : (def.realName || '')}<br>
+    taille de jeu <b>${def.size}</b> · ${doc ? doc.shapes.length + ' forme(s)' : 'silhouette procédurale'}</p>`;
+
+  if (!doc) { p.innerHTML = h; cabler(); return; }
+
+  // Le haut du panneau appartient à l'outil courant, et le dit.
+  h += `<div id="titreOutil"><span class="ico">${O.ico}</span>
+    <b>${O.nom}<span class="quoi">${O.quoi}</span></b></div>`;
+  h += outil === 'ancres' ? sectionAncres()
+     : outil === 'visage' ? sectionVisage()
+     : outil === 'nageoires' ? sectionAppendices()
+     : outil === 'queue' ? sectionQueue()
+     : outil === 'forme' ? sectionCalque()
+     : outil === 'dessiner' ? sectionDessiner()
+     : A(`Tire les carrés pour retoucher le contour de la forme sélectionnée.
+          <kbd>clic</kbd> sur le trait pour insérer un point, <kbd>alt</kbd>+clic sur un
+          point pour le supprimer.<br><kbd>Ctrl</kbd>+<kbd>Z</kbd> annule, partout.`);
+
+  // Sections communes, repliées par défaut sauf celles dont l'outil se sert.
+  const surCalque = outil === 'forme' || outil === 'points' || outil === 'dessiner';
+  h += bloc('formes', 'Formes', sectionFormes(),
+            surCalque || outil === 'nageoires' || outil === 'queue',
+            `${doc.shapes.length} · n°${formeSel + 1}`);
+  h += bloc('apparence', 'Apparence de la forme', sectionApparence(), surCalque);
+  h += bloc('taille', 'Taille & aperçu', sectionTaille(), false,
+            (doc.spriteScale || 1).toFixed(2) + '×');
+  h += bloc('fond', 'Calque de repérage', sectionFond(), false,
+            doc.fond ? (doc.fond.planche || 'image') : '—');
+  h += bloc('enreg', 'Enregistrer', sectionEnregistrer(nom), false,
+            manifeste[espece] ? 'actif' : '');
 
   p.innerHTML = h;
   cabler();
@@ -1256,6 +1545,148 @@ function cabler() {
   on('#bSansFond', 'click', () => { instantane(); delete doc.fond; reprendreFond(); marquer(); panneau(); });
   on('#bAnime', 'click', () => { anime = !anime; panneau(); });
   on('#bRecadrer', 'click', cadrer);
+
+  // --- Sections repliables ---------------------------------------------------
+  // L'état est retenu hors du DOM : le panneau est reconstruit à chaque geste,
+  // une section ouverte se refermerait sinon au premier mouvement de curseur.
+  document.querySelectorAll('details.bloc').forEach(d => d.addEventListener('toggle', () => {
+    ouverts[d.dataset.bloc] = d.open;
+    localStorage.setItem('atelier.blocs', JSON.stringify(ouverts));
+  }));
+
+  // --- Visage ----------------------------------------------------------------
+  on('#selBouche', 'change', e => {
+    instantane();
+    if (e.target.value === 'standard') delete doc.boucheStyle;
+    else doc.boucheStyle = e.target.value;
+    marquer(); panneau();
+  });
+  document.querySelectorAll('[data-vis]').forEach(inp => {
+    inp.addEventListener('pointerdown', instantane);
+    inp.addEventListener('input', () => {
+      doc.visage = doc.visage || {};
+      doc.visage[inp.dataset.vis] = inp.value;
+      marquer();
+    });
+    // La mention « défaut » et le bouton ↺ ne changent qu'au relâchement :
+    // reconstruire le panneau pendant le glissé arracherait le sélecteur.
+    inp.addEventListener('change', () => panneau());
+  });
+  document.querySelectorAll('[data-visraz]').forEach(b => b.addEventListener('click', () => {
+    instantane();
+    if (doc.visage) delete doc.visage[b.dataset.visraz];
+    if (doc.visage && !Object.keys(doc.visage).length) delete doc.visage;
+    marquer(); panneau();
+  }));
+  on('#bVisRaz', 'click', () => { instantane(); delete doc.visage; marquer(); panneau(); });
+
+  // --- Apparence d'un calque -------------------------------------------------
+  const sh = () => doc.shapes[formeSel];
+  on('#bSansFill', 'click', () => {
+    instantane();
+    const f = sh(); if (!f) return;
+    // Trait seul : c'est ainsi que se dessinent un tentacule, une antenne, une
+    // moustache. Il lui faut alors forcément un contour, sinon la forme
+    // disparaît purement et simplement.
+    if (f.fill === null) f.fill = f._fillAvant || '#888888';
+    else { f._fillAvant = f.fill; f.fill = null; if (!f.stroke) { f.stroke = '#1c2733'; f.lineWidth = f.lineWidth || 3; } }
+    marquer(); panneau();
+  });
+  on('#cDeg', 'change', e => {
+    instantane();
+    const f = sh(); if (!f) return;
+    if (e.target.checked) f.degrade = { type: 'lineaire', ang: 90, pos: 1 };
+    else delete f.degrade;
+    marquer(); panneau();
+  });
+  document.querySelectorAll('[data-degtype]').forEach(b => b.addEventListener('click', () => {
+    instantane(); sh().degrade.type = b.dataset.degtype; marquer(); panneau();
+  }));
+  on('#cDegVers', 'pointerdown', instantane);
+  on('#cDegVers', 'input', e => { sh().degrade.vers = e.target.value; marquer(); });
+  on('#cDegVers', 'change', () => panneau());
+  on('#bDegAuto', 'click', () => { instantane(); delete sh().degrade.vers; marquer(); panneau(); });
+  on('#sDegAng', 'pointerdown', instantane);
+  on('#sDegAng', 'input', e => {
+    sh().degrade.ang = +e.target.value; $('#vDegAng').textContent = e.target.value + '°'; marquer();
+  });
+  on('#sDegPos', 'pointerdown', instantane);
+  on('#sDegPos', 'input', e => {
+    sh().degrade.pos = +e.target.value; $('#vDegPos').textContent = (+e.target.value).toFixed(2); marquer();
+  });
+  on('#cCont', 'change', e => {
+    instantane();
+    const f = sh(); if (!f) return;
+    if (e.target.checked) { f.stroke = f.stroke || '#1c2733'; f.lineWidth = f.lineWidth || 2; }
+    else if (f.fill === null) return dire('une forme sans remplissage a besoin de son contour', 'ko');
+    else delete f.stroke;
+    marquer(); panneau();
+  });
+  on('#cContC', 'pointerdown', instantane);
+  on('#cContC', 'input', e => { sh().stroke = e.target.value; marquer(); });
+  on('#sContW', 'pointerdown', instantane);
+  on('#sContW', 'input', e => {
+    sh().lineWidth = +e.target.value; $('#vContW').textContent = (+e.target.value).toFixed(1); marquer();
+  });
+  on('#sAlpha', 'pointerdown', instantane);
+  on('#sAlpha', 'input', e => {
+    const v = +e.target.value;
+    if (v >= 0.999) delete sh().alpha; else sh().alpha = v;
+    $('#vAlpha').textContent = v.toFixed(2); marquer();
+  });
+  on('#sLueur', 'pointerdown', instantane);
+  on('#sLueur', 'input', e => {
+    const v = +e.target.value;
+    if (v <= 0.001) delete sh().lueur; else sh().lueur = v;
+    $('#vLueur').textContent = v.toFixed(2); marquer();
+  });
+
+  // --- Couleur tirée au sort par individu ------------------------------------
+  on('#selCoul', 'change', e => {
+    instantane();
+    const f = sh(); if (!f) return;
+    const m = e.target.value;
+    if (m === 'fixe') delete f.couleur;
+    else if (m === 'palette') f.couleur = { mode: m, couleurs: (f.couleur && f.couleur.couleurs) || [f.fill || '#888888'] };
+    else if (m === 'teinte') f.couleur = { mode: m, amplitude: (f.couleur && f.couleur.amplitude) || 30 };
+    else f.couleur = { mode: m };
+    marquer(); panneau();
+  });
+  document.querySelectorAll('[data-pal]').forEach(inp => {
+    inp.addEventListener('pointerdown', instantane);
+    inp.addEventListener('input', () => { sh().couleur.couleurs[+inp.dataset.pal] = inp.value; marquer(); });
+  });
+  on('#bPalPlus', 'click', () => {
+    instantane();
+    const c = sh().couleur;
+    c.couleurs = (c.couleurs || []).concat([sh().fill || '#888888']);
+    marquer(); panneau();
+  });
+  on('#bPalMoins', 'click', () => {
+    instantane(); sh().couleur.couleurs.pop(); marquer(); panneau();
+  });
+  // Le raccourci qui compte : les couleurs de l'espèce sont DÉJÀ celles que la
+  // silhouette procédurale tire au sort. Les recopier à la main, c'est se
+  // tromper d'une nuance et voir le banc dessiné jurer avec le reste.
+  on('#bPalEspece', 'click', () => {
+    instantane();
+    sh().couleur.couleurs = (defEspece().colors || []).slice();
+    marquer(); panneau();
+    dire(`${sh().couleur.couleurs.length} couleurs reprises de ${defEspece().name}`, 'ok');
+  });
+  on('#sTeinte', 'pointerdown', instantane);
+  on('#sTeinte', 'input', e => {
+    sh().couleur.amplitude = +e.target.value;
+    $('#vTeinte').textContent = e.target.value + '°'; marquer();
+  });
+
+  // Sans ce bouton, une luminescence ne se voit jamais dans l'atelier : le
+  // faux `Main` de la page renvoie toujours « plein jour ».
+  on('#bNuit', 'click', () => {
+    nuit = !nuit;
+    Main.nightAmount = () => (nuit ? 1 : 0);
+    panneau(); dessiner();
+  });
 }
 
 // --- Transformations d'une forme entière ------------------------------------
@@ -1421,7 +1852,10 @@ addEventListener('keydown', ev => {
 function pres(sx, sy) {
   if (!doc) return null;
   const seuil = 11;
-  if (outil === 'ancres') {
+  // L'outil Visage règle les mêmes deux ancres que l'outil Ancres : il doit
+  // pouvoir les tirer, sinon la taille de l'œil se règle au curseur à l'aveugle
+  // alors que la poignée est là, sous le pointeur.
+  if (outil === 'ancres' || outil === 'visage') {
     for (const cle of ['eye', 'eye2', 'mouth']) {
       const a = doc.points[cle];
       if (!a) continue;
@@ -1429,6 +1863,14 @@ function pres(sx, sy) {
       if (!r) continue;
       const [x, y] = versEcran([a.x, a.y]);
       if (Math.hypot(sx - (x + r * vueT.k), sy - y) < seuil) return { type: 'rayonOeil', cle };
+    }
+    if (outil === 'visage') {
+      for (const cle of ['eye', 'eye2', 'mouth']) {
+        const p2 = doc.points[cle]; if (!p2) continue;
+        const [x, y] = versEcran([p2.x, p2.y]);
+        if (Math.hypot(sx - x, sy - y) < seuil) return { type: 'ancre', cle };
+      }
+      return null;
     }
     // La croix la PLUS PROCHE, pas la première trouvée : sur une petite tête,
     // center, nose, eye et mouth tiennent dans quarante pixels, et la première
@@ -1757,7 +2199,15 @@ function aEnvoyer() {
   // Arrondi : un dessin n'a pas besoin de quinze décimales, et le fichier
   // triple de taille pour rien.
   const a = v => Math.round(v * 100) / 100;
-  for (const sh of d.shapes) sh.points = sh.points.map(p => [a(p[0]), a(p[1])]);
+  for (const sh of d.shapes) {
+    sh.points = sh.points.map(p => [a(p[0]), a(p[1])]);
+    // Mémoire de travail du bouton « trait seul » : elle n'a rien à faire dans
+    // le fichier, et le jeu ne saurait pas quoi en faire.
+    delete sh._fillAvant;
+    if (sh.lineWidth != null) sh.lineWidth = a(sh.lineWidth);
+    if (sh.alpha != null) sh.alpha = a(sh.alpha);
+    if (sh.lueur != null) sh.lueur = a(sh.lueur);
+  }
   for (const c in d.points) {
     const pt = d.points[c];
     pt.x = a(pt.x); pt.y = a(pt.y);
@@ -1825,9 +2275,29 @@ function choisirOutil(nom) {
 document.querySelectorAll('#barre button[data-outil]').forEach(b =>
   b.addEventListener('click', () => choisirOutil(b.dataset.outil)));
 
-// Raccourcis 1…6, dans l'ordre de la barre. Un outil de dessin où l'on change
+// --- Commandes permanentes (hors panneau, donc câblées une seule fois) -------
+// Le filtre : à 51 espèces réparties en cinq rubriques, chercher « la murène »
+// à l'œil coûtait plus cher que de la taper.
+$('#filtre').addEventListener('input', e => { filtreTxt = e.target.value; rail(); });
+// L'aide occupait les deux tiers de la colonne. Elle est indispensable la
+// première fois et encombrante toutes les suivantes : elle s'éteint.
+$('#bAide').addEventListener('click', () => {
+  aide = !aide;
+  localStorage.setItem('atelier.aide', aide ? '1' : '0');
+  $('#bAide').classList.toggle('on', aide);
+  panneau();
+});
+$('#bAide').classList.toggle('on', aide);
+document.querySelectorAll('#humeursBarre button').forEach(b =>
+  b.addEventListener('click', () => {
+    bandeauMode = b.dataset.bandeau;
+    document.querySelectorAll('#humeursBarre button').forEach(x =>
+      x.classList.toggle('on', x === b));
+  }));
+
+// Raccourcis 1…7, dans l'ordre de la barre. Un outil de dessin où l'on change
 // d'outil à la souris fait faire l'aller-retour vingt fois par minute.
-const ORDRE = ['ancres', 'nageoires', 'queue', 'forme', 'points', 'dessiner'];
+const ORDRE = ['ancres', 'visage', 'nageoires', 'queue', 'forme', 'points', 'dessiner'];
 addEventListener('keydown', ev => {
   if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
   if (/^(INPUT|TEXTAREA|SELECT)$/.test((ev.target.tagName || ''))) return;

@@ -25,7 +25,10 @@ const Food = {
     }
   },
 
-  addBone(x, y) { this.bones.push({ x, y, age: 0, settled: false }); },
+  // `taille` : l'échelle de l'arête, 1 = petit poisson. Un gros laissait
+  // TROIS petites arêtes identiques à celles d'une sardine, ce qui ne disait
+  // rien de ce qui venait de mourir. Une seule, mais à sa mesure.
+  addBone(x, y, taille = 1) { this.bones.push({ x, y, age: 0, settled: false, k: taille }); },
 
   update(dt) {
     for (const f of this.items) {
@@ -143,28 +146,35 @@ const Food = {
     for (const b of this.bones) {
       if (!Camera.isVisible(b.x, b.y)) continue;
       const sx = Camera.sx(b.x), sy = Camera.sy(b.y);
+      const k = b.k || 1;                      // échelle : un cachalot laisse une CARCASSE
       ctx.globalAlpha = U.clamp(1 - (b.age - 35) / 10, 0, 1);
-      // colonne vertébrale + arêtes
-      ctx.strokeStyle = '#e8e4d8'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+      // colonne vertébrale + arêtes. Le nombre de côtes suit la taille : une
+      // grande arête avec trois côtes ressemble à une petite mal zoomée.
+      const cotes = Math.round(U.clamp(k * 1.6, 1, 7));
+      ctx.strokeStyle = '#e8e4d8'; ctx.lineWidth = Math.max(1.5, 2 * Math.sqrt(k));
+      ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.moveTo(sx - 8, sy); ctx.lineTo(sx + 6, sy);
-      for (let i = -1; i <= 1; i++) {
-        ctx.moveTo(sx + i * 4 - 2, sy - 4); ctx.lineTo(sx + i * 4 - 2, sy + 4);
+      ctx.moveTo(sx - 8 * k, sy); ctx.lineTo(sx + 6 * k, sy);
+      for (let i = 0; i < cotes; i++) {
+        const u = cotes === 1 ? 0.5 : i / (cotes - 1);
+        const cx = sx + U.lerp(-6 * k, 4 * k, u);
+        const h = 4 * k * (0.55 + 0.45 * Math.sin(u * Math.PI));   // fuselé aux deux bouts
+        ctx.moveTo(cx, sy - h); ctx.lineTo(cx, sy + h);
       }
       ctx.stroke();
-      // petite queue en triangle
+      // queue en triangle
       ctx.beginPath();
-      ctx.moveTo(sx - 8, sy); ctx.lineTo(sx - 12, sy - 4);
-      ctx.moveTo(sx - 8, sy); ctx.lineTo(sx - 12, sy + 4);
+      ctx.moveTo(sx - 8 * k, sy); ctx.lineTo(sx - 12 * k, sy - 4 * k);
+      ctx.moveTo(sx - 8 * k, sy); ctx.lineTo(sx - 12 * k, sy + 4 * k);
       ctx.stroke();
       // tête de squelette avec œil en croix
       ctx.fillStyle = '#e8e4d8';
-      ctx.beginPath(); ctx.arc(sx + 10, sy, 4.5, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = '#4a5560'; ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.arc(sx + 10 * k, sy, 4.5 * k, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#4a5560'; ctx.lineWidth = Math.max(1, 1.3 * Math.sqrt(k));
       ctx.beginPath();
-      ctx.moveTo(sx + 9, sy - 2.5); ctx.lineTo(sx + 12.5, sy + 1);   // œil ✕
-      ctx.moveTo(sx + 12.5, sy - 2.5); ctx.lineTo(sx + 9, sy + 1);
-      ctx.moveTo(sx + 8.5, sy + 3); ctx.lineTo(sx + 12, sy + 3);     // petite bouche plate
+      ctx.moveTo(sx + 9 * k, sy - 2.5 * k); ctx.lineTo(sx + 12.5 * k, sy + 1 * k);   // œil ✕
+      ctx.moveTo(sx + 12.5 * k, sy - 2.5 * k); ctx.lineTo(sx + 9 * k, sy + 1 * k);
+      ctx.moveTo(sx + 8.5 * k, sy + 3 * k); ctx.lineTo(sx + 12 * k, sy + 3 * k);     // bouche plate
       ctx.stroke();
       ctx.globalAlpha = 1;
     }

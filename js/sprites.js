@@ -3,7 +3,20 @@
 // Le format de l'éditeur, tel qu'il est consommé ici :
 //   naturalW/H  — dimensions du dessin d'origine
 //   points      — ANCRES : center (origine de la créature), nose, eye, mouth, tail
-//   shapes[]    — { points: [[x,y]…], fill, smooth, pivot, amp, groupe }
+//   visage      — PALETTE du visage commun : encre, pupille, gorge, langue,
+//                 lèvres, bec, joue. Surcharge partielle de `FishBody.VISAGE`.
+//   boucheStyle — forme de la bouche : standard, grande, petite, gueule (à
+//                 dents), bec, ventouse. Ce que la bouche EXPRIME reste piloté
+//                 par les émotions, identiques pour tout l'aquarium.
+//   shapes[]    — { points: [[x,y]…], fill, smooth, pivot, amp, groupe,
+//                   stroke/lineWidth (contour), alpha, lueur, degrade, couleur }
+//                 `degrade` : { type: 'lineaire'|'radial', ang, de, vers, pos }
+//                 `couleur` : { mode: 'espece'|'especeSombre'|'palette'|'teinte',
+//                               couleurs[], amplitude } — la teinte devient
+//                             PROPRE À L'INDIVIDU, comme `Entity.color` le fait
+//                             déjà pour les silhouettes procédurales.
+//                 `lueur`   : bioluminescence (halo), bridée à la nuit quand
+//                             l'espèce déclare `glowAtNight`.
 //                 `smooth`  : contour lissé plutôt qu'en ligne brisée
 //                 `pivot`   : point d'attache — la forme PIVOTE autour (nageoire)
 //                 `amp`     : amplitude d'animation de la forme
@@ -148,7 +161,25 @@ const Sprites = {
       // ~0,2 fois la taille du visage, d'où la conversion.
       boucheR: d.points && d.points.mouth && d.points.mouth.r,
       faceK: d.faceK, faceTx: d.faceTx, faceTy: d.faceTy,
+      // PALETTE DU VISAGE et STYLE DE BOUCHE, réglés dans l'atelier. Le visage
+      // commun reste dessiné par-dessus le dessin — c'est la règle du projet —
+      // mais il n'a plus à être le même trait d'encre pour tout le monde : un
+      // bec orange, une pupille dorée, une gueule à dents sont des réglages du
+      // dessin, pas un rendu de plus à écrire.
+      visage: d.visage || null,
+      boucheStyle: d.boucheStyle || null,
       shapes,
+      // Boîte de chaque forme, en unités du dessin : c'est le repère dans lequel
+      // se construisent les dégradés et se centrent les halos de luminescence.
+      // Relevée une fois ici plutôt qu'à chaque frame pour chaque individu.
+      boites: shapes.map(sh => {
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const p of sh.points) {
+          if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0];
+          if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1];
+        }
+        return isFinite(x0) ? { x0, y0, x1, y1 } : { x0: 0, y0: 0, x1: 1, y1: 1 };
+      }),
       // Le JSON d'origine, gardé tel quel : l'atelier le réenregistre enrichi
       // des ancres et des réglages de visage.
       source: d,

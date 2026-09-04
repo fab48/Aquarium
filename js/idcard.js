@@ -75,8 +75,20 @@ const IdCard = {
     const cy = (e.y - Camera.y) * Camera.zoom / K;
     const H = pad * 2 + 36 + rows.length * LH + 14
             + (phrase.length ? 10 + phrase.length * 15 : 0);
-    let bx = cx + 26, by = cy - H / 2;
-    if (bx + W > VW - 8) bx = cx - W - 26;
+    // ÉCART À LA CRÉATURE. 26 px fixes suffisaient pour une sardine, pas pour
+    // un cachalot : la fiche se posait SUR l'animal qu'elle décrit, et on ne le
+    // voyait plus. L'écart suit donc le rayon dessiné à l'écran, plus une marge
+    // confortable — c'est le sujet qu'on veut regarder, pas le panneau.
+    const rayon = e.size * (def.spanRatio || 1.05) * Camera.zoom / K;
+    const ecart = rayon + 34;
+    let bx = cx + ecart, by = cy - H / 2;
+    if (bx + W > VW - 8) bx = cx - W - ecart;
+    // Si les deux côtés débordent (grosse créature au centre d'un petit écran),
+    // on la pose AU-DESSUS ou EN DESSOUS plutôt que par-dessus.
+    if (bx < 8 && cx + ecart + W > VW - 8) {
+      bx = U.clamp(cx - W / 2, 8, Math.max(8, VW - W - 8));
+      by = cy + rayon + 20 + H <= VH - 8 ? cy + rayon + 20 : cy - rayon - 20 - H;
+    }
     // Bornée dans les DEUX axes : une créature près du bord gauche (ou hors
     // champ, cas de la fiche épinglée quand la caméra n'a pas fini de la
     // rattraper) envoyait sa fiche à un x négatif, donc invisible.

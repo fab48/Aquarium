@@ -4,14 +4,29 @@
     {
       "name": "aquarium",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["dev_server.py", "8642"],
+      "runtimeArgs": [
+        "dev_server.py",
+        "8642"
+      ],
       "port": 8642
     },
     {
       "name": "aquarium-perf",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["dev_server.py", "8653"],
+      "runtimeArgs": [
+        "dev_server.py",
+        "8653"
+      ],
       "port": 8653
+    },
+    {
+      "name": "aquarium-atelier",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "dev_server.py",
+        "8661"
+      ],
+      "port": 8661
     }
   ]
 }

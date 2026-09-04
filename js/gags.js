@@ -577,10 +577,22 @@ const GAGS = {
   etoile_ventouse(e, dt, t) {
     if (e._monte && !e._monte.dead) {
       e._ventouseT -= dt;
+      // L'ANCRE SUIT, pas seulement la position : l'étoile est `fixed`, et
+      // `move()` la recolle à son ancre juste après — sans ça elle ne bougeait
+      // pas d'un pixel pendant tout le « transport ».
       e.x = e._monte.x; e.y = e._monte.y - e._monte.size * 0.7;
+      e.anchorX = e.x; e.anchorY = e.y;
       if (Math.random() < dt * 0.5) e.emote('happy', 1.5, false);
       if (e._ventouseT <= 0) {
         e._monte = null;
+        // Elle se repose sur une PLACE LIBRE. Reposée là où elle se trouve,
+        // elle atterrissait sur ses congénères — et une étoile posée ne peut
+        // plus jamais s'en écarter. C'était la dernière source d'empilement.
+        const marge = Math.max(64, e.def.size * 3.4);
+        const spot = Ecosystem.placeLibreAuFond(e.speciesId, e.x, marge);
+        e.x = spot !== null ? spot : e.x;
+        e.y = World.floorY(e.x) - e.def.size * 0.4 + (e._sable || 0);
+        e.anchorX = e.x; e.anchorY = e.y;
         e.emote('surprise', 1.5);
       }
       return;

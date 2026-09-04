@@ -13,8 +13,9 @@ const FishBody = {
   //
   // Raccourci depuis une silhouette : FishBody.face(ctx, taille, entité, t)
   face(ctx, size, e, t) {
+    const v = this.visageDe(e);
     this.drawFace(ctx, size, e.expression, t + (e.phase || 0),
-                  e.emoteK ? e.emoteK() : 1, e._eyeLook);
+                  e.emoteK ? e.emoteK() : 1, e._eyeLook, false, v.pal, v.style);
   },
 
   // Table des émotions. tout est relatif à la taille du visage.
@@ -49,23 +50,119 @@ const FishBody = {
     smug:      { sx: .95,  sy: .62, pu: .45, look: .5, lid: .42, ba: .3,  bl: .45, mouth: 'malin', blush: 0 },
   },
 
+  // --- PALETTE DU VISAGE ------------------------------------------------------
+  // Tout ce que le visage commun peint passait par des couleurs EN DUR : l'encre
+  // `#1c2733` du trait, la gorge `#5a2d3d`, la langue rose. Une direction
+  // artistique qui veut un trait sépia, une pupille dorée ou un bec orange
+  // n'avait aucune prise dessus — et repeindre la silhouette ne change rien,
+  // puisque le visage est dessiné PAR-DESSUS.
+  //
+  // La table se surcharge PARTIELLEMENT : un dessin qui ne déclare que la
+  // pupille garde le reste. Deux provenances, dans cet ordre — le document
+  // (`visage:` du dessin, réglé dans l'atelier), puis la fiche d'espèce
+  // (`def.visage`), pour une silhouette procédurale qui n'a pas de dessin.
+  VISAGE: {
+    encre:   '#1c2733',          // le trait : contour de bouche, œil fermé
+    sourcil: '#1c2733',          // laisser vide dans une surcharge = suivre l'encre
+    pupille: '#1c2733',
+    blanc:   '#ffffff',          // blanc de l'œil
+    eclat:   'rgba(255,255,255,.92)',
+    gorge:   '#5a2d3d',          // l'intérieur, quand la bouche est ouverte
+    langue:  '#ff8fa3',
+    levres:  '#e8607f',          // bisou, ventouse
+    dent:    '#ffffff',
+    bec:     '#f0a83c',
+    joue:    '255,110,135',      // en r,g,b : la rougeur est peinte en alpha
+  },
+  _palCache: new WeakMap(),
+  // Palette effective. Mise en cache sur l'objet source : `drawFace` tourne
+  // pour chaque créature de chaque frame, il n'a pas à refaire un Object.assign.
+  palette(v) {
+    if (!v) return this.VISAGE;
+    let p = this._palCache.get(v);
+    if (!p) {
+      p = Object.assign({}, this.VISAGE, v);
+      if (!p.sourcil) p.sourcil = p.encre;
+      if (!p.pupille) p.pupille = p.encre;
+      this._palCache.set(v, p);
+    }
+    return p;
+  },
+  // Palette + style de bouche d'une créature, dessin ou silhouette. Le dessin
+  // prime : c'est lui qu'on vient de régler dans l'atelier.
+  visageDe(e) {
+    const def = e.def;
+    const sp = (def.sprite && typeof Sprites !== 'undefined') ? Sprites.get(def.sprite) : null;
+    const v = (sp && sp.visage) || def.visage || null;
+    const st = (sp && sp.boucheStyle) || def.boucheStyle || 'standard';
+    return { pal: this.palette(v), style: st };
+  },
+
+  // --- STYLES DE BOUCHE -------------------------------------------------------
+  // Le catalogue des bouches (`neutre`, `sourire`, `gloutonne`…) dit ce que la
+  // créature EXPRIME ; le style dit à quoi ressemble sa bouche. Un pélican, une
+  // murène et une crevette jouent les mêmes 18 émotions, mais pas avec la même
+  // bouche — et jusqu'ici tout l'aquarium avait la même petite bouche de dessin
+  // animé, bec et gueule à dents compris.
+  //
+  //   w / h   — la bouche standard, étirée autour de son ancre
+  //   dents   — une rangée de dents en travers, dès qu'elle s'ouvre
+  //   forme   — un tracé ENTIÈREMENT différent (bec, ventouse), qui rejoue les
+  //             mêmes émotions via la table `GESTE`
+  BOUCHES: {
+    standard: { nom: 'Standard' },
+    grande:   { nom: 'Grande bouche', w: 1.45, h: 1.35 },
+    petite:   { nom: 'Petite bouche', w: 0.62, h: 0.62 },
+    gueule:   { nom: 'Gueule à dents', w: 1.35, h: 1.2, dents: true },
+    bec:      { nom: 'Bec', forme: 'bec' },
+    ventouse: { nom: 'Ventouse', forme: 'ventouse' },
+  },
+
+  // Chaque bouche du catalogue, réduite à DEUX nombres : combien elle est
+  // ouverte (`o`) et si elle sourit ou boude (`c`, de -1 à 1). C'est ce qui
+  // permet à un bec ou à une ventouse de jouer les 18 émotions sans avoir à
+  // redessiner les dix-huit bouches une à une pour chaque style.
+  GESTE: {
+    neutre:    { o: .06, c: 0 },
+    sourire:   { o: .12, c: 1 },
+    timide:    { o: .06, c: .6 },
+    gloutonne: { o: 1,   c: .2, pulse: 16 },
+    cri:       { o: .8,  c: -.3 },
+    grogne:    { o: .28, c: -.8 },
+    ondulee:   { o: .1,  c: 0 },
+    rire:      { o: 1,   c: 1, pulse: 15 },
+    bisou:     { o: .2,  c: .4 },
+    berk:      { o: .5,  c: -1 },
+    o:         { o: .55, c: 0 },
+    triste:    { o: .08, c: -1 },
+    malin:     { o: .1,  c: .7 },
+    ronfle:    { o: .7,  c: 0, pulse: 1.7 },
+  },
+  geste(mouth, t) {
+    const g = this.GESTE[mouth] || this.GESTE.neutre;
+    const o = g.pulse ? g.o * (0.55 + 0.45 * (Math.sin(t * g.pulse) * 0.5 + 0.5)) : g.o;
+    return { o, c: g.c };
+  },
+
   // `eyeLook` : {x, y} en unités d'œil (-1..1). Quand le poisson est tranquille,
   // sa pupille suit le curseur — c'est ce qui donne l'impression qu'il vous voit.
   // ŒIL UNIQUE, piloté par la table des émotions. Les silhouettes dont les yeux
   // ne forment pas un visage groupé (crabe sur tiges, coquillage entre ses
   // valves) dessinaient les leurs à la main : ils restaient donc GRANDS OUVERTS
   // en toutes circonstances, y compris endormis. Elles passent par ici.
-  oeil(ctx, x, y, r, e, t) {
+  oeil(ctx, x, y, r, e, t, pal) {
     const base = this.EMOTIONS.idle;
     const em = this.EMOTIONS[e.expression] || base;
     const k = U.clamp(e.emoteK ? e.emoteK() : 1, 0, 1);
     const lid = U.lerp(base.lid, em.lid, k);
-    const INK = '#1c2733';
+    // La palette suit la créature : un œil isolé (crabe, coquillage) doit être
+    // peint comme le reste de son visage, pas en noir d'usine.
+    const P = pal || this.visageDe(e).pal;
     const clignote = Math.sin(t * 0.7 + x) > 0.975;
 
     if (lid > 0.85 || clignote) {                    // œil fermé
       const joyeux = e.expression === 'laughing' || e.expression === 'kiss';
-      ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1.2, r * 0.42);
+      ctx.strokeStyle = P.encre; ctx.lineWidth = Math.max(1.2, r * 0.42);
       ctx.beginPath();
       if (joyeux) ctx.arc(x, y + r * 0.4, r * 0.95, 1.15 * Math.PI, 1.85 * Math.PI);
       else ctx.arc(x, y, r * 0.9, 0.12 * Math.PI, 0.88 * Math.PI);
@@ -76,19 +173,19 @@ const FishBody = {
     const look = U.lerp(base.look, em.look, k), pu = U.lerp(base.pu, em.pu, k);
     ctx.save();
     ctx.translate(x, y); ctx.scale(sx, sy);
-    ctx.fillStyle = '#fff';
+    ctx.fillStyle = P.blanc;
     ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
     // la pupille suit le curseur au repos, comme pour les visages groupés
     const suivi = e._eyeLook ? (1 - k) : 0;
     const pr = r * pu;
     const px = r * U.lerp(look, e._eyeLook ? e._eyeLook.x : look, suivi);
     const py = r * U.lerp(0.05, e._eyeLook ? e._eyeLook.y : 0.05, suivi);
-    ctx.fillStyle = INK;
+    ctx.fillStyle = P.pupille;
     ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,.92)';
+    ctx.fillStyle = P.eclat;
     ctx.beginPath(); ctx.arc(px - pr * 0.32, py - pr * 0.38, Math.max(0.5, pr * 0.34), 0, Math.PI * 2); ctx.fill();
     if (lid > 0.05) {                                 // paupière tombante
-      ctx.fillStyle = INK;
+      ctx.fillStyle = P.encre;
       ctx.beginPath(); ctx.ellipse(0, -r * (1 - lid * 0.9), r * 1.05, r * lid * 0.8, 0, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
@@ -100,17 +197,35 @@ const FishBody = {
   // requin elle est presque à la VERTICALE de l'œil, alors que le visage commun
   // la met en avant et à peine plus bas — elle atterrissait sur le museau.
   // `mx`/`my` sont donc passés par l'appelant.
-  bouche(ctx, mx, my, size, mouth, t) {
-    const INK = '#1c2733';
+  //
+  // `style` choisit la FORME de la bouche (cf. `BOUCHES`) ; `mouth` reste ce
+  // qu'elle EXPRIME. Les deux sont indépendants : un bec sait sourire.
+  bouche(ctx, mx, my, size, mouth, t, pal, style) {
+    const P = pal || this.VISAGE;
+    const st = this.BOUCHES[style] || this.BOUCHES.standard;
+    if (st.forme === 'bec') return this.boucheBec(ctx, mx, my, size, mouth, t, P, st);
+    if (st.forme === 'ventouse') return this.boucheVentouse(ctx, mx, my, size, mouth, t, P, st);
+    const w = st.w || 1, h = st.h || 1;
+    ctx.save();
+    // L'étirement se fait AUTOUR de l'ancre : la bouche reste posée là où
+    // l'artiste l'a mise, elle ne dérive pas quand on l'agrandit.
+    if (w !== 1 || h !== 1) { ctx.translate(mx, my); ctx.scale(w, h); ctx.translate(-mx, -my); }
+    this.boucheStandard(ctx, mx, my, size, mouth, t, P);
+    if (st.dents) this.dentsBouche(ctx, mx, my, size, mouth, t, P);
+    ctx.restore();
+  },
+
+  boucheStandard(ctx, mx, my, size, mouth, t, P) {
+    const INK = P.encre;
     const lw = Math.max(1.4, size * 0.055);
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     ctx.strokeStyle = INK; ctx.lineWidth = lw;
     ctx.beginPath();
   if (mouth === 'gloutonne') {
     const o = (Math.sin(t * 16) * 0.5 + 0.5) * size * 0.3 + size * 0.08;
-    ctx.fillStyle = '#5a2d3d';
+    ctx.fillStyle = P.gorge;
     ctx.ellipse(mx, my, size * 0.15, o, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#ff8fa3';   // petite langue
+    ctx.fillStyle = P.langue;   // petite langue
     ctx.beginPath(); ctx.ellipse(mx, my + o * 0.45, size * 0.08, o * 0.3, 0, 0, Math.PI * 2); ctx.fill();
   } else if (mouth === 'sourire') {
     ctx.lineWidth = lw * 1.2;
@@ -120,14 +235,14 @@ const FishBody = {
     ctx.arc(mx - size * 0.06, my - size * 0.02, size * 0.1, 0.15 * Math.PI, 0.85 * Math.PI);
     ctx.stroke();
   } else if (mouth === 'cri') {
-    ctx.fillStyle = '#5a2d3d';
+    ctx.fillStyle = P.gorge;
     ctx.ellipse(mx, my + size * 0.04, size * 0.11, size * 0.17, 0, 0, Math.PI * 2); ctx.fill();
   } else if (mouth === 'grogne') {
     ctx.lineWidth = lw * 1.2;
     ctx.moveTo(mx - size * 0.16, my + size * 0.08);
     ctx.quadraticCurveTo(mx - size * 0.02, my - size * 0.06, mx + size * 0.12, my + size * 0.06);
     ctx.stroke();
-    ctx.fillStyle = '#fff';    // canine
+    ctx.fillStyle = P.dent;    // canine
     ctx.beginPath();
     ctx.moveTo(mx - size * 0.02, my + size * 0.02);
     ctx.lineTo(mx + size * 0.07, my + size * 0.02);
@@ -143,16 +258,16 @@ const FishBody = {
   } else if (mouth === 'rire') {
     // grande bouche ouverte de rire, avec la langue, qui pulse au rythme des « ha »
     const o = size * (0.26 + 0.09 * Math.sin(t * 15));
-    ctx.fillStyle = '#5a2d3d';
+    ctx.fillStyle = P.gorge;
     ctx.beginPath(); ctx.ellipse(mx - size * 0.04, my + size * 0.05, size * 0.19, o, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#ff8fa3';
+    ctx.fillStyle = P.langue;
     ctx.beginPath(); ctx.ellipse(mx - size * 0.04, my + o * 0.55, size * 0.1, o * 0.34, 0, 0, Math.PI * 2); ctx.fill();
   } else if (mouth === 'bisou') {
     // lèvres pincées projetées en avant
-    ctx.fillStyle = '#e8607f';
+    ctx.fillStyle = P.levres;
     ctx.beginPath();
     ctx.ellipse(mx + size * 0.14, my, size * 0.13, size * 0.1, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#a83a55';
+    ctx.fillStyle = this.sombre(P.levres, 0.35);
     ctx.beginPath();
     ctx.ellipse(mx + size * 0.2, my, size * 0.05, size * 0.045, 0, 0, Math.PI * 2); ctx.fill();
   } else if (mouth === 'berk') {
@@ -160,12 +275,12 @@ const FishBody = {
     ctx.lineWidth = lw * 1.5;
     ctx.arc(mx - size * 0.06, my + size * 0.26, size * 0.24, 1.12 * Math.PI, 1.88 * Math.PI);
     ctx.stroke();
-    ctx.fillStyle = '#e8879b';
+    ctx.fillStyle = this.sombre(P.langue, 0.12);
     ctx.beginPath();
     ctx.ellipse(mx - size * 0.06, my + size * 0.14, size * 0.08, size * 0.14, 0.15, 0, Math.PI * 2);
     ctx.fill();
   } else if (mouth === 'o') {
-    ctx.fillStyle = '#5a2d3d';
+    ctx.fillStyle = P.gorge;
     ctx.beginPath(); ctx.arc(mx, my + size * 0.03, size * 0.13, 0, Math.PI * 2); ctx.fill();
   } else if (mouth === 'triste') {
     ctx.lineWidth = lw * 1.1;
@@ -182,7 +297,7 @@ const FishBody = {
     // grand puis se pince, et une bulle de morve gonfle sur le temps faible.
     const cycle = (Math.sin(t * 1.7) + 1) / 2;          // 0 = expire, 1 = inspire
     const o = size * (0.035 + cycle * 0.15);
-    ctx.fillStyle = '#5a2d3d';
+    ctx.fillStyle = P.gorge;
     ctx.beginPath();
     ctx.ellipse(mx - size * 0.09, my + size * 0.03, size * (0.08 + cycle * 0.035), o, 0, 0, Math.PI * 2);
     ctx.fill();
@@ -210,7 +325,101 @@ const FishBody = {
 
   },
 
-  drawFace(ctx, size, expression, t, k = 1, eyeLook = null, sansBouche = false) {
+  // Assombrir une couleur sans se soucier de son écriture. `U.mixColor` ne sait
+  // lire que du « #rrggbb » : une palette peut très bien contenir un « rgba(…) ».
+  sombre(c, k) {
+    return (typeof c === 'string' && c[0] === '#' && c.length === 7)
+      ? U.mixColor(c, '#000000', k) : c;
+  },
+
+  // Rangée de dents en travers d'une bouche ouverte (style `gueule`). Elle ne
+  // sort que quand la bouche s'ouvre vraiment : posée sur une bouche fermée,
+  // elle se lit comme une rayure blanche en travers du museau.
+  dentsBouche(ctx, mx, my, size, mouth, t, P) {
+    const g = this.geste(mouth, t);
+    if (g.o < 0.3) return;
+    const L = size * 0.34, h = size * 0.09 * Math.min(1, g.o);
+    const haut = my - size * 0.16 * g.o;
+    ctx.fillStyle = P.dent;
+    ctx.beginPath();
+    ctx.moveTo(mx - L / 2, haut);
+    for (let i = 0; i < 4; i++) {
+      const x0 = mx - L / 2 + (L / 4) * i;
+      ctx.lineTo(x0 + L / 8, haut + h);
+      ctx.lineTo(x0 + L / 4, haut);
+    }
+    ctx.closePath(); ctx.fill();
+  },
+
+  // BEC — pélican, goéland, cormoran. Deux mandibules articulées sur une
+  // charnière ARRIÈRE : c'est l'angle d'ouverture qui joue l'émotion, lu dans
+  // la table `GESTE`, si bien que le bec sait faire les dix-huit expressions
+  // sans qu'on redessine quoi que ce soit.
+  boucheBec(ctx, mx, my, size, mouth, t, P, st) {
+    const g = this.geste(mouth, t);
+    const L = size * 0.6 * (st.w || 1), H = size * 0.17 * (st.h || 1);
+    const a = g.o * 0.5;                       // demi-angle d'ouverture
+    ctx.save();
+    ctx.translate(mx - L * 0.3, my);
+    ctx.rotate(-g.c * 0.14);                   // un bec qui sourit se relève
+    // La gorge, entre les deux mandibules : sans elle, un bec grand ouvert
+    // laisse voir le corps au travers.
+    if (g.o > 0.12) {
+      ctx.fillStyle = P.gorge;
+      ctx.beginPath();
+      ctx.moveTo(0, 0); ctx.lineTo(L * 0.96, -Math.sin(a) * L * 0.9);
+      ctx.lineTo(L * 0.96, Math.sin(a) * L * 0.9); ctx.closePath(); ctx.fill();
+    }
+    for (const s of [-1, 1]) {
+      ctx.save(); ctx.rotate(s * a);
+      ctx.fillStyle = s < 0 ? P.bec : this.sombre(P.bec, 0.18);
+      ctx.beginPath();
+      ctx.moveTo(0, s * H * 0.1);
+      ctx.quadraticCurveTo(L * 0.55, s * H * 1.25, L, 0);
+      ctx.quadraticCurveTo(L * 0.5, s * H * 0.25, 0, s * H * 0.1);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = P.encre; ctx.lineWidth = Math.max(1, size * 0.035);
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.fillStyle = P.encre;                   // narine
+    ctx.beginPath();
+    ctx.arc(L * 0.22, -H * 0.45 - a * L * 0.2, Math.max(0.6, size * 0.035), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  },
+
+  // VENTOUSE — nettoyeur, brouteur de corail, poisson qui suce la vitre. Une
+  // couronne de lèvres et un trou qui s'ouvre : l'anneau reste, c'est le trou
+  // qui joue l'émotion.
+  boucheVentouse(ctx, mx, my, size, mouth, t, P, st) {
+    const g = this.geste(mouth, t);
+    const R = size * 0.2 * (st.w || 1);
+    const r = R * (0.25 + 0.6 * g.o);
+    ctx.save();
+    ctx.translate(mx, my);
+    ctx.scale(1, 1 - g.c * 0.12);              // la moue pince un peu la couronne
+    ctx.fillStyle = P.levres;
+    ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = P.gorge;
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+    // les plis de la ventouse : c'est ce qui la distingue d'un simple rond
+    ctx.strokeStyle = this.sombre(P.levres, 0.3);
+    ctx.lineWidth = Math.max(0.8, size * 0.025);
+    for (let i = 0; i < 8; i++) {
+      const A = (i / 8) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(A) * r, Math.sin(A) * r);
+      ctx.lineTo(Math.cos(A) * R, Math.sin(A) * R);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = P.encre; ctx.lineWidth = Math.max(1, size * 0.03);
+    ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  },
+
+  drawFace(ctx, size, expression, t, k = 1, eyeLook = null, sansBouche = false,
+           pal = null, style = null) {
     size = Math.max(1, size || 0);   // garde : un rayon négatif ferait planter arc()
     k = U.clamp(k == null ? 1 : k, 0, 1);
     const base = this.EMOTIONS.idle;
@@ -227,7 +436,9 @@ const FishBody = {
     }
     const mouth = k > 0.35 ? em.mouth : base.mouth;
 
-    const INK = '#1c2733';
+    // Palette : le trait du visage n'est plus forcément l'encre bleu nuit.
+    const V = pal || this.VISAGE;
+    const INK = V.encre;
     const ex = size * 0.55, ey = -size * 0.18;
     const er = Math.max(2.5, size * 0.22);
     const lw = Math.max(1.4, size * 0.055);
@@ -264,7 +475,7 @@ const FishBody = {
     } else {
       ctx.save();
       ctx.translate(ex, ey); ctx.scale(P.sx, P.sy);
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = V.blanc;
       ctx.beginPath(); ctx.arc(0, 0, er, 0, Math.PI * 2); ctx.fill();
       const pr = er * P.pu;
       // Le regard vers le curseur ne s'applique qu'au repos : une émotion forte
@@ -272,9 +483,9 @@ const FishBody = {
       const suivi = eyeLook ? (1 - k) : 0;
       const px = er * U.lerp(P.look, eyeLook ? eyeLook.x : P.look, suivi);
       const py = er * U.lerp(0.05, eyeLook ? eyeLook.y : 0.05, suivi);
-      ctx.fillStyle = INK;
+      ctx.fillStyle = V.pupille;
       ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,.92)';
+      ctx.fillStyle = V.eclat;
       ctx.beginPath(); ctx.arc(px - pr * 0.32, py - pr * 0.38, Math.max(0.6, pr * 0.34), 0, Math.PI * 2); ctx.fill();
       // paupière tombante (fatigue, gourmandise, fierté)
       if (P.lid > 0.05) {
@@ -287,7 +498,7 @@ const FishBody = {
     }
 
     // --- SOURCIL : c'est lui qui porte l'essentiel de l'émotion ---
-    ctx.strokeStyle = INK;
+    ctx.strokeStyle = V.sourcil;
     ctx.lineWidth = Math.max(1.6, size * 0.075);
     ctx.save();
     ctx.translate(ex, ey - er * (1.05 + P.bl));
@@ -299,10 +510,10 @@ const FishBody = {
     ctx.restore();
 
     // --- Bouche (extraite : un sprite la pose sur SON ancre, cf. `bouche()`) ---
-    if (!sansBouche) this.bouche(ctx, size * 0.82, size * 0.12, size, mouth, t);
+    if (!sansBouche) this.bouche(ctx, size * 0.82, size * 0.12, size, mouth, t, V, style);
     // --- Joues (rougeur, ou teint verdâtre quand il est écœuré) ---
     if (P.blush > 0.05) {
-      const teinte = em.cheek || '255,110,135';
+      const teinte = em.cheek || V.joue;
       ctx.fillStyle = `rgba(${teinte},${0.6 * P.blush})`;
       ctx.beginPath(); ctx.ellipse(size * 0.42, size * 0.12, size * 0.19, size * 0.12, 0, 0, Math.PI * 2); ctx.fill();
     }
@@ -313,6 +524,106 @@ const FishBody = {
   // dessin de l'éditeur — MAIS elle garde le système commun yeux / sourcils /
   // bouche par-dessus. C'est la règle du projet : la direction artistique peut
   // changer entièrement, les émotions restent celles de tout l'aquarium.
+  // --- Couleur d'une forme, INDIVIDU PAR INDIVIDU ------------------------------
+  // Les silhouettes procédurales tirent déjà leur teinte au hasard dans
+  // `def.colors` (`Entity.color`) : c'est ce qui fait chatoyer le banc de
+  // confettis, et c'est la seule raison pour laquelle quarante poissons du même
+  // banc ne se lisent pas comme quarante copies. Un dessin fait main n'avait
+  // rien de tel — une seule couleur par forme, donc un banc monochrome.
+  //
+  // Cinq modes, tous DÉTERMINISTES : l'individu garde sa couleur toute sa vie,
+  // et deux frames de suite donnent la même. Le résultat est mis en cache sur
+  // l'entité, exactement comme `Entity.color` l'est déjà.
+  //   fixe          — la couleur du dessin (défaut)
+  //   espece        — celle que l'individu a tirée dans `def.colors`
+  //   especeSombre  — sa version foncée (`Entity.colorDark`)
+  //   palette       — un tirage dans une liste propre à la forme
+  //   teinte        — la couleur du dessin, teinte décalée de ±`amplitude`°
+  couleurForme(forme, e, i) {
+    const c = forme.couleur;
+    const base = forme.fill || '#888';
+    if (!c || !c.mode || c.mode === 'fixe' || !e) return base;
+    const cache = e._couleursForme || (e._couleursForme = {});
+    if (cache[i] !== undefined) return cache[i];
+    let v = base;
+    if (c.mode === 'espece') v = e.color;
+    else if (c.mode === 'especeSombre') v = e.colorDark;
+    else if (c.mode === 'palette') {
+      const l = c.couleurs || [];
+      if (l.length) v = l[Math.floor(this.alea(e.id || 0, i) * l.length) % l.length];
+    } else if (c.mode === 'teinte') {
+      v = U.tourneTeinte(base, (this.alea(e.id || 0, i) * 2 - 1) * (c.amplitude || 30));
+    }
+    return (cache[i] = v);
+  },
+
+  // Pseudo-aléatoire déterministe à deux entrées (individu, forme). Le même que
+  // celui des taches procédurales : sans lui, une couleur tirée à chaque frame
+  // ferait scintiller le poisson.
+  alea(a, b) {
+    const h = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
+    return h - Math.floor(h);
+  },
+
+  // BIOLUMINESCENCE d'une forme. Le drapeau est celui de l'artiste (« cette
+  // tache est une lampe ») ; `def.glowAtNight` de l'espèce dit seulement si la
+  // lampe ne s'allume QUE la nuit — c'est déjà la règle des silhouettes
+  // procédurales de la méduse, du lanterne et du calamar.
+  lueurForme(forme, e) {
+    if (!forme.lueur) return 0;
+    const l = forme.lueur === true ? 1 : forme.lueur;
+    if (!e.def.glowAtNight) return l;
+    return l * (typeof Main !== 'undefined' ? Main.nightAmount() : 0);
+  },
+
+  // DÉGRADÉ d'une forme. Deux arrêts : la couleur de la forme — donc celle de
+  // l'individu quand elle est tirée au sort — et une seconde, plus foncée par
+  // défaut. Un dégradé à couleurs fixes annulerait la variation individuelle,
+  // c'est-à-dire précisément ce qu'on vient de gagner.
+  //
+  // Les coordonnées sont celles du DESSIN : le dégradé est donc calculable une
+  // fois pour toutes et mis en cache, la mise à l'échelle étant faite par la
+  // transformation courante.
+  degradeDe(ctx, forme, sp, i, couleur) {
+    const d = forme.degrade;
+    const cache = sp._degrades || (sp._degrades = new Map());
+    const cle = i + '|' + couleur;
+    const vu = cache.get(cle);
+    if (vu) return vu;
+    const bo = (sp.boites && sp.boites[i]) || this.boiteForme(forme);
+    const cx = (bo.x0 + bo.x1) / 2, cy = (bo.y0 + bo.y1) / 2;
+    const L = Math.max(1, bo.x1 - bo.x0), H = Math.max(1, bo.y1 - bo.y0);
+    const de = d.de || couleur;
+    const vers = d.vers || this.sombre(couleur, 0.35);
+    let g;
+    if (d.type === 'radial') {
+      const R = Math.max(1, Math.hypot(L, H) / 2);
+      g = ctx.createRadialGradient(cx, cy, R * 0.05, cx, cy, R);
+    } else {
+      const a = (d.ang == null ? 90 : d.ang) * Math.PI / 180;
+      const co = Math.cos(a), si = Math.sin(a);
+      // Demi-portée dans la direction voulue : le dégradé couvre exactement la
+      // boîte de la forme, quel que soit l'angle.
+      const R = Math.max(1, (Math.abs(co) * L + Math.abs(si) * H) / 2);
+      g = ctx.createLinearGradient(cx - co * R, cy - si * R, cx + co * R, cy + si * R);
+    }
+    const pos = U.clamp(d.pos == null ? 1 : d.pos, 0.03, 1);
+    g.addColorStop(0, de);
+    g.addColorStop(pos, vers);
+    if (pos < 1) g.addColorStop(1, vers);
+    cache.set(cle, g);
+    return g;
+  },
+
+  boiteForme(forme) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const p of forme.points) {
+      if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0];
+      if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1];
+    }
+    return isFinite(x0) ? { x0, y0, x1, y1 } : { x0: 0, y0: 0, x1: 1, y1: 1 };
+  },
+
   drawSprite(ctx, e, t) {
     const sp = Sprites.get(e.def.sprite);
     if (!sp) { this.drawFish(ctx, e, t); return; }   // pas encore chargé : on ne saute pas de frame
@@ -374,19 +685,43 @@ const FishBody = {
         ctx.translate(-forme.pivot[0], -forme.pivot[1]);
       }
       this.tracerForme(ctx, forme, sp, anim, apps, i);
+      // Couleur de la forme POUR CET INDIVIDU : elle peut être fixe, ou tirée
+      // au sort comme le fait déjà `Entity.color` sur les silhouettes.
+      const couleur = this.couleurForme(forme, e, i);
+      // Translucidité (une méduse) — multipliée à l'alpha courant, jamais posée
+      // à sa place : le gag du Crabe Disco et le fondu des œufs en dépendent.
+      const ga = ctx.globalAlpha;
+      if (forme.alpha != null && forme.alpha < 1) ctx.globalAlpha = ga * forme.alpha;
+      // Bioluminescence. Même mécanisme que les silhouettes procédurales
+      // (`glowAtNight`) : le halo est une image en cache, pas un shadowBlur —
+      // celui-ci travaille en pixels ÉCRAN et grossirait sur les petits
+      // poissons de loin, en plus de coûter cher.
+      const lueur = this.lueurForme(forme, e);
+      if (lueur > 0) {
+        const bo = sp.boites[i];
+        // Le halo doit DÉBORDER de la forme : centré dessus à sa propre taille,
+        // il resterait entièrement caché derrière elle. Les silhouettes
+        // procédurales le tirent déjà à ~1,7 fois la taille de la créature.
+        this.halo(ctx, (bo.x0 + bo.x1) / 2, (bo.y0 + bo.y1) / 2,
+                  Math.hypot(bo.x1 - bo.x0, bo.y1 - bo.y0) * 0.85, couleur, 0.6 * lueur);
+      }
       // Une forme peut être remplie, tracée au trait, ou les deux. Les
       // tentacules et les antennes sont des TRAITS : les traiter comme des
       // polygones les rendrait difformes, les ignorer les ferait disparaître.
       if (forme.fill !== null || !forme.stroke) {
-        ctx.fillStyle = forme.fill || '#888';
+        ctx.fillStyle = forme.degrade ? this.degradeDe(ctx, forme, sp, i, couleur) : couleur;
         ctx.fill();
       }
+      // CONTOUR. Le même champ sert au trait seul (un tentacule, une antenne)
+      // et au liseré d'une forme pleine : la première est tracée sans `fill`,
+      // la seconde par-dessus le sien.
       if (forme.stroke) {
         ctx.strokeStyle = forme.stroke;
         ctx.lineWidth = forme.lineWidth || 1;
         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
         ctx.stroke();
       }
+      ctx.globalAlpha = ga;
       ctx.restore();
     });
     ctx.restore();
@@ -398,6 +733,7 @@ const FishBody = {
     // que le requin de l'éditeur l'a presque à la verticale — elle atterrissait
     // 4 px trop en avant, sur le museau. Deux ancres, deux placements.
     const oe = sp.oeil;
+    const vis = this.visageDe(e);
     if (oe) {
       // Taille des traits du visage. Sur une silhouette procédurale elle vaut
       // `size` ; sur un dessin fait main la tête est plus fine, et à 1 l'œil
@@ -423,7 +759,7 @@ const FishBody = {
         ctx.translate((a.x - sp.cx) * k - taille * 0.55 + dx, (a.y - sp.cy) * k + taille * 0.18 + dy);
         // `sansBouche` : elle est dessinée une seule fois, sur sa propre ancre.
         this.drawFace(ctx, taille, e.expression, t + (e.phase || 0),
-                      e.emoteK ? e.emoteK() : 1, e._eyeLook, !!bo);
+                      e.emoteK ? e.emoteK() : 1, e._eyeLook, !!bo, vis.pal, vis.style);
         ctx.restore();
       }
       if (bo) {
@@ -434,7 +770,8 @@ const FishBody = {
         const fsB = sp.boucheR ? (sp.boucheR * k) / 0.2 : fs;
         ctx.save();
         this.bouche(ctx, (bo.x - sp.cx) * k + dx, (bo.y - sp.cy) * k + dy, fsB,
-                    k2 > 0.35 ? em.mouth : this.EMOTIONS.idle.mouth, t + (e.phase || 0));
+                    k2 > 0.35 ? em.mouth : this.EMOTIONS.idle.mouth, t + (e.phase || 0),
+                    vis.pal, vis.style);
         ctx.restore();
       }
     }
@@ -1240,7 +1577,9 @@ const FishBody = {
     ctx.clip();
     ctx.save();
     ctx.scale(0.6, 0.6); ctx.translate(-s * 0.2, -s * 0.55);
-    this.drawFace(ctx, s, eating ? 'idle' : e.expression, t + e.phase, e.emoteK());
+    const vT = this.visageDe(e);
+    this.drawFace(ctx, s, eating ? 'idle' : e.expression, t + e.phase, e.emoteK(),
+                  null, false, vT.pal, vT.style);
     ctx.restore();
     ctx.restore();
     ctx.restore();
@@ -1337,8 +1676,10 @@ const FishBody = {
     ctx.closePath(); ctx.fill();
     ctx.restore();
 
-    // Visage commun
-    this.drawFace(ctx, s, expr, t + e.phase, e.emoteK());
+    // Visage commun. Un oiseau réclame en général le style de bouche `bec` :
+    // c'est un réglage d'espèce (`def.boucheStyle`), pas un rendu à part.
+    const vO = this.visageDe(e);
+    this.drawFace(ctx, s, expr, t + e.phase, e.emoteK(), null, false, vO.pal, vO.style);
 
     // Le PÉLICAN a une poche à la place de la moustache. Elle se remplit quand
     // il vient d'attraper quelque chose (`_chew`) et quand il rate (`_poche`),
@@ -1502,7 +1843,12 @@ const FishBody = {
       c = this._halos[color] = document.createElement('canvas');
       c.width = c.height = 64;
       const hc = c.getContext('2d');
-      const rgb = U.hexRGB(color.startsWith('#') ? color : '#ffffff');
+      // La couleur peut arriver en « #rrggbb » (une palette) ou en « rgb(…) »
+      // (une teinte tirée au sort par individu) : les deux doivent donner leur
+      // vraie lueur, pas un halo blanc de repli.
+      const m = /^rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(color || '');
+      const rgb = m ? [+m[1], +m[2], +m[3]]
+                    : U.hexRGB(color && color.startsWith('#') ? color : '#ffffff');
       const g = hc.createRadialGradient(32, 32, 2, 32, 32, 32);
       g.addColorStop(0, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.85)`);
       g.addColorStop(0.5, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.28)`);

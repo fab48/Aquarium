@@ -1,6 +1,13 @@
 // Gestion de la population : spawn initial, groupes/bancs, prédation,
 // ponte, caps de population par zone (GDD §6, §7, §9, §14).
 
+// Silhouettes POSÉES AU FOND : elles suivent la pente, se répartissent dans la
+// bande de sable, et ne peuvent plus se déplacer une fois installées. Une seule
+// liste de référence — elle était recopiée à quatre endroits, et l'oursin comme
+// l'anguille-jardinière avaient été oubliés dans certains.
+const POSEES_AU_FOND = new Set(['shell', 'star', 'anemone', 'eel', 'worm', 'crab',
+                                'urchin', 'gardeneel']);
+
 const Ecosystem = {
   entities: [],
   groups: {},      // groupId -> [entities]
@@ -77,6 +84,48 @@ const Ecosystem = {
     this.spawnGroups('goeland', 2);
     this.spawnGroups('cormoran', 2);
 
+    this.desempile();
+  },
+
+  // DÉSEMPILEMENT DES CRÉATURES POSÉES. Elles arrivent par trois chemins qui
+  // s'ignorent — la répartition régulière du groupe, les sites d'habitat, et le
+  // recadrage aux bornes — et rien ne garantissait le résultat FINAL : relevé
+  // avant, 44 paires d'étoiles côte à côte, dont certaines à 0 px d'écart. Or
+  // une espèce posée ne peut plus jamais se déplacer (`move` la recolle à son
+  // ancre), donc ce qui est empilé au départ le reste à vie.
+  //
+  // Une passe unique, à la fin du peuplement : on trie par x et on écarte les
+  // voisins trop proches, chacun de la moitié du manque. Deux ou trois passes
+  // suffisent à répartir une file entière, et ça ne coûte rien — c'est fait une
+  // seule fois, sur une centaine d'individus.
+  desempile() {
+    for (const id in SPECIES) {
+      const def = SPECIES[id];
+      if (!POSEES_AU_FOND.has(def.render) && def.movement !== 'fixed') continue;
+      const L = this.entities.filter(e => !e.dead && e.speciesId === id);
+      if (L.length < 2) continue;
+      const marge = Math.max(64, def.size * 3.4);
+      const xMin = World.shoreX + 90, xMax = CONFIG.WORLD_WIDTH - 120;
+      for (let passe = 0; passe < 4; passe++) {
+        L.sort((a, b) => a.x - b.x);
+        let bouge = false;
+        for (let i = 0; i < L.length - 1; i++) {
+          const d = L[i + 1].x - L[i].x;
+          if (d >= marge) continue;
+          const pousse = (marge - d) / 2;
+          L[i].x = U.clamp(L[i].x - pousse, xMin, xMax);
+          L[i + 1].x = U.clamp(L[i + 1].x + pousse, xMin, xMax);
+          bouge = true;
+        }
+        if (!bouge) break;
+      }
+      // Chacun se repose sur le sable à sa nouvelle place, et se réancre.
+      for (const e of L) {
+        e.y = World.floorY(e.x) - def.size * 0.4 + (e._sable || 0);
+        e.anchorX = e.x; e.anchorY = e.y;
+        delete def._bornesRep;
+      }
+    }
   },
 
 
@@ -84,7 +133,7 @@ const Ecosystem = {
     const def = SPECIES[speciesId];
     for (let g = 0; g < count; g++) {
       const n = U.randInt(def.groupSize[0], def.groupSize[1]);
-      const bottomDweller = ['shell', 'star', 'anemone', 'eel', 'worm', 'crab', 'urchin', 'gardeneel'].includes(def.render);
+      const bottomDweller = POSEES_AU_FOND.has(def.render);
       let x, y;
       // Espèces ancrées à une anémone : on répartit les groupes sur des refuges
       // DIFFÉRENTS (le moins peuplé d'un tirage), sinon tout le monde s'installe
@@ -216,7 +265,14 @@ const Ecosystem = {
         // Espèces fixes : étalées en rang le long du fond (elles ne pourront
         // plus se repousser ensuite), les autres en nuage autour du point.
         // Les espèces territoriales s'espacent VRAIMENT (leur caverne est large)
-        const ecart = def.territory ? def.territory * U.rand(1, 1.5) : def.size * U.rand(2.6, 3.6);
+        // ÉCART entre membres d'un groupe. `size * 3` donnait 30 px pour une
+        // étoile de 10 — or elle en fait le double une fois dessinée, et rien
+        // ne pourra plus les séparer (une espèce posée est recollée à son ancre
+        // par `move`). D'où un PLANCHER en pixels : le fond a de la place, et
+        // trois étoiles collées se lisent comme un bug d'empilement.
+        const ecart = def.territory ? def.territory * U.rand(1, 1.5)
+                    : bottomDweller ? Math.max(70, def.size * 3.2) * U.rand(0.9, 1.5)
+                    : def.size * U.rand(2.6, 3.6);
         // QUINCONCE : trois rangees dans la bande de sable, decalees d'une
         // demi-case en x. Un rang unique alignait tout le monde sur la meme
         // diagonale — c'est ce qui donnait ces files d'etoiles et d'hippocampes.
@@ -275,7 +331,7 @@ const Ecosystem = {
         const bande = (def.render === 'eel' || def.render === 'gardeneel') ? 0
           : U.clamp((rang + U.rand(-0.28, 0.28)) / 2.6 * SABLE_BANDE, 0, SABLE_BANDE);
         e._sable = bande;
-        if (['shell', 'star', 'anemone', 'eel', 'worm', 'urchin', 'gardeneel'].includes(def.render)) {
+        if (POSEES_AU_FOND.has(def.render) && def.render !== 'crab') {
           e.y = World.floorY(e.x) - def.size * 0.4 + bande;
         } else if (def.movement === 'crawl') {
           e.y = World.floorY(e.x) - def.size * 0.6 + bande;
@@ -629,6 +685,37 @@ const Ecosystem = {
 
   // Pond un œuf (appelé par Entity.tryMate, une fois par œuf de la portée).
   // ox/oy : lieu de la rencontre du couple, sinon la position du parent.
+  // Place libre sur le fond, à `marge` px de tout congénère. Les espèces posées
+  // (`fixed`) ne peuvent PAS se repousser ensuite : `Entity.move` les recolle à
+  // leur ancre, donc l'anti-chevauchement ne s'applique jamais à elles. Si deux
+  // naissent au même endroit, elles y restent COLLÉES à vie — relevé avant
+  // correction : 86 paires d'oursins et 38 d'étoiles à moins de 40 px, les plus
+  // proches à 1 px l'une de l'autre. Tout se joue donc à la ponte.
+  placeLibreAuFond(speciesId, x, marge) {
+    // On balaie `entities`, PAS `bySpecies` : cet index exclut les œufs
+    // (`buildGrid` les saute) et n'est reconstruit qu'une fois par frame. Deux
+    // œufs pondus dans la même frame se posaient donc exactement au même
+    // endroit, et un œuf déjà là ne bloquait rien — d'où les étoiles à 0 px
+    // d'écart malgré la recherche de place.
+    const memes = [];
+    for (const o of this.entities) if (!o.dead && o.speciesId === speciesId) memes.push(o);
+    const libre = cx => memes.every(o => Math.abs(o.x - cx) >= marge);
+    if (libre(x)) return x;
+    // Spirale autour du point voulu : on s'éloigne le moins possible, et des
+    // DEUX côtés — chercher toujours du même côté aligne toute la portée.
+    for (let d = marge * 0.6; d < 1600; d += marge * 0.5) {
+      for (const cx of [x + d, x - d]) {
+        if (cx < World.shoreX + 90 || cx > CONFIG.WORLD_WIDTH - 120) continue;
+        const def = SPECIES[speciesId];
+        const prof = World.depthAt(cx);
+        if (prof < Math.max(def.depthBand[0], def.size * 3 + 40)) continue;
+        if (prof > def.depthBand[1]) continue;
+        if (libre(cx)) return cx;
+      }
+    }
+    return null;                                 // le fond est plein
+  },
+
   layEgg(parent, ox = parent.x, oy = parent.y) {
     // Capacité de charge par espèce (GDD §14) : la pyramide trophique impose
     // beaucoup de petits herbivores et très peu de grands prédateurs.
@@ -657,7 +744,12 @@ const Ecosystem = {
     if (parent.def.habitat) {
       const spot = this.habitatLibre(parent);
       if (spot === null) return;                 // tout est plein : pas de ponte
-      egg.x = spot + U.rand(-40, 40);
+      // Le site d'accueil est le bon, mais rien ne garantissait l'écart AVEC
+      // LES VOISINS déjà installés dessus : les étoiles s'empilaient sur le
+      // même rocher.
+      const marge = 60 + parent.def.size * 2.2;
+      egg.x = this.placeLibreAuFond(parent.speciesId, spot + U.rand(-40, 40), marge);
+      if (egg.x === null) return;
       egg.y = World.floorY(egg.x) - parent.def.size * 0.4 + sableOffset(egg);
       egg.anchorX = egg.x; egg.anchorY = egg.y;
       // On la voit partir : quelques bulles emportées par le courant
@@ -672,7 +764,12 @@ const Ecosystem = {
     // Seules les espèces de récif confient leurs œufs à une anémone. Les autres
     // fraient dans LEUR zone : sans ça, les alevins de tout l'aquarium
     // s'entassaient sur les mêmes anémones.
-    const reef = (parent.def.nursery || 'reef') === 'reef';
+    // UNE ESPÈCE POSÉE NE CONFIE PAS SES ŒUFS À UNE ANÉMONE : elle se pose au
+    // fond, à distance de ses congénères. Ce test doit passer AVANT celui du
+    // refuge — sinon oursins, coquillages et jardinières s'ancraient tous
+    // autour de la même anémone, en tas, et ne pouvaient plus s'en écarter.
+    const posee = POSEES_AU_FOND.has(parent.def.render) || parent.def.movement === 'fixed';
+    const reef = !posee && (parent.def.nursery || 'reef') === 'reef';
     const refuge = reef ? this.nearestRefuge(ox, oy) : null;
     if (refuge && U.dist2(ox, oy, refuge.x, refuge.y) < 900 * 900) {
       // Chaque œuf reçoit SA place autour de l'anémone : sans ça, tous les
@@ -680,6 +777,15 @@ const Ecosystem = {
       const a = Math.random() * Math.PI * 2, rr = U.rand(20, 75);
       egg.x = refuge.x + Math.cos(a) * rr; egg.y = refuge.y - Math.abs(Math.sin(a)) * rr * 0.6 - 6;
       egg.anchorX = egg.x; egg.anchorY = egg.y; egg._refugeAnchored = true;
+    } else if (posee) {
+      // Posée au fond : elle ne pourra plus jamais bouger, donc sa place se
+      // décide MAINTENANT, à bonne distance de ses congénères.
+      const marge = 60 + parent.def.size * 2.2;
+      const spot = this.placeLibreAuFond(parent.speciesId, ox, marge);
+      if (spot === null) return;                 // le fond est plein : pas de ponte
+      egg.x = spot;
+      egg.y = World.floorY(spot) - parent.def.size * 0.4 + sableOffset(egg);
+      egg.anchorX = egg.x; egg.anchorY = egg.y;
     } else {
       egg.y = World.floorY(egg.x) - 8;
     }

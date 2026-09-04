@@ -947,7 +947,7 @@ class Entity {
     Particles.boom(this.x, this.y, this.size, this.color);
     Particles.shout(this.x, this.y - this.size * 1.2, 'BOUM !', '#ffd75e', this.size * 0.9);
     // Il ne disparaît pas pour rien : ses restes nourrissent le fond
-    for (let i = 0; i < 3; i++) Food.addBone(this.x + U.rand(-40, 40), this.y + U.rand(-25, 25));
+    Food.addBone(this.x, this.y, U.clamp(this.size / 16, 0.7, 4.5));
     for (let i = 0; i < 4; i++) Food.poop(this.x + U.rand(-50, 50), this.y + U.rand(-30, 30), this.size * 0.5);
     // Les témoins sont soufflés — et écœurés par ce qui leur retombe dessus
     for (const o of Ecosystem.neighbors(this.x, this.y)) {
@@ -1654,7 +1654,9 @@ class Entity {
     if (this.dead) return;
     this.dead = true;
     if (this.stage === 'adult' || this.stage === 'fry') {
-      Food.addBone(this.x, this.y);
+      // UNE seule arête, mise à l'échelle du poisson : trois petites arêtes
+      // identiques ne disaient pas si c'était une sardine ou un cachalot.
+      Food.addBone(this.x, this.y, U.clamp(this.size / 16, 0.7, 4.5));
       Particles.bones(this.x, this.y);
     }
   }

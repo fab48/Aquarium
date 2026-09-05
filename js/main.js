@@ -3,6 +3,12 @@ const Main = {
   canvas: null, ctx: null,
   time: 0,          // temps de jeu en secondes
   lastFrame: 0,
+  // PLAFOND DE CADENCE. rAF bat à la cadence de l'ÉCRAN : sur un téléphone à
+  // 120 Hz le jeu tournait à 120 fps — exactement deux fois le travail pour un
+  // gain nul sur un aquarium contemplatif, et la batterie qui fond jusqu'à
+  // l'étranglement thermique (le téléphone chauffe, ralentit, et LÀ les frames
+  // deviennent vraiment lentes). `adaptResolution` peut l'abaisser à 30.
+  fpsCap: 60,
 
   // t du cycle jour : 0 = aube, 0.5 = crépuscule, ... sur DAY_LENGTH secondes
   dayT() { return (this.time % CONFIG.DAY_LENGTH) / CONFIG.DAY_LENGTH; },
@@ -53,13 +59,27 @@ const Main = {
   },
 
   resize() {
-    this.dpr = Math.min(window.devicePixelRatio || 1, this.dprCap ?? 2);
+    // Plafond INITIAL à 1,5 sur écran tactile (2 ailleurs) : sur un OLED de
+    // 390 px de large, la différence entre dpr 1,5 et 2 est à peine perceptible,
+    // et c'est 44 % de pixels en moins d'entrée de jeu — sans attendre que la
+    // mesure d'`adaptResolution` condamne dpr 2 après trois secondes de rame.
+    const plafond = this.dprCap ?? (matchMedia('(pointer: coarse)').matches ? 1.5 : 2);
+    this.dpr = Math.min(window.devicePixelRatio || 1, plafond);
     this.canvas.width = window.innerWidth * this.dpr;
     this.canvas.height = window.innerHeight * this.dpr;
     Camera.resize(window.innerWidth, window.innerHeight);
   },
 
   frame(ts) {
+    // Le plafond de cadence : la frame arrivée trop tôt est SAUTÉE, simulation
+    // comprise — c'est tout l'intérêt (diviser le travail, pas le lisser). Le
+    // seuil laisse 5 ms de jeu : à 60 Hz réels le jitter de rAF ne fait jamais
+    // sauter de frame, à 120 Hz on en rend exactement une sur deux.
+    // `lastFrame` n'avance que sur une frame rendue, donc le dt s'accumule.
+    if (ts - this.lastFrame < 1000 / this.fpsCap - 5) {
+      requestAnimationFrame(ts2 => this.frame(ts2));
+      return;
+    }
     // Borné des DEUX côtés : le timestamp de la première frame peut précéder le
     // performance.now() de l'init (et les reprises d'onglet font des sauts), ce
     // qui donnait un dt négatif — les particules vieillissaient à l'envers et
@@ -137,7 +157,14 @@ const Main = {
     if (this._perfAcc < 3000) return;       // on juge sur ~3 s, pas sur une frame
     const avg = this._perfAcc / this._perfN;
     this._perfAcc = 0; this._perfN = 0;
-    if (avg <= 40) return;
+    // Le seuil est le BUDGET du plafond de cadence plus une marge — pas une
+    // constante. À plafond 30, une frame parfaitement saine dure déjà 33 ms :
+    // l'ancien seuil fixe de 40 aurait continué d'adapter un jeu qui tient sa
+    // cadence. La marge est plus serrée au tactile (≈33 ms à plafond 60,
+    // contre ≈40 au bureau — la valeur historique) : sur téléphone le filet
+    // doit se tendre AVANT que ce soit pénible, pas à 25 fps.
+    const marge = matchMedia('(pointer: coarse)').matches ? 16 : 23;
+    if (avg <= 1000 / this.fpsCap + marge) return;
     // 1. La résolution d'abord : c'est le levier le moins visible. À dpr 1 au
     //    lieu de 2, c'est quatre fois moins de pixels et l'image reste cadrée
     //    pareil.
@@ -147,7 +174,15 @@ const Main = {
       console.info(`[perf] frame moyenne ${avg.toFixed(0)} ms : résolution abaissée (dpr ${this.dpr})`);
       return;
     }
-    // 2. Puis le champ de vision. Une fois la résolution au plancher, ce qui
+    // 2. Puis la cadence : 30 fps STABLES se lisent mieux qu'un 45 qui pompe,
+    //    et rien ne se déplace vite dans un aquarium. Avant la bride du dézoom,
+    //    qui recadre la vue — le plus visible des trois leviers.
+    if (this.fpsCap > 30) {
+      this.fpsCap = 30;
+      console.info(`[perf] frame moyenne ${avg.toFixed(0)} ms : cadence plafonnée à 30 fps`);
+      return;
+    }
+    // 3. Puis le champ de vision. Une fois la résolution au plancher, ce qui
     //    reste cher est la SURFACE DE MONDE affichée : à 0,35 la vue couvre
     //    trois fois plus qu'à 1, donc trois fois plus de créatures à dessiner.
     //    On remonte le plancher de dézoom par paliers, et on rapproche la vue

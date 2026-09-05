@@ -161,6 +161,18 @@
   .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-items: center; }
   .pastilles { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
   .pastilles input[type=color] { width: 30px; height: 26px; padding: 1px; }
+  /* Pastille de couleur : c'est ELLE qu'on clique. La fenêtre native d'un
+     `<input type=color>` s'ouvre à l'enfoncement du bouton, avant même qu'on
+     relâche — impossible d'annuler un clic parti de travers. Le `click` d'un
+     bouton, lui, n'arrive qu'au relâchement. */
+  .couleur { position: relative; display: block; }
+  .couleur > button { width: 100%; height: 30px; padding: 0;
+                      border: 1px solid var(--bord); border-radius: 5px; cursor: pointer; }
+  .couleur > input[type=color] { position: absolute; left: 10px; bottom: 0;
+                                 width: 1px; height: 1px; opacity: 0; border: 0;
+                                 padding: 0; pointer-events: none; }
+  .pastilles .couleur { display: inline-block; width: 30px; }
+  .pastilles .couleur > button { height: 26px; }
   .pastilles .sup { padding: 2px 5px; font-size: 11px; }
   #filtre { width: 100%; margin-top: 7px; padding: 4px 7px; border: 1px solid var(--bord);
             border-radius: 5px; font: inherit; font-size: 12px; }
@@ -1216,6 +1228,17 @@ const OUTILS = {
   dessiner:  { ico: '✏️', nom: 'Dessiner',   quoi: 'Tracer un nouveau calque au clic.' },
 };
 
+// UN CHAMP DE COULEUR = une pastille cliquable + l'input natif, caché derrière.
+// La fenêtre native d'un `<input type=color>` s'ouvre à l'ENFONCEMENT du bouton,
+// avant le relâchement : un clic parti de travers ne peut plus être annulé, et
+// ça se paye vingt fois par séance. Le `click` d'un bouton n'arrive qu'au
+// relâchement. Les identifiants et les gestionnaires ne changent pas — c'est
+// seulement ce qui déclenche l'ouverture qui change.
+function champCouleur(attrs, valeur) {
+  return `<span class="couleur"><button type="button" class="ouvreCouleur"
+      style="background:${valeur}"></button><input type="color" ${attrs} value="${valeur}"></span>`;
+}
+
 // Une explication ne s'affiche que si l'aide est allumée.
 const A = h => (aide ? `<p class="aide">${h}</p>` : '');
 
@@ -1242,6 +1265,86 @@ function listeCalques(attr, choisies) {
     `<label><input type="checkbox" data-${attr}="${i}" ${s.has(i) ? 'checked' : ''}>` +
     `<span class="pastel" style="background:${sh.fill || sh.stroke || '#888'}"></span>` +
     `${nomForme(i)}${sh.groupe ? ' · ' + sh.groupe : ''}</label>`).join('') + `</div>`;
+}
+
+// --- LES DEUX COULEURS DE BASE ----------------------------------------------
+// Un dessin a presque toujours DEUX couleurs qui reviennent partout : celle du
+// corps et celle du trait. Elles se retapaient à la main dans chaque champ —
+// remplissage, contour, second arrêt du dégradé, encre du visage — donc jamais
+// tout à fait les mêmes, et un liseré finissait par jurer avec le sourcil d'à
+// côté.
+//
+// `doc.base = { primaire, secondaire }` les déclare une fois. Ce sont des
+// DÉFAUTS, pas des contraintes : tout champ réglé à la main l'emporte.
+//   primaire   → remplissage d'une forme nouvelle
+//   secondaire → contour, second arrêt d'un dégradé, et l'encre du visage —
+//                donc le sourcil et le trait de la bouche, qui la suivent.
+function base(role) {
+  const b = doc && doc.base;
+  if (!b) return null;
+  return (role === 'primaire' ? b.primaire : b.secondaire) || null;
+}
+
+// PIPETTE. `pipette` vaut le rôle qu'on est en train de prélever, ou null.
+let pipette = null;
+let fondEchantillon = null;      // l'image de repérage, à sa taille NATIVE
+
+// Prélever DANS L'IMAGE D'ORIGINE quand le clic tombe dessus, et pas sur ce que
+// l'écran affiche : le calque de repérage est peint à son opacité, donc l'écran
+// renvoie une couleur DÉLAVÉE, mélangée au fond et au dessin. C'est tout
+// l'intérêt de prélever « depuis le dessin d'origine ».
+function couleurSousLeCurseur(sx, sy) {
+  const [wx, wy] = versDoc(sx, sy);
+  const f = doc && doc.fond;
+  if (f && imgFond && imgFond.complete && !f.cache) {
+    const k = f.k || 1;
+    let ix = (wx - (f.x || 0)) / k;
+    const iy = (wy - (f.y || 0)) / k;
+    if (f.miroir) ix = f.w - ix;
+    if (ix >= 0 && iy >= 0 && ix < f.w && iy < f.h) {
+      if (!fondEchantillon || fondEchantillon.src !== imgFond.src) {
+        const c = document.createElement('canvas');
+        c.width = f.w; c.height = f.h;
+        c.getContext('2d').drawImage(imgFond, 0, 0, f.w, f.h);
+        fondEchantillon = { src: imgFond.src, ctx: c.getContext('2d') };
+      }
+      const d = fondEchantillon.ctx.getImageData(Math.floor(ix), Math.floor(iy), 1, 1).data;
+      // Un pixel transparent de la vignette détourée ne dit rien : on retombe
+      // alors sur ce qui est affiché.
+      if (d[3] > 40) return '#' + [d[0], d[1], d[2]].map(v => v.toString(16).padStart(2, '0')).join('');
+    }
+  }
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const d = ctx.getImageData(Math.round(sx * dpr), Math.round(sy * dpr), 1, 1).data;
+  return '#' + [d[0], d[1], d[2]].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+
+function sectionBase() {
+  const p = base('primaire') || '#7fb2d6', sec = base('secondaire') || '#1c2733';
+  const pris = !!(doc.base && (doc.base.primaire || doc.base.secondaire));
+  return `<label>Primaire — remplissage</label>
+    <div class="rangee">
+      ${champCouleur('id="cBase1"', p)}
+      <button id="bPip1" class="${pipette === 'primaire' ? 'on' : ''}">💧 prendre</button>
+    </div>
+    <label>Secondaire — trait, dégradé, visage</label>
+    <div class="rangee">
+      ${champCouleur('id="cBase2"', sec)}
+      <button id="bPip2" class="${pipette === 'secondaire' ? 'on' : ''}">💧 prendre</button>
+    </div>`
+    + A(`<b>💧 prendre</b> puis un clic sur le dessin prélève la couleur. Le prélèvement
+        se fait dans l'<b>image de repérage d'origine</b> quand le clic tombe dessus —
+        pas sur ce que l'écran affiche, qui la mélange à son opacité et au dessin.`)
+    + `<div class="rangee">
+      <button id="bBaseAppliquer" ${pris ? '' : 'disabled'}>Appliquer à ce calque</button>
+      <button id="bBaseRaz" ${pris ? '' : 'disabled'}>Oublier</button>
+    </div>`
+    + A(`Ce sont des <b>défauts</b>, pas des contraintes : ils servent au remplissage
+        d'une forme nouvelle, au contour qu'on active, au second arrêt d'un dégradé et à
+        l'encre du visage — donc au <b>sourcil et au trait de la bouche</b>, qui la
+        suivent. Un champ réglé à la main l'emporte toujours.<br>
+        « Appliquer à ce calque » repeint la forme sélectionnée : remplissage en
+        primaire, contour et dégradé en secondaire.`);
 }
 
 // --- Les sections, une fonction par sujet -----------------------------------
@@ -1301,7 +1404,7 @@ function sectionVisage() {
   const c = (cle, defaut, titre) =>
     `<label>${titre}<span class="val">${v[cle] ? '' : 'défaut'}</span></label>
      <div class="rangee">
-       <input type="color" data-vis="${cle}" value="${v[cle] && v[cle][0] === '#' ? v[cle] : defaut}">
+       ${champCouleur(`data-vis="${cle}"`, v[cle] && v[cle][0] === '#' ? v[cle] : defaut)}
        <button data-visraz="${cle}" ${v[cle] ? '' : 'disabled'} title="Revenir à la valeur commune">↺</button>
      </div>`;
   return blocYeux()
@@ -1478,7 +1581,7 @@ function sectionDessiner() {
   return A(`Clique pour poser les sommets. <kbd>double-clic</kbd> ou <b>Fermer</b> termine
       la forme, <kbd>Échap</kbd> l'abandonne, <kbd>retour arrière</kbd> retire le dernier point.`)
     + `<label>Couleur</label>
-    <input type="color" id="cTrace" value="${couleurTrace}">
+    ${champCouleur('id="cTrace"', couleurTrace)}
     <label class="puce"><input type="checkbox" id="cLisse" ${lisseTrace ? 'checked' : ''}> contour lissé</label>
     <div class="rangee">
       <button id="bFermer" ${trace && trace.length > 2 ? '' : 'disabled'}>Fermer la forme</button>
@@ -1514,7 +1617,7 @@ function sectionApparence() {
         ne dit rien et on cherche la bonne en les allumant une par une.`)
     + `<label>Remplissage</label>
     <div class="rangee">
-      <input type="color" id="cFill" value="${(sh.fill && sh.fill[0] === '#') ? sh.fill : '#888888'}">
+      ${champCouleur('id="cFill"', (sh.fill && sh.fill[0] === '#') ? sh.fill : '#888888')}
       <button id="bSansFill" class="${sh.fill === null ? 'on' : ''}" title="Trait seul, sans remplissage">Trait seul</button>
     </div>
     <label class="puce"><input type="checkbox" id="cSmooth" ${sh.smooth ? 'checked' : ''}> contour lissé</label>
@@ -1532,7 +1635,7 @@ function sectionApparence() {
     </div>
     <label>Vers <span class="val">${deg.vers || 'auto'}</span></label>
     <div class="rangee">
-      <input type="color" id="cDegVers" value="${(deg.vers && deg.vers[0] === '#') ? deg.vers : '#243447'}">
+      ${champCouleur('id="cDegVers"', (deg.vers && deg.vers[0] === '#') ? deg.vers : '#243447')}
       <button id="bDegAuto" class="${deg.vers ? '' : 'on'}" title="La couleur de la forme, assombrie">auto</button>
     </div>`
     + (deg.type === 'radial' ? '' : `
@@ -1559,7 +1662,7 @@ function sectionApparence() {
     <label class="puce"><input type="checkbox" id="cCont" ${cont ? 'checked' : ''}> tracer un contour</label>`;
   if (cont) h += `
     <div class="rangee">
-      <input type="color" id="cContC" value="${(sh.stroke && sh.stroke[0] === '#') ? sh.stroke : '#1c2733'}">
+      ${champCouleur('id="cContC"', (sh.stroke && sh.stroke[0] === '#') ? sh.stroke : '#1c2733')}
     </div>
     <label>Épaisseur <span class="val" id="vContW">${(sh.lineWidth || 2).toFixed(1)}</span></label>
     <input type="range" id="sContW" min="0.5" max="20" step="0.5" value="${sh.lineWidth || 2}">`
@@ -1586,7 +1689,7 @@ function sectionApparence() {
     <label>Inclinaison <span class="val" id="vRefA">${Math.round(rf.angle || 0)}°</span></label>
     <input type="range" id="sRefA" min="-45" max="45" value="${Math.round(rf.angle || 0)}">
     <label>Couleur</label>
-    <input type="color" id="cRefC" value="${(rf.couleur && rf.couleur[0] === '#') ? rf.couleur : '#ffffff'}">`
+    ${champCouleur('id="cRefC"', (rf.couleur && rf.couleur[0] === '#') ? rf.couleur : '#ffffff')}`
     + A(`La bande de lumière qui court sur le dos d'un poisson. Elle est <b>découpée dans
         le contour</b>, donc elle ne déborde jamais et elle <b>ondule avec la nage</b> —
         dessinée à la main dans un calque, elle restait figée pendant que le corps
@@ -1608,7 +1711,7 @@ function sectionApparence() {
   if (cl.mode === 'palette') {
     const l = cl.couleurs || [];
     h += `<div class="pastilles">` + l.map((c, i) =>
-        `<input type="color" data-pal="${i}" value="${c}">`).join('')
+        champCouleur(`data-pal="${i}"`, c)).join('')
       + `<button class="sup" id="bPalPlus">+</button>`
       + (l.length ? `<button class="sup" id="bPalMoins">−</button>` : '') + `</div>`
       + `<div class="rangee"><button id="bPalEspece">Reprendre les couleurs de l'espèce</button></div>`;
@@ -1867,6 +1970,8 @@ function panneau() {
             surCalque || outil === 'nageoires' || outil === 'queue',
             `${doc.shapes.length} · n°${formeSel + 1}`);
   h += bloc('apparence', 'Apparence de la forme', sectionApparence(), surCalque);
+  h += bloc('base', 'Couleurs de base', sectionBase(), false,
+            (base('primaire') || base('secondaire')) ? '2' : '—');
   h += bloc('vitesse', 'Vitesse d’animation', sectionVitesse(), false,
             (doc.vitesse == null ? 1 : doc.vitesse).toFixed(2) + '×');
   h += bloc('taille', 'Échelle du dessin', sectionTaille(), false,
@@ -1882,7 +1987,6 @@ function panneau() {
 function cabler() {
   const on = (sel, ev, fn) => { const e = $(sel); if (e) e.addEventListener(ev, fn); };
   ['#sR', '#sFR', '#sTB', '#sAmp'].forEach(sel => on(sel, 'pointerdown', instantane));
-  on('#cFill', 'pointerdown', instantane);
   on('#sR', 'input', e => { doc.points.eye.r = +e.target.value; $('#vR').textContent = (+e.target.value).toFixed(1); marquer(); });
   document.querySelectorAll('.coord input').forEach(inp => {
     inp.addEventListener('focus', instantane);
@@ -2120,8 +2224,7 @@ function cabler() {
     else doc.boucheStyle = e.target.value;
     marquer(); panneau();
   });
-  document.querySelectorAll('[data-vis]').forEach(inp => {
-    inp.addEventListener('pointerdown', instantane);
+  document.querySelectorAll('input[data-vis]').forEach(inp => {
     inp.addEventListener('input', () => {
       doc.visage = doc.visage || {};
       doc.visage[inp.dataset.vis] = inp.value;
@@ -2141,6 +2244,39 @@ function cabler() {
 
   // --- Apparence d'un calque -------------------------------------------------
   const sh = () => doc.shapes[formeSel];
+  // La pastille ouvre l'input caché. L'instantané est pris ICI plutôt qu'au
+  // `pointerdown` de l'input : le geste commence à l'ouverture, pas à l'appui.
+  document.querySelectorAll('.couleur > input[type=color]').forEach(inp =>
+    inp.addEventListener('input', () => { inp.previousElementSibling.style.background = inp.value; }));
+  document.querySelectorAll('.ouvreCouleur').forEach(b => b.addEventListener('click', () => {
+    instantane();
+    b.nextElementSibling.click();
+  }));
+  // --- Couleurs de base ------------------------------------------------------
+  const poseBase = (role, v) => {
+    doc.base = doc.base || {};
+    doc.base[role] = v;
+    // Le tracé d'une forme neuve part de la primaire : c'est là qu'elle sert.
+    if (role === 'primaire') couleurTrace = v;
+    marquer();
+  };
+  on('#cBase1', 'input', e => poseBase('primaire', e.target.value));
+  on('#cBase2', 'input', e => poseBase('secondaire', e.target.value));
+  ['#cBase1', '#cBase2'].forEach(sel => on(sel, 'change', () => panneau()));
+  on('#bPip1', 'click', () => { pipette = pipette === 'primaire' ? null : 'primaire'; panneau(); majCurseur(); });
+  on('#bPip2', 'click', () => { pipette = pipette === 'secondaire' ? null : 'secondaire'; panneau(); majCurseur(); });
+  on('#bBaseRaz', 'click', () => { instantane(); delete doc.base; marquer(); panneau(); });
+  on('#bBaseAppliquer', 'click', () => {
+    const f = sh(); if (!f) return;
+    instantane();
+    if (base('primaire') && f.fill !== null) f.fill = base('primaire');
+    if (base('secondaire')) {
+      if (f.stroke) f.stroke = base('secondaire');
+      if (f.degrade) f.degrade.vers = base('secondaire');
+    }
+    marquer(); panneau();
+    dire(`${nomForme(formeSel)} repeint aux couleurs de base`, 'ok');
+  });
   on('#nomCalque', 'focus', instantane);
   on('#nomCalque', 'input', e => {
     const f = sh(); if (!f) return;
@@ -2165,21 +2301,23 @@ function cabler() {
     const f = sh(); if (!f) return;
     // Un contour ouvert n'a de sens qu'avec un trait : sans lui il n'y a plus
     // qu'un remplissage bâclé, refermé n'importe comment par le moteur.
-    if (e.target.checked) { f.ferme = false; f.stroke = f.stroke || f.fill || '#1c2733'; f.lineWidth = f.lineWidth || 3; }
+    if (e.target.checked) { f.ferme = false; f.stroke = f.stroke || base('secondaire') || f.fill || '#1c2733'; f.lineWidth = f.lineWidth || 3; }
     else delete f.ferme;
     marquer(); panneau();
   });
   on('#cDeg', 'change', e => {
     instantane();
     const f = sh(); if (!f) return;
-    if (e.target.checked) f.degrade = { type: 'lineaire', ang: 90, pos: 1 };
+    if (e.target.checked) {
+      f.degrade = { type: 'lineaire', ang: 90, debut: 0, fin: 1 };
+      if (base('secondaire')) f.degrade.vers = base('secondaire');
+    }
     else delete f.degrade;
     marquer(); panneau();
   });
   document.querySelectorAll('[data-degtype]').forEach(b => b.addEventListener('click', () => {
     instantane(); sh().degrade.type = b.dataset.degtype; marquer(); panneau();
   }));
-  on('#cDegVers', 'pointerdown', instantane);
   on('#cDegVers', 'input', e => { sh().degrade.vers = e.target.value; marquer(); });
   on('#cDegVers', 'change', () => panneau());
   on('#bDegAuto', 'click', () => { instantane(); delete sh().degrade.vers; marquer(); panneau(); });
@@ -2237,17 +2375,15 @@ function cabler() {
   refl('#sRefL', 'largeur', '#vRefL', 2);
   refl('#sRefE', 'epaisseur', '#vRefE', 3);
   refl('#sRefA', 'angle', '#vRefA', 0);
-  on('#cRefC', 'pointerdown', instantane);
   on('#cRefC', 'input', e => { sh().reflet.couleur = e.target.value; marquer(); });
   on('#cCont', 'change', e => {
     instantane();
     const f = sh(); if (!f) return;
-    if (e.target.checked) { f.stroke = f.stroke || '#1c2733'; f.lineWidth = f.lineWidth || 2; }
+    if (e.target.checked) { f.stroke = f.stroke || base('secondaire') || '#1c2733'; f.lineWidth = f.lineWidth || 2; }
     else if (f.fill === null) return dire('une forme sans remplissage a besoin de son contour', 'ko');
     else delete f.stroke;
     marquer(); panneau();
   });
-  on('#cContC', 'pointerdown', instantane);
   on('#cContC', 'input', e => { sh().stroke = e.target.value; marquer(); });
   on('#sContW', 'pointerdown', instantane);
   on('#sContW', 'input', e => {
@@ -2278,7 +2414,6 @@ function cabler() {
     marquer(); panneau();
   });
   document.querySelectorAll('[data-pal]').forEach(inp => {
-    inp.addEventListener('pointerdown', instantane);
     inp.addEventListener('input', () => { sh().couleur.couleurs[+inp.dataset.pal] = inp.value; marquer(); });
   });
   on('#bPalPlus', 'click', () => {
@@ -2387,15 +2522,35 @@ function miroirForme(axe) {
 }
 function dupliquerForme() {
   instantane();
-  const sh = JSON.parse(JSON.stringify(doc.shapes[formeSel]));
-  sh.points = sh.points.map(p => [p[0] + doc.naturalW * 0.04, p[1] + doc.naturalH * 0.04]);
+  const dx = doc.naturalW * 0.04, dy = doc.naturalH * 0.04;
+  const src = formeSel;
+  // Les appendices qui animaient l'original, RELEVÉS AVANT tout décalage.
+  // Dupliquer une nageoire sans son ancrage donnait une pièce inerte : on
+  // refaisait l'appendice à la main, avec ses cinq réglages, à chaque copie —
+  // alors que le geste sert justement à faire la paire de l'autre côté.
+  const aCopier = doc.fins.filter(f => calquesDe(f).includes(src));
+  const sh = JSON.parse(JSON.stringify(doc.shapes[src]));
+  sh.points = sh.points.map(p => [p[0] + dx, p[1] + dy]);
   // La copie sort du groupe : dupliquer une nageoire, c'est en faire une AUTRE.
   delete sh.groupe;
-  doc.shapes.splice(formeSel + 1, 0, sh);
+  doc.shapes.splice(src + 1, 0, sh);
   // Les appendices visant une forme au-delà du point d'insertion se décalent.
-  decalerCalques(j => (j > formeSel ? j + 1 : j));
-  formeSel++;
+  decalerCalques(j => (j > src ? j + 1 : j));
+  // La copie de l'appendice ne vise QUE la copie de la forme, et suit son
+  // décalage : posée sur l'ancre d'origine, elle déformerait autour du vide.
+  for (const f of aCopier) {
+    const g = JSON.parse(JSON.stringify(f));
+    g.calques = [src + 1];
+    delete g.layerIndex;
+    g.x += dx; g.y += dy;
+    doc.fins.push(g);
+  }
+  formeSel = src + 1;
+  if (aCopier.length) finSel = doc.fins.length - 1;
   marquer(); panneau();
+  dire(aCopier.length
+    ? `forme dupliquée avec ${aCopier.length} appendice${aCopier.length > 1 ? 's' : ''}`
+    : 'forme dupliquée', 'ok');
 }
 
 // Toute renumérotation des calques doit être répercutée sur ce qui les VISE :
@@ -2486,7 +2641,7 @@ function marquer() { if (espece && doc) brouillons[espece] = doc; dessiner(); ra
 function fermerTrace() {
   if (!trace || trace.length < 3) return dire('il faut au moins trois sommets', 'ko');
   instantane();
-  doc.shapes.push({ points: trace, fill: couleurTrace, smooth: lisseTrace,
+  doc.shapes.push({ points: trace, fill: base('primaire') || couleurTrace, smooth: lisseTrace,
                     pivot: null, amp: 15, ferme: true });
   formeSel = doc.shapes.length - 1;
   trace = null;
@@ -2522,6 +2677,7 @@ function annuler(pile, autre) {
 }
 addEventListener('keydown', ev => {
   if (!(ev.ctrlKey || ev.metaKey)) return;
+  if (ev.key === 'Escape' && pipette) { pipette = null; majCurseur(); panneau(); return; }
   const k = ev.key.toLowerCase();
   if (k === 'z' && !ev.shiftKey) { ev.preventDefault(); annuler(histoire, futur); }
   else if (k === 'y' || (k === 'z' && ev.shiftKey)) { ev.preventDefault(); annuler(futur, histoire); }
@@ -2653,10 +2809,26 @@ function segmentPres(sx, sy) {
   return best;
 }
 
+// Le curseur dit dans quel mode on est : sans ça, une pipette armée et oubliée
+// transforme le prochain clic d'édition en prélèvement, sans prévenir.
+function majCurseur() { vue.style.cursor = pipette ? 'crosshair' : ''; }
+
 vue.addEventListener('pointerdown', ev => {
   if (!doc) return;
   const r = vue.getBoundingClientRect();
   const sx = ev.clientX - r.left, sy = ev.clientY - r.top;
+  // PIPETTE : elle passe avant tout, et se désarme après un prélèvement.
+  if (pipette) {
+    instantane();
+    const role = pipette;
+    doc.base = doc.base || {};
+    doc.base[role] = couleurSousLeCurseur(sx, sy);
+    if (role === 'primaire') couleurTrace = doc.base[role];
+    pipette = null; majCurseur();
+    marquer(); panneau();
+    dire(`couleur ${role} prélevée : ${doc.base[role]}`, 'ok');
+    return;
+  }
   const cible = pres(sx, sy);
 
   if (cible && cible.type === 'point' && ev.altKey) {
@@ -2962,6 +3134,9 @@ function aEnvoyer() {
   // rendre le réglage tel qu'il était, pas une valeur par défaut.
   if (d.tailBlend != null) d.tailBlend = a(d.tailBlend);
   if (d.tailAxe != null && Math.round(d.tailAxe) === 90) delete d.tailAxe;
+  // `base` reste dans le fichier : c'est une donnée du dessin, pas un réglage
+  // d'outil — le jeu s'en sert pour l'encre du visage.
+  if (d.base && !d.base.primaire && !d.base.secondaire) delete d.base;
   // Une vitesse à 1 est la valeur par défaut : l'écrire alourdirait chaque
   // fichier d'un réglage qui ne dit rien.
   for (const cle of ['vitesse', 'vitesseQueue']) {

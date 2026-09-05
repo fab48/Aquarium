@@ -3,6 +3,9 @@
 // Le format de l'éditeur, tel qu'il est consommé ici :
 //   naturalW/H  — dimensions du dessin d'origine
 //   points      — ANCRES : center (origine de la créature), nose, eye, mouth, tail
+//   base        — { primaire, secondaire } : les deux couleurs du dessin. La
+//                 secondaire donne son défaut à l'encre du visage (donc au
+//                 sourcil et au trait de la bouche).
 //   visage      — PALETTE du visage commun : encre, pupille, gorge, langue,
 //                 lèvres, bec, joue. Surcharge partielle de `FishBody.VISAGE`.
 //   boucheStyle — forme de la bouche : standard, grande, petite, gueule (à
@@ -75,19 +78,29 @@ const Sprites = {
   // si sa fiche déclare un `sprite:` — c'est ainsi qu'on garde celles qui
   // marchent bien telles quelles.
   init() {
+    // DESSINS EMBARQUÉS (`build.py --inline`). `fetch` est bloqué par CORS sur
+    // `file://` : un fichier unique qu'on ouvre d'un double-clic perdrait donc
+    // TOUS ses sprites et rendrait des silhouettes procédurales, en silence.
+    // Quand la page les a embarqués, il n'y a rien à aller chercher.
+    const pre = this.PRECHARGE;
+    if (pre) for (const nom in pre.dessins) this.cache[nom] = this.preparer(pre.dessins[nom]);
+
     for (const id in SPECIES) if (SPECIES[id].sprite) this.charger(SPECIES[id].sprite);
+    if (pre) { this.appliquerManifeste(pre.manifeste); return; }
+
     fetch('Assets/sprites.json')
       .then(r => (r.ok ? r.json() : null))
-      .then(m => {
-        if (!m) return;
-        this.manifeste = m;
-        for (const id in m) {
-          if (!SPECIES[id]) continue;
-          if (m[id]) { SPECIES[id].sprite = m[id]; this.charger(m[id]); }
-          else delete SPECIES[id].sprite;
-        }
-      })
+      .then(m => { if (m) this.appliquerManifeste(m); })
       .catch(() => {});     // pas de manifeste = rien à faire, cas normal
+  },
+
+  appliquerManifeste(m) {
+    this.manifeste = m;
+    for (const id in m) {
+      if (!SPECIES[id]) continue;
+      if (m[id]) { SPECIES[id].sprite = m[id]; this.charger(m[id]); }
+      else delete SPECIES[id].sprite;
+    }
   },
 
   charger(nom) {
@@ -202,7 +215,13 @@ const Sprites = {
       // mais il n'a plus à être le même trait d'encre pour tout le monde : un
       // bec orange, une pupille dorée, une gueule à dents sont des réglages du
       // dessin, pas un rendu de plus à écrire.
-      visage: d.visage || null,
+      // COULEURS DE BASE du dessin. La secondaire donne son DÉFAUT à l'encre du
+      // visage — donc au trait de la bouche et au sourcil, qui la suivent — pour
+      // qu'un liseré de forme et un sourcil ne jurent pas l'un à côté de l'autre.
+      // Une couleur déclarée à la main dans `visage` l'emporte toujours.
+      visage: (d.base && d.base.secondaire)
+        ? Object.assign({ encre: d.base.secondaire, sourcil: d.base.secondaire }, d.visage || {})
+        : (d.visage || null),
       boucheStyle: d.boucheStyle || null,
       shapes,
       // Boîte de chaque forme, en unités du dessin : c'est le repère dans lequel

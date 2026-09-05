@@ -309,7 +309,13 @@ embarquée, donc on ne la retrouve plus.
   Ils l'agrandissent, la tournent, la retournent ou la dupliquent autour de son
   centre. Cliquer n'importe quel calque le sélectionne (le calque actif garde la
   priorité, sinon celui du dessus lui volerait le clic). Un miroir horizontal
-  sert à faire la nageoire de l'autre côté : dupliquer, retourner, déplacer.
+  sert à faire la nageoire de l'autre côté : dupliquer, retourner, déplacer — et
+  **la copie emporte les appendices** qui animaient l'original, décalés comme
+  elle. Sans ça la copie sortait inerte et il fallait refaire l'ancrage à la
+  main, avec ses cinq réglages, à chaque fois, alors que le geste sert justement
+  à faire la paire de l'autre côté. Vérifié : une forme visée par un appendice
+  (r 55, amp 37, phase 123, vitesse 1,6, symétrique) se duplique avec un second
+  appendice identique, ne visant que la copie et décalé du même vecteur qu'elle.
   **Les ancrages suivent la forme** qu'ils visent, sinon le disque d'influence
   reste derrière et la nageoire se déforme autour du vide.
 
@@ -568,6 +574,34 @@ verticale du bout de la queue. À `vitesse: 1` elle vaut 169,5 / 171,3 / 170,7 ;
 avec `vitesseQueue` seule (170,9 / 166,4 / 160,8), ce qui prouve que les deux
 curseurs sont bien indépendants.
 
+### Les deux couleurs de base
+
+Un dessin a presque toujours **deux couleurs** qui reviennent partout : celle du
+corps et celle du trait. Elles se retapaient à la main dans chaque champ —
+remplissage, contour, second arrêt du dégradé, encre du visage — donc jamais tout
+à fait les mêmes, et un liseré finissait par jurer avec le sourcil d'à côté.
+
+`base: { primaire, secondaire }` les déclare une fois. Ce sont des **défauts**,
+pas des contraintes — un champ réglé à la main l'emporte toujours :
+
+| | sert de défaut à |
+|---|---|
+| `primaire` | le remplissage d'une forme nouvelle |
+| `secondaire` | le contour qu'on active, le second arrêt d'un dégradé, et l'**encre du visage** — donc le **sourcil** et le **trait de la bouche**, qui la suivent |
+
+La pupille, elle, reste sombre : c'est un point d'accroche du regard, pas un trait
+de contour. Vérifié : `base.secondaire = #5b2a12` donne `visage = { encre,
+sourcil }` à cette couleur et laisse la pupille à `#1c2733` ; un `visage.encre`
+déclaré à la main reprend le dessus.
+
+**La pipette prélève dans l'image d'origine**, pas sur ce que l'écran affiche. Le
+calque de repérage est peint à son opacité : l'écran renvoie une couleur délavée,
+mélangée au fond et au dessin. Mesuré, vignette du Mérou à 30 % d'opacité —
+l'écran donne `#ffffff` au point visé, le prélèvement donne `#c7762f`. C'est
+toute la différence entre « prendre une couleur sur le dessin » et « prendre la
+couleur d'un pixel d'écran ». Hors de la vignette (ou sur un pixel transparent de
+son détourage), on retombe sur ce qui est affiché.
+
 ### L'apparence d'un calque
 
 Un calque n'était qu'un contour et **une couleur unie**. Les silhouettes
@@ -625,6 +659,16 @@ remplace (le repère pour juger d'une taille — surtout sur un dessin importé 
 échelle déclarée, où le jeu suppose un poisson allongé), et un bouton **🌙 nuit**
 qui force `Main.nightAmount()` à 1 : le faux `Main` de la page répond « plein
 jour », donc sans lui une luminescence ne se voit **jamais** dans l'atelier.
+
+### Un sélecteur de couleur s'ouvre au RELÂCHEMENT
+
+La fenêtre native d'un `<input type=color>` s'ouvre dès l'**enfoncement** du
+bouton : un clic parti de travers ne peut plus être annulé, et ça se paye vingt
+fois par séance. Chaque champ de couleur est donc une **pastille** — un vrai
+bouton, dont le `click` n'arrive qu'au relâchement — qui déclenche l'input natif,
+resté dans le DOM mais invisible. Les identifiants et les gestionnaires ne
+changent pas ; seul ce qui déclenche l'ouverture change. L'instantané
+d'annulation est pris à l'ouverture, plus à l'appui.
 
 ### Le panneau, rangé
 
@@ -762,6 +806,7 @@ d'espèce reste lu : le manifeste ne fait que le compléter ou l'annuler.
 | `shapes[].alpha` | opacité de la forme, multipliée à l'alpha courant | 1 |
 | `shapes[].lueur` | **bioluminescence** (halo) 0→1, bridée à la nuit si l'espèce déclare `glowAtNight` | éteinte |
 | `shapes[].degrade` | `{ type: 'lineaire'\|'radial', ang, de, vers, debut, fin }` — le premier arrêt vaut la couleur **résolue** de la forme ; la transition a un **début** et une **fin** (`pos` reste lu : fin, début à 0) | aplat |
+| `base` | `{ primaire, secondaire }` — les deux couleurs du dessin ; la secondaire donne son défaut à l'encre du visage | aucune |
 | `shapes[].nom` | nom libre du calque, affiché à la place de « forme n » | le numéro |
 | `shapes[].reflet` | `{ x, y, largeur, epaisseur, angle, force, couleur }` — la **bande de lumière** sur le dos, découpée dans le contour déformé | aucun |
 | `shapes[].couleur` | **couleur propre à l'individu** : `{ mode: 'espece'\|'especeSombre'\|'palette'\|'teinte', couleurs[], amplitude }` | la couleur du dessin |

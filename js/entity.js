@@ -129,6 +129,27 @@ class Entity {
 
   setExpression(expr, dur = 1.5) { this.emote(expr, dur); }
 
+  // UN VOISIN QUI NE PEUT PAS PARTIR EST UN VOISIN PERMANENT. Toute réaction
+  // déclenchée par sa seule présence tourne donc en boucle, indéfiniment, sur
+  // la même victime. Mesuré avant correction : la Rascasse piquait le Corail
+  // 29 fois/min et l'Anémone 24 fois/min (le récif restait vert de dégoût en
+  // permanence), et l'Anguille assommait 112 créatures de fond par minute —
+  // coquillages, oursins, étoiles, concombres, tous immobiles et donc tous à
+  // portée en continu, sonnés 4 à 7 % du temps.
+  //
+  // C'est la règle que l'Anémone et le Clown appliquaient déjà pour choisir
+  // qui câliner (`o.speedNow < 12 → continue`), généralisée : **une scène ne se
+  // déclenche que sur quelqu'un qui PASSE.** Le décor vivant en est exclu
+  // d'office, les rampants par leur vitesse.
+  static passe(o) {
+    return !o.def.refuge && o.def.movement !== 'fixed' && o.speedNow > 12;
+  }
+
+  // Part des individus qui montrent l'EFFET d'une émotion vécue en groupe.
+  // Ajouter une ligne ici plutôt qu'un `Math.random()` dans le code appelant :
+  // c'est le seul endroit où l'on voit le budget d'un coup d'œil.
+  static VFX_GROUPE = { scared: 0.1, eating: 0.1, dizzy: 0.1, love: 0.22 };
+
   // Joue une émotion DANS LA DURÉE : montée rapide, tenue, retombée douce.
   // `emoteK()` renvoie l'intensité 0→1 que le visage utilise pour interpoler,
   // ce qui évite les expressions qui claquent d'une frame à l'autre.
@@ -167,11 +188,15 @@ class Entity {
   // Throttlés : sans ça, un banc entier qui prend peur affiche 20 bulles d'un coup.
   emoteVFX(expr) {
     if ((this._vfxCd ?? 0) > 0) return;
-    // les réactions de groupe (peur, régal) ne s'affichent que sur quelques individus
-    // `dizzy` a rejoint la liste : depuis l'Anguille Coup-de-Jus, se faire
-    // sonner est un événement de GROUPE — une décharge assomme cinq poissons
-    // d'un coup, et cinq gerbes d'étoiles simultanées saturaient l'écran.
-    if ((expr === 'scared' || expr === 'eating' || expr === 'dizzy') && Math.random() > 0.1) return;
+    // Les réactions de GROUPE ne s'affichent que sur une fraction des individus,
+    // sinon un banc entier montre vingt bulles d'un coup. `dizzy` y est depuis
+    // l'Anguille (une décharge assomme cinq poissons à la fois) ; `love` depuis
+    // la mesure du 5 septembre 2026 : la migration de ponte met des dizaines de
+    // créatures en parade au même moment, et `loveBurst` était le deuxième
+    // émetteur du jeu (237 gerbes/min pour cette seule ligne). L'expression,
+    // elle, n'est jamais filtrée — c'est le VISAGE qui raconte, pas la gerbe.
+    const part = Entity.VFX_GROUPE[expr];
+    if (part !== undefined && Math.random() > part) return;
     this._vfxCd = U.rand(2.5, 5);
     const x = this.x, y = this.y - this.size * 1.1, s = this.size;
     switch (expr) {
@@ -235,7 +260,15 @@ class Entity {
     // elle se raréfie. Le Poisson-lanterne le déclarait déjà à la main
     // (`grazes: true`) pour cette raison exacte ; la règle est maintenant
     // générale et couvre le Thon (4 morts de faim en 6 min) et le Poisson-lune.
-    const broute = this.def.grazes ?? !(this.def.prey && this.def.prey.length > 1);
+    // Deuxième cas général : un EMBUSQUÉ QUI NE SE DÉPLACE PAS. Il ne peut pas
+    // aller chercher son repas, il dépend entièrement de ce qui veut bien
+    // passer devant son caillou — c'est la même absence de marge, sous une
+    // autre forme. Mesuré sans : 5 Rascasses mortes de faim sur 6 en 10 min, et
+    // 2 Murènes sur 3 dès qu'on descend leur bande de profondeur.
+    const plante = this.def.ambush
+      && (this.def.movement === 'fixed' || this.def.movement === 'crawl');
+    const broute = this.def.grazes
+      ?? (plante || !(this.def.prey && this.def.prey.length > 1));
     // DISETTE : un carnivore dont TOUTES les proies sont passées sous leur
     // plancher de protection n'a plus rien à chasser. Il se rabat alors sur ce
     // qu'il trouve — assez pour ne pas mourir, jamais assez pour se reproduire.
@@ -398,11 +431,19 @@ class Entity {
         return;
       }
       this.hold('sleeping');
-      // ZzZzZ qui s'envolent au rythme du ronflement
-      this._zzzCd = (this._zzzCd ?? 0) - dt;
-      if (this._zzzCd <= 0) {
-        this._zzzCd = U.rand(1.1, 2.2);
-        Particles.zzz(this.x + this.size * 0.7, this.y - this.size * 0.9, this.size);
+      // ZzZzZ qui s'envolent au rythme du ronflement — mais PAS SUR TOUT LE
+      // MONDE. La nuit, ~46 % de l'aquarium dort : un « z » par dormeur toutes
+      // les 1,5 s faisait 648 particules/min à lui seul, le plus gros poste du
+      // jeu après les bulles de la Sardine. Le sommeil se lit déjà sur le
+      // visage (yeux clos, bouche qui ronfle) ; le « z » n'est qu'une
+      // ponctuation. Un dormeur sur quatre en émet, TOUJOURS LE MÊME (l'ancre
+      // est l'identifiant) : un tirage par frame ferait clignoter la nuit.
+      if ((this.id & 3) === 0) {
+        this._zzzCd = (this._zzzCd ?? 0) - dt;
+        if (this._zzzCd <= 0) {
+          this._zzzCd = U.rand(2.6, 4.4);
+          Particles.zzz(this.x + this.size * 0.7, this.y - this.size * 0.9, this.size);
+        }
       }
       if (def.snores && Math.random() < dt * 0.7) Particles.bubble(this.x + this.size * 0.8, this.y, U.rand(4, 9));
       if (this.stateTimer <= 0) { this.state = 'wander'; this.release(); }
@@ -414,8 +455,13 @@ class Entity {
     // La nuit, l'aquarium s'endort (GDD §10). Seuls les nocturnes et les
     // embusqués veillent. Avant, seul le niveau 2 dormait : on ne voyait
     // presque personne s'assoupir.
-    if (!def.sleeps && !def.nocturnal && !def.ambush && Main.nightAmount() > 0.55
-        && Math.random() < dt * 0.06) {
+    // Les AÉRIENS en sont exclus. Mesuré : le Pélican passait 53 % de son temps
+    // à dormir et 1 % à chasser — or sa poche ratée, qui est tout son gag, ne
+    // se joue QUE sur une chasse. Elle ne s'est pas affichée une seule fois en
+    // 18 minutes, et le Fou Moustachu (45 % endormi) remontait son algue une
+    // fois toutes les dix minutes. Un oiseau qui dort n'a plus de rôle.
+    if (!def.sleeps && !def.nocturnal && !def.ambush && !def.aerial
+        && Main.nightAmount() > 0.55 && Math.random() < dt * 0.06) {
       this.state = 'sleep'; this.stateTimer = U.rand(12, 30); return;
     }
 
@@ -617,16 +663,28 @@ class Entity {
       // `perceBallon` : le Barracuda fonce à travers les piquants sans en
       // souffrir. C'est tout son intérêt — il est le seul régulateur du Fugu.
       if (o.def.perceBallon) continue;
+      // ON NE PIQUE QUE CE QUI PASSE (cf. `Entity.passe`). Le décor vivant est
+      // un voisin permanent : la Rascasse repiquait le Corail et l'Anémone
+      // toutes les quatre secondes, sans fin — 53 malaises/min à elle seule, et
+      // un récif vert de dégoût en continu. Le filtre couvre aussi le
+      // gonflement : c'est ce qui faisait enfler le Fugu toutes les 6,5 s alors
+      // que c'est censé être un AVERTISSEMENT.
+      if (!Entity.passe(o)) continue;
       const d2 = U.dist2(this.x, this.y, o.x, o.y);
       if (d2 > menace * menace) continue;
-      proche = Math.max(proche, 1 - Math.sqrt(d2) / menace);
+      // LE GONFLEMENT EST UN AVERTISSEMENT, DONC IL S'ADRESSE À UNE MENACE.
+      // N'importe quel passant le déclenchait, krill compris : sur un récif
+      // fréquenté, le Fugu enflait toutes les six secondes et ça devenait sa
+      // respiration. Seul quelque chose d'au moins sa taille le fait gonfler —
+      // mais tout ce qui touche se pique quand même, c'est le principe.
+      if (o.size >= this.size * 1.6) proche = Math.max(proche, 1 - Math.sqrt(d2) / menace);
 
       // Contact : les épines entrent
       const touche = (this.size * this._piquantK() + o.size) * 0.9;
       if (d2 > touche * touche) continue;
       o._piqueCd = (o._piqueCd ?? 0) - dt;
       if (o._piqueCd > 0) continue;
-      o._piqueCd = 4;
+      o._piqueCd = 12;                                   // 4 s : on repiquait le même voisin en boucle
       o.malaise(0.8, this.x, this.y);
       o.state = 'flee'; o.target = this; o.stateTimer = 2;
       Particles.burst(o.x, o.y, '#ffe08a', 5);
@@ -667,6 +725,14 @@ class Entity {
     for (const o of Ecosystem.neighbors(this.x, this.y)) {
       if (o === this || o.dead) continue;
       if (o.speciesId === this.speciesId) continue;      // elle ne s'électrocute pas elle-même
+      // ELLE NE ZAPPE QUE CE QUI NAGE. Sa bande (900–2200) EST le sol : ses
+      // voisins étaient donc les créatures de fond, immobiles, toujours à
+      // portée — 112 KO/min, et un sable en permanence plein d'étoiles et
+      // d'yeux en spirale (coquillage 18/min, oursin 17, étoile 15…). Une
+      // décharge doit disperser un banc qui passe, pas assommer un coquillage
+      // qui n'a jamais bougé de sa vie. Un dormeur reste une cible : le
+      // réveiller en sursaut, c'est justement la scène.
+      if (!Entity.passe(o) && o.state !== 'sleep') continue;
       if (U.dist2(this.x, this.y, o.x, o.y) < portee * portee) cibles.push(o);
     }
     if (!cibles.length) return;                          // rien à zapper : on garde le jus
@@ -674,6 +740,15 @@ class Entity {
     this._shockCd = U.rand(S.cooldown, S.cooldown * 1.8);
     Particles.eclairs(this.x, this.y, portee, 6);
     this.emote('smug', 1.8, false);
+    // BORNÉE À HUIT VICTIMES, LES PLUS PROCHES. Une décharge lâchée dans un
+    // essaim de krill en assommait une vingtaine d'un coup (55 KO/min pour le
+    // seul krill) : la scène se lit exactement pareil à huit, et le reste
+    // n'était que des vrilles hors champ. Même raison que le filtre des
+    // réactions de groupe dans `emoteVFX`.
+    if (cibles.length > 8) {
+      cibles.sort((a, b) => U.dist2(this.x, this.y, a.x, a.y) - U.dist2(this.x, this.y, b.x, b.y));
+      cibles.length = 8;
+    }
     for (const o of cibles) {
       o.assomme(null, Math.random() < 0.25);
       const dx = o.x - this.x, dy = o.y - this.y, d = Math.hypot(dx, dy) || 1;
@@ -854,11 +929,24 @@ class Entity {
       xMax = x;
     }
     if (xMin === null) { xMin = World.shoreX + 200; xMax = CONFIG.WORLD_WIDTH - 200; }
-    // Marge de confort : la bande stricte ferait une boîte, on veut une zone
-    // de vie avec des bords flous.
-    const marge = 500;
-    return (this.def._bandeX = [Math.max(World.shoreX + 60, xMin - marge),
-                                Math.min(CONFIG.WORLD_WIDTH - 80, xMax + marge)]);
+    // Marge de confort : la bande stricte ferait une boîte, on veut une zone de
+    // vie avec des bords flous. Elle suit la VITESSE — un nudibranche à 14 px/s
+    // et une sardine à 90 n'ont pas besoin du même terrain : à marge constante,
+    // la sardine se retrouvait dans un couloir de 900 px qu'elle traversait en
+    // dix secondes, ce qui se lit comme une cage même quand le rappel est doux.
+    const marge = 400 + Math.min(700, this.def.speed * 6);
+    // LA BANDE NE COMMENCE JAMAIS AVANT LA BARRIÈRE DE RIVAGE de l'espèce.
+    // Sans ce garde-fou les deux contraintes se battent : le rappel souple tire
+    // vers la côte pendant que le mur dur interdit d'y aller, et tout le banc
+    // reste COLLÉ au mur, en pleine eau, sur le même pixel. C'est le « mur
+    // invisible » qu'on voyait au milieu de la mer — mesuré avant correction :
+    // 67 % des Sardines Bulle-fofolle et 79 % des Poissons Volants tenaient à
+    // moins de 40 px de leur barrière.
+    const mur = (this.def.aerial || this.def.movement === 'crawl')
+      ? 0 : this.limiteLarge() + 180;
+    const x0 = Math.max(World.shoreX + 60, mur, xMin - marge);
+    return (this.def._bandeX = [x0,
+      Math.max(x0 + 900, Math.min(CONFIG.WORLD_WIDTH - 80, xMax + marge))]);
   }
 
   limiteLarge() {
@@ -999,7 +1087,11 @@ class Entity {
     this.target = null; this._faceAt = null;
     this.emote('dizzy', 3, vfx);
     this.vx *= -0.25; this.vy = -Math.abs(this.vy) * 0.3;
-    Particles.burst(this.x, this.y, '#ffe8a8', 8);
+    // La gerbe suit le drapeau `vfx`, comme l'étoile de l'émotion. Elle partait
+    // sur CHAQUE assommé : une décharge d'Anguille en touche six d'un coup, et
+    // ça faisait 178 gerbes/min à soi seul alors que l'émotion `dizzy` est
+    // déjà, elle, filtrée comme une réaction de groupe.
+    if (vfx) Particles.burst(this.x, this.y, '#ffe8a8', 8);
     if (solY !== null) Particles.sandCloud(this.x, solY - 4, true);
   }
 
@@ -1041,8 +1133,12 @@ class Entity {
 
   breathe(dt) {
     this._air = (this._air ?? U.rand(8, 25)) - dt;
-    // Filet de bulles permanent, échappé de l'évent
-    if (Math.random() < dt * 1.2) {
+    // Filet de bulles permanent, échappé de l'évent. LES TROIS CADENCES DE
+    // BULLES DE CETTE MÉTHODE ONT ÉTÉ DIVISÉES PAR TROIS : mesurées ensemble à
+    // 4 357 bulles/min, elles faisaient à elles seules 68 % de toutes les
+    // particules de bulle du jeu, pour une quinzaine de cétacés. Un filet se
+    // lit à trois bulles par seconde comme à vingt.
+    if (Math.random() < dt * 0.35) {
       const [bx, by] = this.event();
       Particles.bubble(bx, by, U.rand(2, 5));
     }
@@ -1069,7 +1165,7 @@ class Entity {
     // Une fois soufflé, elle reste un moment à l'air libre avant de replonger
     if (this._blown) {
       this._surfaceHold = (this._surfaceHold ?? 1.8) - dt;
-      if (Math.random() < dt * 3) Particles.bubble(bx, CONFIG.SURFACE_Y, U.rand(2, 5));
+      if (Math.random() < dt * 1.2) Particles.bubble(bx, CONFIG.SURFACE_Y, U.rand(2, 5));
       if (this._surfaceHold <= 0) {
         Particles.splash(this.x);                 // elle replonge
         this._air = U.rand(20, 40) * (this.def.size >= 70 ? 1.5 : 1);
@@ -1082,7 +1178,7 @@ class Entity {
 
     // Pendant la montée : un chapelet de bulles s'échappe de l'évent, ce qui
     // annonce la remontée avant même qu'on voie le dos percer la surface.
-    if (by > CONFIG.SURFACE_Y && Math.random() < dt * 6) {
+    if (by > CONFIG.SURFACE_Y && Math.random() < dt * 1.8) {
       Particles.bubble(bx + U.rand(-4, 4), by, U.rand(2.5, 6));
     }
 
@@ -1143,7 +1239,12 @@ class Entity {
       this._freeze = 0.25;
       this._faceAt = { x: p.x, y: p.y };      // nez à nez
       this.emote('kiss', 1.5, false);
-      if (Math.random() < dt * 3) Particles.loveBurst((this.x + p.x) / 2, (this.y + p.y) / 2, 2);
+      // UNE SEULE FOIS, AU DÉBUT DU BAISER. Le tirage par frame était la
+      // première source de particules du moteur : 390 cœurs/min à lui seul,
+      // soit une fois et demie le budget entier de bulles de l'aquarium. C'est
+      // exactement la règle que le projet s'est donnée (« ne jamais émettre à
+      // chaque frame d'une scène ») et qui n'avait pas été appliquée ici.
+      if (this._matingT < dt * 2) Particles.loveBurst((this.x + p.x) / 2, (this.y + p.y) / 2, 4);
 
       // Un seul des deux pond, sinon la portée est doublée
       if (this._matingT > 1.6 && this.id < p.id) {
@@ -1518,7 +1619,10 @@ class Entity {
     // sauf sur la peur — un banc qui garde la pose pendant qu'un thon fonce
     // dedans, ça ne va pas.
     if (this._figX != null && this.state !== 'flee') {
-      maxSpeed = def.speed * 1.6;
+      // `_figSpeed` : une scène peut demander SA vitesse. Le plafond de 1,6×
+      // convient à une figure de banc, pas au grand run de l'Espadon, qui a
+      // 460 px/s de sprint et ne s'en servait jamais que sur trente pixels.
+      maxSpeed = this._figSpeed ?? def.speed * 1.6;
       this.steerVers(this._figX, this._figY, maxSpeed, 5);
     } else if (this._lureT > 0 && this.state !== 'flee') {
       // HYPNOTISÉE par une lampe de poisson-lanterne : elle avance droit sur la
@@ -1533,7 +1637,7 @@ class Entity {
     } else if (this.state === 'hunt' && this.target) {
       maxSpeed = def.sprintSpeed || def.speed * 1.8;
       this.steerVers(this.target.x, this.target.y, maxSpeed, 4);
-      if (def.sprintSpeed && Math.random() < dt * 2) Particles.wake(this.x - this.size, this.y);
+      if (def.sprintSpeed && Math.random() < dt * 0.8) Particles.wake(this.x - this.size, this.y);
     } else if (this.state === 'flee' && this.target) {
       maxSpeed = def.speed * 2;
       // EN ÉVENTAIL, pas en file. Fuir « à l'opposé exact » envoyait tous les
@@ -1609,13 +1713,41 @@ class Entity {
     // Un cétacé qui remonte respirer IGNORE sa profondeur minimale : sinon sa
     // bande le retient vers le fond et il n'atteint jamais la surface.
     if (this.y < dMin && !this._surfacing) ay += (dMin - this.y) * bandK;
-    if (this.y > dMax && !this._surfacing) ay += (dMax - this.y) * bandK;
+    // `_coule` : le pendant de `_surfacing`, vers le bas. Le Poisson-lune
+    // Bada-boum s'endort en nageant et doit COULER JUSQU'AU SABLE — c'est tout
+    // son gag, et le nom de l'espèce. Sa bande s'arrête à 1900 px alors que le
+    // fond est bien plus bas là où il vit : le rappel de bande le retenait, et
+    // la scène ne s'est jamais produite en 18 minutes de mesure.
+    if (this.y > dMax && !this._surfacing && !this._coule) ay += (dMax - this.y) * bandK;
     // Ancrage à RAYON DE CONFORT : le rappel ne s'exerce qu'au-delà du rayon,
     // sinon tout le monde converge sur le même point et s'empile autour de
     // l'anémone. À l'intérieur, chacun vaque librement.
     // Le rappel vers l'anémone est suspendu pendant une chatouille : sinon le
     // clown est retenu en laisse et n'atteint jamais sa victime.
-    if (def.movement === 'anchored' && !this._tickleTarget) this.tetherVers(def.homeRadius ?? 120, 2.2);
+    if (def.movement === 'anchored' && !this._tickleTarget) {
+      // L'HÔTE EST UNE VRAIE RÉFÉRENCE, pas une copie de coordonnées. L'ancre
+      // était figée à la position du refuge le jour du spawn : un clown né
+      // d'une ponte, ou arrivé par immigration, restait ancré à un point d'eau
+      // vide et ne rejoignait jamais aucune anémone.
+      if (def.anchorToRefuge) {
+        if (!this._hote || this._hote.dead) {
+          this._hoteCd = (this._hoteCd ?? 0) - dt;
+          if (this._hoteCd <= 0) {                 // recherche rare : elle balaie tout
+            this._hoteCd = 4;
+            this._hote = Ecosystem.nearestRefuge(this.x, this.y);
+          }
+        }
+        if (this._hote) {
+          this.anchorX = this._hote.x;
+          this.anchorY = this._hote.y - this._hote.size * 0.35;
+        }
+      }
+      // DEDANS pour dormir, autour le reste du temps. Le rayon de confort se
+      // referme la nuit : sinon le clown passe la nuit à 120 px de son anémone,
+      // en pleine eau — c'est-à-dire loin de la seule chose qui le protège.
+      const dedans = this.state === 'sleep';
+      this.tetherVers(dedans ? this.size * 0.5 : (def.homeRadius ?? 120), dedans ? 3.4 : 2.2);
+    }
     // Alevin né près d'une anémone (GDD §9) : reste à proximité de son refuge
     if (this._refugeAnchored && this.stage === 'fry') this.tetherVers(190, 1.4);
     // Reversement des contributions steerVers/tetherVers accumulées plus haut
@@ -1691,7 +1823,11 @@ class Entity {
     // et la ponte terrestre ne se déclenchait jamais.
     const montePondre = def.ponteTerrestre && (this._plage || this.state === 'migrate');
     if (!def.aerial && def.movement !== 'crawl' && !montePondre) {
-      const bord = this.limiteLarge();
+      // CHACUN SA DISTANCE AU MUR. Un `clamp` commun pose tous ceux qui le
+      // touchent exactement sur le même x : un banc poussé par un prédateur s'y
+      // empile en colonne, et la barrière se lit comme une vitre. Le décalage
+      // est stable (tiré de l'identifiant), donc personne ne glisse le long.
+      const bord = this.limiteLarge() + (this.id % 7) * 26;
       if (this.x < bord) { this.x = bord; this.vx = Math.max(this.vx, 0); ax += 250; }
     }
     if (this.x < shoreX + 100 && !montePondre) ax += (shoreX + 100 - this.x) * 2;
@@ -1718,7 +1854,14 @@ class Entity {
       // Seule une VRAIE charge assomme (un simple plongeon ne suffit pas)
       if (this.vy > 300 && def.movement !== 'crawl' && def.movement !== 'fixed') this.assomme(fy);
       this.vy = Math.min(0, this.vy);
-      if (sp > 100) Particles.sandCloud(this.x, fy - 4, this.size > 30);
+      // UN NUAGE PAR SECONDE AU PLUS. Il partait à CHAQUE frame passée contre
+      // le sable à plus de 100 px/s : 953 nuages/min, le deuxième émetteur du
+      // jeu, et un banc qui longe le fond en faisait un mur opaque.
+      this._sableCd = (this._sableCd ?? 0) - dt;
+      if (sp > 100 && this._sableCd <= 0) {
+        this._sableCd = U.rand(0.8, 1.6);
+        Particles.sandCloud(this.x, fy - 4, this.size > 30);
+      }
     }
 
     // Orientation
@@ -1845,14 +1988,24 @@ class Entity {
     // gros animal qui monte à la verticale se retrouvait presque sur la tête.
     // Chatouillé : il frissonne mais ne bascule pas — il se retrouvait la tête
     // en bas à force de secousses verticales.
+    // La bride est GRADUÉE par le gabarit, et CONTINUE plutôt qu'en paliers : un
+    // confetti peut piquer du nez, un barracuda de 40 penché à 43° se lit déjà
+    // comme un poisson mort — et avec des seuils, le Thon (26) tombait du bon
+    // côté du palier « moyen » et gardait la bride des petits poissons.
+    const gab = this.def.size;
     const maxTilt = this.expression === 'laughing' ? 0.18
-                  : (this.def.size >= 70 ? 0.28 : 0.75);
+                  : U.clamp(0.95 - gab * 0.0095, 0.26, 0.75);
     let tilt;
     if (this._faceAt) {
-      // Orientation EXACTE vers la cible : pas d'amortissement ni de bride, sinon
-      // un poisson placé au-dessus de sa victime pointe en oblique au lieu de
+      // Orientation FRANCHE vers la cible : peu d'amortissement, sinon un
+      // poisson placé au-dessus de sa victime pointe en oblique au lieu de
       // piquer vers elle (le bisou du clown paraissait de travers).
-      tilt = U.clamp(Math.atan2(dirY, Math.abs(dirX)), -1.4, 1.4);
+      // Franche, mais pas VERTICALE : la même bride de gabarit s'applique, en
+      // plus large. Sans elle, un requin arrêté à la station de nettoyage se
+      // dressait sur la queue pour regarder le Poisson Dentiste qui flottait
+      // au-dessus de lui — c'est ça, « les requins à la verticale ».
+      const visee = U.clamp(1.7 - gab * 0.045, 0.32, 1.4);
+      tilt = U.clamp(Math.atan2(dirY, Math.abs(dirX)), -visee, visee);
     } else {
       tilt = U.clamp(Math.atan2(dirY, Math.abs(dirX) + 40) * 0.5, -maxTilt, maxTilt);
     }
@@ -1866,6 +2019,22 @@ class Entity {
     // l'angle devient franc, comme pour le bisou du clown.
     ctx.scale(flipX, 1);
     ctx.rotate(this._tilt);
+    // DEMI-TOUR : squash & stretch. Comprimer la silhouette en x et rien
+    // d'autre, c'est une feuille de papier qu'on tourne sur la tranche — elle
+    // s'amincit jusqu'à disparaître. Un vrai virage conserve le volume : ce que
+    // le corps perd en largeur, il le reprend en hauteur, et la queue traîne
+    // derrière la tête avant de fouetter dans le nouveau sens.
+    //
+    // Les deux déformations sont posées APRÈS la rotation, donc dans le repère
+    // du CORPS : le cisaillement décale bien la queue par rapport à la tête, et
+    // pas le bas du poisson par rapport au haut. Son signe s'inverse tout seul
+    // avec le miroir, au moment précis où la silhouette est sur la tranche —
+    // c'est ce qui fait lire un coup de queue continu et non un à-coup.
+    const vir = 1 - Math.abs(flipX);      // 0 en ligne droite, 1 au plus fort du virage
+    if (vir > 0.01) {
+      ctx.transform(1, vir * 0.5, 0, 1, 0, 0);
+      ctx.scale(1, 1 + vir * 0.3);
+    }
     // Le dauphin se tord de rire : il roule sur lui-même
     if (this._farceRoll) ctx.rotate(Math.sin(this._farceRoll) * 0.5);
 

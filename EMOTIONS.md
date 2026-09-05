@@ -112,6 +112,19 @@ relie l'humour à la simulation.
 l'écran sature. Ne jamais émettre une bulle à chaque frame d'une scène : une
 seule, au démarrage (`if (e._xxxT < dt * 2)`).
 
+Mesuré le 5 septembre 2026 : les bulles au sens strict tenaient déjà la cible
+(~285/min), mais le jeu créait **35 700 particules/min**, dont les deux tiers
+venaient de trois postes qui n'étaient pas des gags (respiration des cétacés,
+chapelet de la Sardine, ZzZ des dormeurs). Ramené à 19 300/min. Le détail et la
+méthode d'audit sont dans `CLAUDE.md`.
+
+**`Entity.VFX_GROUPE`** est la table des émotions vécues en GROUPE et de la part
+des individus qui en montrent l'effet — `scared`, `eating`, `dizzy` à 10 %,
+`love` à 22 % (la parade collective des migrations de ponte faisait de
+`loveBurst` le deuxième émetteur du jeu). Ajouter une ligne là plutôt qu'un
+`Math.random()` chez l'appelant. **L'expression, elle, n'est jamais filtrée :
+c'est le visage qui raconte, la gerbe ne fait que ponctuer.**
+
 ---
 
 ## 4. Idées de gags à brancher

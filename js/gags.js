@@ -7,10 +7,14 @@
 const GAGS = {
   // Elle porte son nom : chapelet de bulles permanent, et gros glouglou joyeux
   bulle_fofolle(e, dt, t) {
-    if (Math.random() < dt * 3.5) Particles.bubble(e.x + e.size * 0.7, e.y, U.rand(2, 5));
+    // 3,5 bulles/seconde et par sardine, c'était 5 550 particules/min pour la
+    // seule Sardine : les DEUX TIERS de toutes les bulles du jeu, pour dix
+    // individus. Le chapelet permanent reste (c'est son nom), il est juste
+    // devenu un chapelet et non un jet.
+    if (Math.random() < dt * 0.9) Particles.bubble(e.x + e.size * 0.7, e.y, U.rand(2, 5));
     e._blubCd = (e._blubCd ?? U.rand(4, 10)) - dt;
     if (e._blubCd <= 0) {
-      e._blubCd = U.rand(5, 12);
+      e._blubCd = Ecosystem.cadence(e, 4);
       for (let i = 0; i < 8; i++) Particles.bubble(e.x + e.size * 0.8, e.y + U.rand(-6, 6), U.rand(3, 8));
       e.emote('happy', 1.8);
     }
@@ -18,7 +22,7 @@ const GAGS = {
 
   // Sa boule disco : il plante ses pinces, s'arrête net et DANSE sur place.
   crabe(e, dt, t) {
-    e._discoCd = (e._discoCd ?? U.rand(6, 16)) - dt;
+    e._discoCd = (e._discoCd ?? Ecosystem.cadence(e, 4)) - dt;
     if (e._discoCd <= 0 && !e._dancing) {
         e._dancing = U.rand(2.5, 4.5);
         e.emote('happy', 3, false);      // pas d'étincelles : ce sont des NOTES
@@ -29,8 +33,8 @@ const GAGS = {
     e._freeze = 0.25;                         // il ne rampe plus, il danse
     e._disco = true;                          // couleurs qui défilent (drawCrab)
     e._danceT = (e._danceT ?? 0) + dt;
-    if (Math.random() < dt * 2.5) Particles.sparkles(e.x, e.y - e.size * 1.4, 2);
-    if (e._dancing <= 0) { e._dancing = 0; e._disco = false; e._discoCd = U.rand(12, 26); }
+    if (Math.random() < dt * 0.9) Particles.sparkles(e.x, e.y - e.size * 1.4, 2);
+    if (e._dancing <= 0) { e._dancing = 0; e._disco = false; e._discoCd = Ecosystem.cadence(e, 4); }
   },
 
   // cœur, gros cooldown, sinon on ne comprend pas d'où viennent les cœurs.
@@ -53,7 +57,9 @@ const GAGS = {
 
   // pas la bulle.
   clown(e, dt, t) {
-    e._kissCd = (e._kissCd ?? U.rand(4, 12)) - dt;
+    // Il dort DANS son anémone : on ne sort pas chatouiller la nuit.
+    if (e.state === 'sleep') { e._tickleTarget = null; e._faceAt = null; return; }
+    e._kissCd = (e._kissCd ?? Ecosystem.cadence(e, 7)) - dt;
 
     const c = e._tickleTarget;
     if (c && (c.dead || U.dist2(e.x, e.y, c.x, c.y) > 520 * 520)) { e._tickleTarget = null; e._faceAt = null; }
@@ -65,6 +71,11 @@ const GAGS = {
         if (o === e || o.dead || o.stage === 'egg') continue;
         if (SPECIES[o.speciesId].refuge || o.speciesId === 'clown') continue;
         if (SPECIES[o.speciesId].movement === 'fixed') continue;   // pas les murènes dans leur trou
+        // QUELQU'UN QUI PASSE, comme pour le câlin de l'Étoile. Le clown vit
+        // dans son anémone et en sort pour le guili ; se coller au premier
+        // voisin immobile, ce n'est pas la même scène — et ça l'emmenait loin
+        // de chez lui pour rien.
+        if (o.speedNow < 14) continue;
         if (o.size > bestSize) { bestSize = o.size; best = o; }
       }
       if (!best) return;
@@ -98,7 +109,7 @@ const GAGS = {
     if (e._kissT > 2.6) {
       o.emote('blush', 2);
       e._tickleTarget = null; e._faceAt = null;
-      e._kissCd = U.rand(10, 22);
+      e._kissCd = Ecosystem.cadence(e, 7);
     }
   },
 
@@ -148,7 +159,7 @@ const GAGS = {
 
   // 3. il se plie de rire sur place, en tournant sur lui-même
   dauphin(e, dt, t) {
-    e._farceCd = (e._farceCd ?? U.rand(8, 20)) - dt;
+    e._farceCd = (e._farceCd ?? Ecosystem.cadence(e, 5)) - dt;
     const ph = e._farcePh;
 
     if (!ph) {
@@ -174,7 +185,7 @@ const GAGS = {
     }
 
     const c = e._farceCible;
-    if (!c || c.dead) { e._farcePh = null; e._farceCd = U.rand(8, 20); return; }
+    if (!c || c.dead) { e._farcePh = null; e._farceCd = Ecosystem.cadence(e, 5); return; }
     e._farceT += dt;
 
     if (ph === 'approche') {
@@ -223,7 +234,7 @@ const GAGS = {
     if (e._farceT < dt * 2) Particles.comic(e.x, e.y - e.size, 'ha');
     if (e._farceT > 2.4) {
       e._farcePh = null; e._farceCible = null; e._farceRoll = 0;
-      e._farceCd = U.rand(14, 30);
+      e._farceCd = Ecosystem.cadence(e, 5);
     }
   },
 
@@ -234,18 +245,24 @@ const GAGS = {
       Particles.comic(e.x, e.y - e.size, '♪');       // ronronnement
     }
     const fy = World.floorY(e.x);
-    e._digCd = (e._digCd ?? U.rand(3, 9)) - dt;
+    // Treize raies × un fouissement toutes les 6 à 14 s, ça faisait 78 nuages
+    // de sable par minute : le fond était en permanence en train de creuser.
+    e._digCd = (e._digCd ?? Ecosystem.cadence(e, 6)) - dt;
     if (e._digCd <= 0) {
-      e._digCd = U.rand(6, 14);
-      e._diveTargetY = fy - e.size * 0.5;                // elle descend fouiller
+      e._digCd = Ecosystem.cadence(e, 6);
+      e._digT = 3.5;                                     // durée de la descente
       Particles.sandCloud(e.x, fy - 4, true);
       Particles.burst(e.x, fy - 10, '#d9c092', 5);
       e.emote('eating', 2.4);
       e.hunger = Math.max(0, e.hunger - 0.25);           // les vers de sable la nourrissent
       e.wellFed += 0.18;
-    } else if (e._digCd < 11) {
-      e._diveTargetY = null;
     }
+    // La descente au sable est TENUE par sa propre durée. Elle l'était par
+    // `_digCd < 11`, c'est-à-dire par le cooldown lui-même : la cible était
+    // posée puis effacée à la frame suivante (le cooldown redémarrait à 6–14),
+    // et elle aurait cloué la raie au fond une fois la cadence allongée.
+    if (e._digT > 0) { e._digT -= dt; e._diveTargetY = fy - e.size * 0.5; }
+    else e._diveTargetY = null;
   },
 
   // émet un sonar (cercles) quand il chasse dans le noir.
@@ -316,7 +333,7 @@ const GAGS = {
   // enfle. Sans ça il grossit sans qu'on comprenne comment.
   fugu(e, dt, t) {
     const g = e._piquantGonfle ?? 0;
-    if (g > 0.25 && Math.random() < dt * g * 5) {
+    if (g > 0.25 && Math.random() < dt * g * 1.6) {
       Particles.bubble(e.x + e.size * 0.7, e.y - e.size * 0.1, U.rand(2, 4.5));
     }
     // Une fois dégonflé, il souffle un grand coup, soulagé.
@@ -348,7 +365,10 @@ const GAGS = {
   // préavis se lit comme un bug d'affichage.
   anguille(e, dt, t) {
     const cd = e._shockCd ?? 99;
-    if (cd < 1.2 && Math.random() < dt * (1.2 - cd) * 9) {
+    // 9 étincelles/s par anguille, c'était 632 gerbes/min : le deuxième poste
+    // de particules du jeu, pour un préavis d'une seconde. Trois suffisent à
+    // annoncer la décharge.
+    if (cd < 1.2 && Math.random() < dt * (1.2 - cd) * 2.5) {
       Particles.burst(e.x + U.rand(-1, 1) * e.size * 0.8,
                       e.y + U.rand(-1, 1) * e.size * 0.3, '#bfe4ff', 2);
     }
@@ -371,14 +391,14 @@ const GAGS = {
   // LE COQUILLAGE FABRIQUE UNE PERLE. Il s'ouvre en grand, la perle brille, il
   // se referme d'un coup dès qu'on la regarde de trop près.
   coquillage(e, dt, t) {
-    e._perleCd = (e._perleCd ?? U.rand(8, 40)) - dt;
+    e._perleCd = (e._perleCd ?? Ecosystem.cadence(e, 4)) - dt;
     if (e._perleCd > 0) { if (e._perle > 0) e._perle = Math.max(0, e._perle - dt * 0.7); return; }
     if (!e._perle) {
       e._perle = 1;
       e.emote('proud', 3);
       Particles.sparkles(e.x, e.y - e.size * 0.8, 6);
     }
-    e._perleCd = U.rand(25, 60);
+    e._perleCd = Ecosystem.cadence(e, 4);
   },
 
   // LA BALEINE RONFLE SI FORT QUE ÇA SOUFFLE LES PETITS. Le ronflement existait
@@ -414,18 +434,24 @@ const GAGS = {
   // LE POISSON-LUNE S'ENDORT EN PLEINE NAGE ET COULE. C'est littéralement ce
   // que « Bada-boum » raconte : il descend tout doucement, touche le fond, et
   // se réveille en sursaut.
+  // Deux corrections après mesure (0 chute en 18 min) : il ne coulait pas assez
+  // vite pour franchir la hauteur d'eau pendant une sieste de dix secondes, et
+  // sa bande de profondeur ([200, 1900]) le retenait bien au-dessus du sable.
+  // `_coule` lève le rappel de bande vers le bas, comme `_surfacing` le fait
+  // vers le haut pour les cétacés, et la descente est franche.
   poisson_lune(e, dt, t) {
-    if (e.state === 'sleep') {
-      e.vy += 26 * dt;                          // il coule
-      const sol = World.floorY(e.x) - e.size * 0.6;
-      if (e.y >= sol) {
-        e.y = sol;
-        e.state = 'wander'; e.stateTimer = 6;
-        e.emote('surprise', 2.4);
-        Particles.sandCloud(e.x, sol + e.size * 0.4, true);
-        Particles.comic(e.x, e.y - e.size, '❗');
-      }
-    }
+    if (e.state !== 'sleep') { e._coule = false; return; }
+    e._coule = true;
+    const sol = World.floorY(e.x) - e.size * 0.6;
+    e._diveTargetY = sol;                       // il vise le sable, pas le vide
+    e.vy += 55 * dt;
+    if (e.y < sol) return;
+    e.y = sol;
+    e._coule = false; e._diveTargetY = null;
+    e.state = 'wander'; e.stateTimer = 6;
+    e.emote('surprise', 2.4);
+    Particles.sandCloud(e.x, sol + e.size * 0.4, true);
+    Particles.comic(e.x, e.y - e.size, '❗');
   },
 
   // L'ORQUE LANCE SES ÉCHOS LA NUIT, ET ÇA RÉVEILLE LES PROFONDEURS.
@@ -598,13 +624,13 @@ const GAGS = {
       return;
     }
     e._monte = null;
-    e._ventouseCd = (e._ventouseCd ?? U.rand(15, 45)) - dt;
+    e._ventouseCd = (e._ventouseCd ?? Ecosystem.cadence(e, 3)) - dt;
     if (e._ventouseCd > 0) return;
     for (const o of Ecosystem.neighbors(e.x, e.y)) {
       if (o === e || o.dead || o.def.movement === 'fixed' || o.def.size < 16) continue;
       if (U.dist2(e.x, e.y, o.x, o.y) > 90 * 90) continue;
       e._monte = o; e._ventouseT = U.rand(6, 14);
-      e._ventouseCd = U.rand(40, 90);
+      e._ventouseCd = Ecosystem.cadence(e, 3);
       e.emote('happy', 2);
       o.emote('surprise', 1.6);
       Particles.comic(e.x, e.y - 18, '🎢');
@@ -618,13 +644,13 @@ const GAGS = {
   anemone(e, dt, t) {
     e._danse = 0.5 + 0.5 * Math.sin(t * 1.6 + e.phase);
     if (Math.random() < dt * 0.012) Particles.notes(e.x, e.y - e.size);
-    e._calinCd = (e._calinCd ?? U.rand(20, 50)) - dt;
+    e._calinCd = (e._calinCd ?? Ecosystem.cadence(e, 4)) - dt;
     if (e._calinCd > 0) return;
     for (const o of Ecosystem.neighbors(e.x, e.y)) {
       if (o === e || o.dead || o.def.movement === 'fixed') continue;
       if (o.speedNow < 12) continue;                  // ceux qui PASSENT
       if (U.dist2(e.x, e.y, o.x, o.y) > 80 * 80) continue;
-      e._calinCd = U.rand(35, 70);
+      e._calinCd = Ecosystem.cadence(e, 4);
       e.emote('happy', 2.2);
       o.emote('blush', 1.8);
       return;
@@ -632,29 +658,53 @@ const GAGS = {
     e._calinCd = 3;
   },
 
-  // LE REQUIN PERD SES DENTS EN MANGEANT. Édenté, il ne peut plus attraper
-  // personne — il doit attendre qu'elles repoussent. GARDE-FOU : la repousse
-  // est automatique et bornée dans le temps, sinon il meurt de faim, exactement
-  // comme la murène quand deux modes d'échec se cumulaient.
+  // LE REQUIN PERD SES DENTS EN MANGEANT, ET IL VA VOIR LE DENTISTE.
+  //
+  // C'est la seule scène du jeu qui ait un début, un problème et une résolution,
+  // et elle ne s'est JAMAIS jouée : mesuré sur 18 minutes, 249 soins par les
+  // Dentistes, 9 pertes de dent chez les Requins, et zéro intersection. Cinq
+  // conditions indépendantes devaient tomber ensemble — une prise (rare), un
+  // tirage à 55 %, 17 s d'édentement, deux bandes de profondeur qui ne se
+  // recouvrent qu'à moitié (500–1700 contre 150–1100) et 200 px entre les deux.
+  //
+  // Il ne manquait pas un réglage, il manquait une INTENTION : le requin va
+  // chercher son dentiste, comme on migre vers une frayère. Trois changements,
+  // tous nécessaires ensemble — une dent tombe à CHAQUE prise (il s'appelle
+  // Dents-Molles), l'édentement dure assez pour faire le trajet, et le trajet
+  // existe. Le garde-fou d'origine tient toujours : la repousse reste
+  // automatique et bornée, il ne peut pas rester édenté indéfiniment si aucun
+  // dentiste n'est joignable.
   requin(e, dt, t) {
     if (e._edente > 0) {
       e._edente -= dt;
       e.hold('sad');                          // TENUE : on doit comprendre qu'il boude
+      // Il met le cap sur le dentiste le plus proche. `_figX` prime sur le
+      // steering de chasse dans `move`, donc il y va vraiment.
+      const soigneurs = Ecosystem.bySpecies.dentiste || [];
+      let best = null, bestD = 1e18;
+      for (const d of soigneurs) {
+        if (d.dead || d._client) continue;
+        const d2 = U.dist2(e.x, e.y, d.x, d.y);
+        if (d2 < bestD) { bestD = d2; best = d; }
+      }
+      if (e._soigneur && (e._soigneur.dead || e._soigneur._client !== e)) e._soigneur = null;
+      if (best && !e._soigneur) { e._figX = best.x; e._figY = best.y; e._figSpeed = e.def.speed * 1.2; }
+      else { e._figX = null; e._figY = null; e._figSpeed = null; }
       if (e._edente <= 0) {
         e.release();
-        e.emote('happy', 2);
+        e._figX = null; e._figY = null; e._figSpeed = null;
+        e.emote('happy', 2);                  // elles ont repoussé toutes seules
         Particles.sparkles(e.x + e.size * 0.6, e.y, 4);
       }
       return;
     }
-    // Il vient de croquer : une dent se décroche et tombe.
+    e._figX = null; e._figY = null; e._figSpeed = null;
+    // Il vient de croquer : une dent se décroche et tombe. À chaque fois.
     if (e._chew > 0 && !e._dentTombee) {
       e._dentTombee = true;
-      if (Math.random() < 0.55) {
-        e._edente = U.rand(12, 22);
-        Particles.comic(e.x + e.size * 0.5, e.y, '🦷');
-        e.emote('surprise', 2);
-      }
+      e._edente = U.rand(26, 40);             // le temps d'aller jusqu'au récif
+      Particles.comic(e.x + e.size * 0.5, e.y, '🦷');
+      e.emote('surprise', 2);
     }
     if (e._chew <= 0) e._dentTombee = false;
   },
@@ -756,31 +806,44 @@ const GAGS = {
       e._freeze = 0.3; e._faceAt = e._client;
       e._client._freeze = 0.3; e._client._faceAt = e;
       e._client.hold('eating');                 // il ouvre grand
-      if (Math.random() < dt * 3) Particles.sparkles(e._client.x + e._client.size * 0.6, e._client.y, 2);
+      if (Math.random() < dt * 1) Particles.sparkles(e._client.x + e._client.size * 0.6, e._client.y, 2);
       if (e._soinT <= 0) {
         const c = e._client;
         c.release();
         if (c._edente > 0) { c._edente = 0; c.emote('happy', 2.5); }   // dents refaites !
         else c.emote('happy', 1.8);
         e.emote('proud', 2);
-        e._client = null; e._faceAt = null; e._soinCd = U.rand(10, 25);
+        c._soigneur = null;
+        e._client = null; e._faceAt = null; e._soinCd = Ecosystem.cadence(e, 5);
       }
       return;
     }
-    e._client = null;
-    e._soinCd = (e._soinCd ?? U.rand(4, 14)) - dt;
+    if (e._client) { e._client._soigneur = null; e._client = null; }
+    e._soinCd = (e._soinCd ?? Ecosystem.cadence(e, 5)) - dt;
     if (e._soinCd > 0) return;
     // Priorité au requin édenté : c'est son patient le plus urgent.
     let best = null, bestScore = 1e9;
     for (const o of Ecosystem.neighbors(e.x, e.y)) {
-      if (o === e || o.dead || o.def.size < 18 || o._client) continue;
+      if (o === e || o.dead || o.def.size < 18) continue;
+      if (o._soigneur && o._soigneur !== e && !o._soigneur.dead && o._soigneur._client === o) continue;
       const d2 = U.dist2(e.x, e.y, o.x, o.y);
       if (d2 > 200 * 200) continue;
       const score = d2 / (o._edente > 0 ? 40 : 1);
       if (score < bestScore) { bestScore = score; best = o; }
     }
+    // UN ÉDENTÉ SE REPÈRE DE BEAUCOUP PLUS LOIN. `neighbors` ne porte qu'à
+    // ~195 px : un requin de 70 px qui arrive n'était vu qu'une fois collé au
+    // dentiste, alors qu'il fait le trajet exprès. Même raison que la liste
+    // dédiée des colosses — la grille ne va pas aussi loin qu'il le faudrait.
+    if (!best) {
+      for (const o of Ecosystem.bySpecies.requin || []) {
+        if (o.dead || !(o._edente > 0)) continue;
+        if (o._soigneur && !o._soigneur.dead && o._soigneur._client === o) continue;
+        if (U.dist2(e.x, e.y, o.x, o.y) < 420 * 420) { best = o; break; }
+      }
+    }
     if (!best) { e._soinCd = 3; return; }
-    e._client = best; e._soinT = U.rand(2.4, 3.6);
+    e._client = best; best._soigneur = e; e._soinT = U.rand(2.4, 3.6);
     if (Math.random() < 0.4) Particles.comic(e.x, e.y - e.size * 1.6, '🪥');
   },
 
@@ -950,14 +1013,69 @@ const GAGS = {
     Particles.comic(e.x, e.y - e.size * 1.4, '🥚');
   },
 
-  // L'ESPADON CHARGE EN LIGNE DROITE, et il siffle en passant.
+  // L'ESPADON FAIT SON GRAND RUN. C'est le poisson le plus rapide du jeu —
+  // 460 px/s de sprint, presque quatre fois sa vitesse de croisière — et on ne
+  // le voyait jamais s'en servir : il ne sprintait qu'en chasse, sur quelques
+  // dizaines de pixels, et le sifflement partait sans qu'on comprenne d'où.
+  // Le run est une scène à part entière, en trois temps :
+  //   1. `montee` — il met le cap au large et remonte JUSTE sous la surface ;
+  //   2. `run`    — ligne droite plein gaz, sillage continu, un seul « FIOUUU » ;
+  //   3. `fin`    — il ralentit, très content de lui.
+  // Il se joue AU GRAND LARGE exprès : c'est une raison d'aller y voir, et la
+  // pleine eau est le seul endroit où deux mille pixels de ligne droite
+  // tiennent sans qu'il percute quoi que ce soit.
   espadon(e, dt, t) {
-    e._siffleCd = (e._siffleCd ?? 0) - dt;
-    if (e.speedNow > e.def.speed * 2.2 && e._siffleCd <= 0) {
-      e._siffleCd = U.rand(20, 45);
-      Particles.wake(e.x - e.size, e.y);
-      Particles.shout(e.x, e.y - e.size, 'FIOUUU', '#cfe4f5', e.size);
+    const SURF = CONFIG.SURFACE_Y + 80;               // juste sous la ligne d'eau
+    if (e._runPh) {
+      e._runT -= dt;
+
+      if (e._runPh === 'montee') {
+        e._figX = e.x + e._runDir * 900; e._figY = SURF;
+        e._figSpeed = e.def.speed * 1.4;
+        e._diveTargetY = SURF;                      // le rappel vertical générique
+        const enPlace = Math.abs(e.y - SURF) < 60 && e.x > World.zonesX.hauteMer;
+        if (enPlace || e._runT <= 0) {
+          e._runPh = 'run'; e._runT = 4.6;
+          Particles.shout(e.x, e.y - e.size, 'FIOUUU', '#cfe4f5', e.size * 1.5);
+          e.emote('angry', 1.6, false);               // le regard de la charge
+        }
+        return;
+      }
+
+      if (e._runPh === 'run') {
+        // Il vise TRÈS loin devant : la cible ne doit jamais être atteinte, ou
+        // il freinerait au milieu de son propre run.
+        // La cible de steering est presque horizontale sur 2 400 px : elle ne
+        // suffit pas à le TENIR à ras de l'eau (mesuré à 196 px sous la surface
+        // au lieu de 80). `_diveTargetY` s'en charge, c'est sa raison d'être.
+        e._figX = e.x + e._runDir * 2400; e._figY = SURF;
+        e._diveTargetY = SURF;
+        e._figSpeed = e.def.sprintSpeed;
+        if (Math.random() < dt * 9) Particles.wake(e.x - e._runDir * e.size, e.y);
+        if (Math.random() < dt * 3) Particles.bubble(e.x - e._runDir * e.size, e.y, U.rand(2, 4));
+        // Le rivage et le bord du monde arrêtent le run : mieux vaut le finir
+        // tôt que le finir dans le sable.
+        const mur = e.x < e.limiteLarge() + 300 || e.x > CONFIG.WORLD_WIDTH - 300;
+        if (e._runT <= 0 || mur) { e._runPh = 'fin'; e._runT = 1.8; }
+        return;
+      }
+
+      // `fin` : il lève le pied, et il se sait beau
+      e._figSpeed = e.def.speed;
+      if (e._runT <= 0) {
+        e._runPh = null; e._figX = null; e._figY = null; e._figSpeed = null;
+        e._diveTargetY = null;
+        e.emote('proud', 2.2);
+        e._runCd = Ecosystem.cadence(e, 2);
+      }
+      return;
     }
+
+    e._runCd = (e._runCd ?? Ecosystem.cadence(e, 2)) - dt;
+    if (e._runCd > 0 || e.state === 'hunt' || e.state === 'flee') return;
+    e._runPh = 'montee'; e._runT = 11;
+    // Toujours vers le large quand il en est loin, sinon dans son sens de nage.
+    e._runDir = e.x < World.zonesX.hauteMer ? 1 : (e._facing >= 0 ? 1 : -1);
   },
 
   // LE GOÉLAND VOLE LA PRISE DES AUTRES. Il ne chasse rien lui-même : il guette
@@ -1037,9 +1155,12 @@ const GAGS = {
 
   // LE CONCOMBRE ASPIRE LE SABLE et râle. Il laisse un sillon propre derrière
   // lui : c'est le seul animal du jeu qui NETTOIE.
+  // Un nuage toutes les deux secondes et par concombre, ça ne racontait rien :
+  // ça faisait du sable (385 scènes/h/individu, le record du roster). Il laisse
+  // maintenant un sillon, pas un chantier.
   concombre(e, dt, t) {
-    if (Math.random() < dt * 0.5) Particles.sandCloud(e.x - e.size, e.y + e.size * 0.3);
-    if (Math.random() < dt * 0.02) e.emote('disgust', 1.8, false);
+    if (Math.random() < dt * 0.12) Particles.sandCloud(e.x - e.size, e.y + e.size * 0.3);
+    if (Math.random() < dt * 0.008) e.emote('disgust', 1.8, false);
   },
 
   // LA RASCASSE NE BOUGE PAS. Elle est déjà `fixed` et `piquant` : le gag,

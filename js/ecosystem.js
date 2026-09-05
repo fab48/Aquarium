@@ -169,8 +169,7 @@ const Ecosystem = {
           // Habitat préféré : les étoiles se posent sur les rochers, les
           // hippocampes s'accrochent dans les herbiers (GDD §12).
           if (def.habitat) {
-            const spots = Background.habitatSpots(def.habitat)
-              .filter(hx => { const d = World.depthAt(hx); return d >= def.depthBand[0] && d <= def.depthBand[1]; });
+            const spots = this.sitesHabitat(def);
             if (spots.length) pool = spots;
           }
           // Espacement general du fond : on evite les colonnes deja occupees par
@@ -237,8 +236,7 @@ const Ecosystem = {
           }
           // Habitat préféré (hippocampes dans les herbiers, GDD §12)
           if (def.habitat) {
-            const spots = Background.habitatSpots(def.habitat)
-              .filter(hx => { const d = World.depthAt(hx); return d >= def.depthBand[0] && d <= def.depthBand[1]; });
+            const spots = this.sitesHabitat(def);
             if (spots.length) valid = spots;
           }
           if (valid.length) {
@@ -454,6 +452,21 @@ const Ecosystem = {
     return this.counts[speciesId] || 0;
   },
 
+  // LA FRÉQUENCE D'UNE SCÈNE N'EST PAS SON COOLDOWN : c'est son cooldown divisé
+  // par l'effectif de l'espèce. Aucun gag du roster n'avait été réglé là-dessus,
+  // et l'écart mesuré entre le plus fréquent et le plus rare atteignait CENT
+  // FOIS : le Fugu se gonflait toutes les 6,5 s (3 individus, cooldown court),
+  // le Dauphin faisait « BOUH ! » toutes les 3,4 s quelque part (9 individus),
+  // pendant que le Requin perdait une dent toutes les 11 minutes.
+  //
+  // On déclare donc ce qu'on veut voir POUR TOUT L'AQUARIUM (`parMinute`) et
+  // c'est ici qu'on en déduit le cooldown d'un individu. La dispersion est
+  // indispensable : sans elle un groupe né ensemble joue sa scène en chœur.
+  cadence(e, parMinute, mini = 5) {
+    const n = Math.max(1, this.counts[e.speciesId] || 1);
+    return Math.max(mini, (n / parMinute) * 60) * U.rand(0.7, 1.35);
+  },
+
   // Proie la plus proche pour un prédateur (à portée de détection).
   // Le monde fait 8000 px de large : avec une portée trop courte, les chasseurs
   // errent sans jamais croiser de proie et meurent de faim.
@@ -658,13 +671,26 @@ const Ecosystem = {
     return libres.length ? U.pick(libres) + U.rand(-25, 25) : null;
   },
 
+  // LES SITES D'HABITAT UTILISABLES pour une espèce. Filtrer sur la seule bande
+  // de profondeur ne suffit pas : une étoile a `depthBand[0] = 0`, donc un
+  // rocher posé pile sur la ligne d'eau passait le test — et comme le tirage
+  // ajoute ensuite ±40 à ±90 px de dispersion, on retrouvait des étoiles SUR LE
+  // SABLE SEC, à deux exemplaires exactement au même endroit. Il faut la même
+  // colonne d'eau minimale que partout ailleurs pour une créature de fond.
+  sitesHabitat(def) {
+    const eau = def.size * 3 + 40 + 90;      // + la dispersion appliquée après
+    return Background.habitatSpots(def.habitat).filter(hx => {
+      const d = World.depthAt(hx);
+      return d >= Math.max(def.depthBand[0], eau) && d <= def.depthBand[1];
+    });
+  },
+
   // Site d'habitat le MOINS peuplé, en écartant ceux qui sont à portée du
   // parent : c'est ce qui envoie la larve « au loin dans le courant » plutôt
   // que de la laisser s'empiler sur le site des parents.
   habitatLibre(parent) {
     const def = parent.def;
-    const spots = Background.habitatSpots(def.habitat)
-      .filter(hx => { const d = World.depthAt(hx); return d >= def.depthBand[0] && d <= def.depthBand[1]; });
+    const spots = this.sitesHabitat(def);
     if (!spots.length) return null;
     const memes = this.bySpecies[parent.speciesId] || [];
     let best = null, bestScore = Infinity, bestOcc = 99;

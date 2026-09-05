@@ -40,6 +40,24 @@ const World = {
     for (let x = 0; x < CONFIG.WORLD_WIDTH; x += 20) {
       if (this.depthAt(x) >= 0) { this.shoreX = x; break; }
     }
+    // LES QUATRE ZONES DE GAUCHE À DROITE. Le monde ne se lisait que
+    // verticalement (les bandes de profondeur) ; horizontalement, tout le monde
+    // pouvait aller partout, et le rivage devenait un goulot où l'on
+    // s'entassait. Les zones sont DÉDUITES du relief, jamais figées : si le
+    // profil change, elles suivent.
+    //
+    //   plage      : le sable émergé, avant le rivage
+    //   rivage     : le haut-fond, jusqu'à 350 px d'eau
+    //   mer        : la pleine eau, jusqu'à 1400 px
+    //   haute mer  : le grand large et les abysses
+    this.zonesX = { plage: 0, rivage: this.shoreX, mer: 0, hauteMer: 0 };
+    for (let x = this.shoreX; x < CONFIG.WORLD_WIDTH; x += 20) {
+      const d = this.depthAt(x);
+      if (!this.zonesX.mer && d >= 350) this.zonesX.mer = x;
+      if (d >= 1400) { this.zonesX.hauteMer = x; break; }
+    }
+    if (!this.zonesX.mer) this.zonesX.mer = this.shoreX + 600;
+    if (!this.zonesX.hauteMer) this.zonesX.hauteMer = CONFIG.WORLD_WIDTH * 0.6;
   },
 
   // Profondeur max (px sous la surface) à une position x monde, interpolée
@@ -78,4 +96,13 @@ const World = {
   slopeAt(x) { return (this.floorY(x + 40) - this.floorY(x - 40)) / 80; },
 
   beachShoreX() { return this.shoreX; },
+
+  // Dans quelle zone horizontale se trouve ce x ?
+  zoneX(x) {
+    const z = this.zonesX;
+    if (x < z.rivage) return 'plage';
+    if (x < z.mer) return 'rivage';
+    if (x < z.hauteMer) return 'mer';
+    return 'haute mer';
+  },
 };

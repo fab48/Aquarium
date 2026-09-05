@@ -32,6 +32,8 @@
 //                 tenant (un poisson) ; 1 ou 2 = onde qui COURT vers le bout
 //                 (une murène, une anguille — le corps entier est un tentacule).
 //   queueCalques— restreint l'ondulation à certains calques (défaut : tous)
+//   masques     — calques éteints. Réglage de TRAVAIL de l'atelier (voir sous
+//                 une pièce sans la supprimer), retiré à l'enregistrement.
 //   fins[]      — APPENDICES posés par l'éditeur. Deux types :
 //                 `nageoire`  (défaut) — rotation autour de l'ancre, pondérée
 //                             par la distance : plein effet au centre, nul au
@@ -128,6 +130,11 @@ const Sprites = {
       tailBlend: d.sansQueue ? null : (d.tailBlend != null ? d.tailBlend : minX),
       tailOndes: d.tailOndes || 0,
       queueCalques: vises(d.queueCalques),
+      // CALQUES MASQUÉS. Réglage de travail de l'atelier — on éteint une pièce
+      // le temps de voir ce qu'il y a dessous — jamais enregistré dans le
+      // fichier. Il passe par `vises()` comme les autres listes d'indices :
+      // une forme écartée par le filtre ci-dessus décale toutes les suivantes.
+      masques: vises(d.masques),
       oeil: d.points && d.points.eye,
       // DEUXIÈME ŒIL, optionnel. Le visage commun est de PROFIL — un seul œil,
       // ce qui convient à un poisson vu de côté. Tout ce qui se voit de face ou

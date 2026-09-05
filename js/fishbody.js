@@ -660,7 +660,7 @@ const FishBody = {
     //  2. un PLAFOND DUR. `speedNow` est relevé avant écrêtage dans
     //     `Entity.move` : le rapport à la vitesse nominale montait à 4,5, donc
     //     l'allure saturait en permanence.
-    const allure = U.clamp(e.speedNow / Math.max(1, e.def.speed), 0, 2);
+    const allure = this.allure(e);
     const gabarit = U.clamp(Math.pow(30 / Math.max(8, e.def.size), 0.45), 0.35, 1.15);
     const f = U.clamp((1.9 + allure * 3.2) * gabarit, 0.8, 8.5);
     // L'amplitude suit l'effort, pas seulement la fréquence : un requin lancé
@@ -679,6 +679,10 @@ const FishBody = {
     // Battement de nageoire : plus lent que celui de la queue, et déphasé.
     const battement = Math.sin(t * f * 0.7 + e.phase + 1);
     sp.shapes.forEach((forme, i) => {
+      // Calque éteint dans l'atelier : rien à peindre. Il reste dans la liste,
+      // donc les indices que visent les appendices et la queue ne bougent pas —
+      // le retirer les décalerait tous.
+      if (sp.masques && sp.masques.has(i)) return;
       const apps = sp.appPar && sp.appPar[i];
       ctx.save();
       // Repli : un calque qui porte un `pivot` mais qu'aucun ancrage de nageoire
@@ -904,7 +908,7 @@ const FishBody = {
   // Facteur commun à drawFish / drawClown pour éviter la duplication.
   drawFishBody(ctx, e, t) {
     const s = e.size, def = e.def;
-    const wag = Math.sin(t * (6 + e.speedNow / 40) + e.phase) * 0.35;
+    const wag = Math.sin(t * (3 + this.battement(e, 0.8, 1.6)) + e.phase) * 0.35;
 
     // Queue
     ctx.fillStyle = e.colorDark;
@@ -1208,7 +1212,7 @@ const FishBody = {
     // Charge : les liserés s'allument à mesure que la décharge approche
     const cd = e._shockCd ?? 99;
     const charge = U.clamp(1 - cd / 1.6, 0, 1);
-    const nage = U.clamp(e.speedNow / (e.def.speed || 30), 0.25, 1.6);
+    const nage = this.battement(e, 1.1, 2.2) / 2.6;   // bridé comme les sprites
 
     const pts = [];
     for (let i = 0; i <= SEG; i++) {
@@ -1306,6 +1310,23 @@ const FishBody = {
     ctx.beginPath(); ctx.ellipse(0, 0, s * 0.34, s * 0.3, 0, 0, Math.PI * 2); ctx.fill();
     this.face(ctx, s * 0.34, e, t);
     ctx.restore();
+  },
+
+  // ALLURE : 0 = arrêté, 1 = à sa vitesse de croisière, 2 = au sprint.
+  // `speedNow` est l'EFFORT relevé AVANT écrêtage dans `Entity.move` — il monte
+  // jusqu'à 4,5 fois la vitesse nominale. S'en servir tel quel fait battre tout
+  // le monde à fond en permanence : l'Anguille se tortillait frénétiquement
+  // alors qu'elle avance à 34 px/s. On prend donc la vitesse VRAIE.
+  allure(e) {
+    const v = Math.hypot(e.vx || 0, e.vy || 0);
+    return U.clamp(v / Math.max(1, e.def.speed), 0, 2);
+  },
+
+  // Fréquence de battement, en rad/s. Un gros animal bat lentement : c'est la
+  // première chose qu'on lit dans une nage.
+  battement(e, base = 1.9, gain = 3.2) {
+    const gabarit = U.clamp(Math.pow(30 / Math.max(8, e.def.size), 0.45), 0.35, 1.15);
+    return U.clamp((base + this.allure(e) * gain) * gabarit, 0.6, 8.5);
   },
 
   drawEel(ctx, e, t) {

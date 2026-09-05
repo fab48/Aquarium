@@ -105,7 +105,12 @@ class NoCacheHandler(SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8642
+    # Le port, dans l'ordre : l'argument de la ligne de commande, puis la
+    # variable PORT, puis le defaut historique. PORT est ce que fournit un
+    # lanceur qui attribue un port LIBRE — indispensable des que plusieurs
+    # sessions travaillent sur le meme depot : a port fixe, la deuxieme ne
+    # demarre pas parce que la premiere le tient deja.
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get("PORT") or 8642)
     print(f"Aquarium sur http://localhost:{port} (cache desactive)")
     print(f"Atelier des sprites : http://localhost:{port}/atelier.html")
     # MULTI-THREAD, et pas le HTTPServer mono-thread d'origine : le

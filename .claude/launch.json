@@ -23,10 +23,10 @@
       "name": "aquarium-atelier",
       "runtimeExecutable": "python",
       "runtimeArgs": [
-        "dev_server.py",
-        "8661"
+        "dev_server.py"
       ],
-      "port": 8661
+      "port": 8661,
+      "autoPort": true
     }
   ]
 }

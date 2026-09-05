@@ -206,6 +206,48 @@ Deux mécaniques génériques en sont sorties :
   sur quelqu'un sans vouloir le manger : le Poisson Police se ruait sur les
   pétomanes pour les gronder… et les avalait (6 poissons-clowns en 3 min).
 
+### Les quatre zones, de gauche à droite
+
+Le monde ne se lisait que **verticalement** (les bandes de profondeur).
+Horizontalement, tout le monde pouvait aller partout — et comme le rivage est le
+seul endroit que TOUTES les bandes traversent, il devenait un goulot où l'on
+s'entassait.
+
+`World.zonesX` découpe donc l'écran en quatre, **déduits du relief** et jamais
+figés (si `CONFIG.PROFILE` change, ils suivent) :
+
+| Zone | Bornes | |
+|---|---|---|
+| **plage** | 0 → `shoreX` | le sable émergé |
+| **rivage** | jusqu'à 350 px d'eau | le haut-fond |
+| **mer** | jusqu'à 1400 px | la pleine eau |
+| **haute mer** | au-delà | le grand large et les abysses |
+
+Chaque espèce a une **bande horizontale** (`Entity.bandeX`) : la portion du monde
+où sa bande de profondeur existe vraiment, plus 500 px de marge de confort. Le
+rappel y est **souple** — une accélération proportionnelle au dépassement, très
+assouplie en chasse et en fuite (×0,25) pour qu'un prédateur ne lâche pas sa
+proie à la frontière.
+
+**Souple, et pas un mur, c'est le point important** : un mur dur aligne tous ceux
+qui s'y pressent sur le même pixel, ce qui est exactement le défaut qu'on
+corrige. Mesuré après : 27 créatures au rivage sur 569, contre un entassement
+systématique avant.
+
+### `speedNow` est un EFFORT, pas une vitesse
+
+`Entity.move` relève `speedNow` **avant** l'écrêtage par `maxSpeed` : il monte
+jusqu'à 4,5 fois la vitesse nominale. S'en servir pour cadencer une animation
+fait battre tout le monde à fond en permanence — l'Anguille se tortillait
+frénétiquement alors qu'elle avance à 34 px/s, et c'est ce qui la faisait
+paraître « beaucoup trop rapide » alors que son déplacement était correct.
+
+Deux helpers pour ça, à utiliser partout : **`FishBody.allure(e)`** (0 arrêté,
+1 vitesse de croisière, 2 sprint), qui lit la vitesse VRAIE, et
+**`FishBody.battement(e)`**, qui en tire une fréquence bornée et pondérée par le
+gabarit — un gros animal bat lentement, c'est la première chose qu'on lit dans
+une nage.
+
 ### Un banc poursuivi s'ÉPARPILLE, il ne se resserre pas
 
 Tant que le banc erre, la cohésion des boids en fait une masse qui ondule d'un

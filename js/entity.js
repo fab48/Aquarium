@@ -830,6 +830,37 @@ class Entity {
   // Le x le plus près de la côte où un colosse a encore assez d'eau sous la
   // quille (avec une marge : on ne veut pas le voir raser le fond). Calculé une
   // fois — le relief ne change pas.
+  // BANDE HORIZONTALE de l'espèce : la portion du monde où sa bande de
+  // profondeur existe réellement. Le monde ne se lisait que verticalement —
+  // horizontalement tout le monde pouvait aller partout, et comme le rivage est
+  // le seul endroit que TOUTES les bandes traversent, il devenait un goulot où
+  // l'on s'entassait.
+  //
+  // C'est un rappel SOUPLE (cf. `move`), pas un mur : un prédateur peut en
+  // sortir pour chasser, une créature poussée y revient d'elle-même. Les murs
+  // durs, eux, alignent tout le monde sur le même pixel.
+  //
+  // Mémoïsé sur la fiche d'espèce : ne dépend que de `depthBand` et du relief.
+  bandeX() {
+    if (this.def._bandeX) return this.def._bandeX;
+    const [dMin, dMax] = this.def.depthBand;
+    let xMin = null, xMax = null;
+    const pas = CONFIG.DEPTH_COLUMN_WIDTH / 2;
+    for (let x = World.shoreX; x < CONFIG.WORLD_WIDTH - 60; x += pas) {
+      const d = World.depthAt(x);
+      // Il faut de quoi NAGER, pas seulement effleurer sa borne haute.
+      if (d < dMin + this.def.size * 2 || d > dMax + 600) continue;
+      if (xMin === null) xMin = x;
+      xMax = x;
+    }
+    if (xMin === null) { xMin = World.shoreX + 200; xMax = CONFIG.WORLD_WIDTH - 200; }
+    // Marge de confort : la bande stricte ferait une boîte, on veut une zone
+    // de vie avec des bords flous.
+    const marge = 500;
+    return (this.def._bandeX = [Math.max(World.shoreX + 60, xMin - marge),
+                                Math.min(CONFIG.WORLD_WIDTH - 80, xMax + marge)]);
+  }
+
   limiteLarge() {
     // Mémoïsé sur la FICHE D'ESPÈCE (ne dépend que de def.offshore/def.size et
     // du relief, qui ne change pas) : ~490 balayages du relief → 27.
@@ -1640,6 +1671,20 @@ class Entity {
     // par accélération se franchit quand un banc paniqué file vers la plage.
     // La tortue qui monte pondre franchit sa propre barrière : c'est tout
     // l'intérêt. Le reste du temps elle est tenue TRÈS au large (`offshore`).
+    // RAPPEL SOUPLE VERS SA ZONE. Une créature hors de sa bande horizontale est
+    // ramenée par une accélération proportionnelle au dépassement, jamais par un
+    // mur : elle peut en sortir pour chasser ou fuir, mais elle rentre toujours.
+    // C'est ce qui répartit les espèces de gauche à droite au lieu de les
+    // laisser toutes converger vers le rivage.
+    if (!def.aerial && def.movement !== 'fixed' && def.movement !== 'crawl' && !this._plage) {
+      const [zx0, zx1] = this.bandeX();
+      // En chasse et en fuite, le rappel est très assoupli : on ne veut pas
+      // qu'un prédateur lâche sa proie parce qu'il sort de sa zone.
+      const k = (this.state === 'hunt' || this.state === 'flee') ? 0.25 : 1.1;
+      if (this.x < zx0) ax += (zx0 - this.x) * k;
+      else if (this.x > zx1) ax += (zx1 - this.x) * k;
+    }
+
     // La tortue qui MONTE PONDRE franchit sa propre barrière — pendant la
     // migration comme pendant la scène de plage. Sans l'exemption en migration
     // elle restait bloquée à 1200 px d'eau, c'est-à-dire à 1500 px du rivage,

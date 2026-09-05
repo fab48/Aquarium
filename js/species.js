@@ -96,7 +96,12 @@ const SPECIES = {
     schooling: false, groupSize: [3, 4], popCap: 12,
     // Confetti seul : la Méduse (vitesse 12) ne peut pas échapper à un sprint à
     // 420 et se faisait exterminer. Sa régulation revient au Poisson-lune (GDD §13).
-    prey: ['confetti'], missChance: 0.35,   // il traverse le banc et ressort bredouille une fois sur trois
+    // Il LÂCHE le Confetti, qu'il décimait à lui seul, et passe sur la Crevette
+    // Sauteuse : elle n'avait que deux prédateurs, elle est à la base de la
+    // chaîne (donc en frai éclair, le joueur peut la renflouer d'un clic), et
+    // c'est déjà sa nourriture favorite. Le Confetti garde le Dauphin et la
+    // Murène.
+    prey: ['crevette_claire'], missChance: 0.35,   // il ressort bredouille une fois sur trois
     favoriteFood: 'micro_crevettes', eatsFood: true,
     colors: ['#4a7fb5'],
     bodyRatio: 0.4, tail: 'lunate',
@@ -844,7 +849,8 @@ const SPECIES = {
     nursery: 'shallow',
     depthBand: [150, 1200], size: 40, speed: 110, sprintSpeed: 420,
     schooling: false, groupSize: [1, 3], popCap: 7,
-    prey: ['fugu', 'dorade', 'maquereau'], missChance: 0.3, senseRange: 1400, grazes: true,
+    // Il lâche le Maquereau, qui avait trois prédateurs et tombait de 19 à 7.
+    prey: ['fugu', 'dorade'], missChance: 0.3, senseRange: 1400, grazes: true,
     perceBallon: true,                 // il crève les piquants sans en souffrir
     colors: ['#8d9aa8', '#e2ecf4'],
     bodyRatio: 0.28, tail: 'lunate', sizeVar: 0.12,

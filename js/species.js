@@ -142,7 +142,7 @@ const SPECIES = {
   coquillage: {
     name: 'Coquillage Rieur', realName: 'Bénitier', trophic: 1, movement: 'fixed',
     nursery: 'reef',
-    depthBand: [0, 1000], size: 12, speed: 0,
+    depthBand: [0, 2200], size: 12, speed: 0,
     schooling: false, groupSize: [4, 8], popCap: 16,
     favoriteFood: 'plancton_dore', eatsFood: true,
     colors: ['#f2c9a0', '#e8a8b8'],
@@ -171,7 +171,7 @@ const SPECIES = {
     name: 'Étoile de Mer Ventouse', realName: 'Étoile de mer', trophic: 1, movement: 'fixed',
     habitat: 'rock',   // se pose sur les rochers
     nursery: 'reef',
-    depthBand: [0, 1000], size: 10, speed: 0,
+    depthBand: [0, 2600], size: 10, speed: 0,
     schooling: false, groupSize: [3, 6], popCap: 16,
     favoriteFood: 'plancton_dore', eatsFood: true,
     colors: ['#ffb347', '#ff8fa3'],
@@ -638,7 +638,7 @@ const SPECIES = {
   nudibranche: {
     name: 'Nudibranche Fluo', realName: 'Limace de mer', trophic: 1, movement: 'crawl',
     nursery: 'reef',
-    depthBand: [100, 1300], size: 8, speed: 14,
+    depthBand: [100, 2200], size: 8, speed: 14,
     schooling: false, groupSize: [2, 4], popCap: 16,
     favoriteFood: 'plancton_dore', eatsFood: true,
     colors: ['#ff5ec4', '#7de8ff'],
@@ -769,7 +769,7 @@ const SPECIES = {
   jardiniere: {
     name: 'Anguille Jardinière', realName: 'Anguille-jardinière', trophic: 2, movement: 'fixed',
     nursery: 'reef',
-    depthBand: [400, 1600], size: 11, speed: 0,
+    depthBand: [400, 2600], size: 11, speed: 0,
     schooling: false, groupSize: [5, 8], popCap: 18,
     favoriteFood: 'plancton_dore', eatsFood: true,
     colors: ['#cbbfa2', '#7d735c'],
@@ -782,7 +782,7 @@ const SPECIES = {
   bernard: {
     name: 'Bernard-l’Ermite Déménageur', realName: 'Pagure', trophic: 'scavenger', movement: 'crawl',
     nursery: 'reef',
-    depthBand: [0, 1400], size: 11, speed: 24,
+    depthBand: [0, 2400], size: 11, speed: 24,
     schooling: false, groupSize: [2, 4], popCap: 14,
     favoriteFood: 'generic', eatsFood: true, eatsBones: true,
     colors: ['#d98a5a', '#f0d8b8'],
@@ -824,7 +824,7 @@ const SPECIES = {
   oursin: {
     name: 'Oursin Pic-Pic', realName: 'Oursin', trophic: 1, movement: 'fixed',
     nursery: 'reef',
-    depthBand: [80, 1400], size: 10, speed: 0,
+    depthBand: [80, 2600], size: 10, speed: 0,
     schooling: false, groupSize: [3, 5], popCap: 14,
     favoriteFood: 'plancton_dore', eatsFood: true,
     piquant: { range: 55 },

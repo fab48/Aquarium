@@ -69,6 +69,20 @@ html, body {
   position: absolute; bottom: 16px; left: 16px; color: rgba(255,255,255,.65);
   font-size: 12px; max-width: 300px; line-height: 1.5;
 }
+/* Le lien vers l'atelier : discret, en haut à droite, jamais dans la barre de
+   nourriture — ce n'est pas une commande de jeu. Masqué hors localhost. */
+#atelier-link {
+  /* à gauche de la jauge de profondeur (6 px, `right: 12px`) : sur un écran
+     bas, son sommet à 10 % remonte jusque sous ce bouton. */
+  position: absolute; top: 12px; right: 26px; z-index: 5;
+  width: 34px; height: 34px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px; text-decoration: none;
+  background: rgba(10,40,70,.55); border: 1px solid rgba(255,255,255,.22);
+  opacity: .5; transition: opacity .15s, transform .1s;
+}
+#atelier-link:hover { opacity: 1; transform: scale(1.1); }
+#atelier-link[hidden] { display: none; }
 
 /* --- Écrans tactiles : cibles plus grosses, aide souris masquée --- */
 @media (pointer: coarse) {

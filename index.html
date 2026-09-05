@@ -21,6 +21,16 @@
   </div>
   <div id="info"></div>
 </div>
+<!-- LIEN VERS L'ATELIER DES CRÉATURES.
+     Le serveur de dev sert le jeu à la racine : tout aperçu ouvre donc
+     l'aquarium, et le seul moyen d'atteindre l'atelier était de taper
+     /atelier.html à la main. Le lien n'apparaît qu'en LOCAL — c'est un outil de
+     développement, pas une commande de jeu. -->
+<a id="atelier-link" href="atelier.html" title="Atelier des créatures" hidden>🎨</a>
+<script>
+  if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname))
+    document.getElementById('atelier-link').hidden = false;
+</script>
 <script src="js/boot.js"></script>
 </body>
 </html>

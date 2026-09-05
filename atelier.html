@@ -150,6 +150,9 @@
   #filtre { width: 100%; margin-top: 7px; padding: 4px 7px; border: 1px solid var(--bord);
             border-radius: 5px; font: inherit; font-size: 12px; }
   #barre .aideOff { opacity: .55; }
+  #lienJeu { padding: 6px 10px; border: 1px solid var(--bord); border-radius: 6px;
+             background: #fff; color: var(--texte); text-decoration: none; font-size: 13.5px; }
+  #lienJeu:hover { background: #f2f7fb; }
 </style>
 </head>
 <body>
@@ -173,6 +176,10 @@
     <button data-outil="points" title="Retoucher le contour (6)">◻ Points</button>
     <button data-outil="dessiner" title="Tracer un nouveau calque (7)">✏️ Dessiner</button>
     <button id="bAide" class="on" title="Afficher / masquer les explications du panneau">💡</button>
+    <!-- Retour au jeu. Le serveur sert l'aquarium à la racine et l'atelier sur
+         /atelier.html : sans les deux liens, on passe de l'un à l'autre en
+         retapant l'URL. -->
+    <a id="lienJeu" href="index.html" title="Retour à l'aquarium">🐠 le jeu</a>
     <span style="flex:1"></span>
     <button id="btnNeuf">Nouveau dessin</button>
     <button id="btnFond">Image de repérage…</button>

@@ -1311,6 +1311,18 @@ class Entity {
       // Banc serré : cohésion et alignement forts sur un large voisinage, ce qui
       // donne une masse qui ondule d'un seul tenant et se déforme quand un
       // prédateur ou la souris la traverse.
+      // UN BANC POURSUIVI S'ÉPARPILLE, il ne se resserre pas. Tant que le banc
+      // erre, la cohésion en fait une masse qui ondule d'un seul tenant — c'est
+      // ce qu'on veut. Mais en FUITE elle devient catastrophique : tout le monde
+      // part dans la même direction ET converge vers le même centre, si bien que
+      // le banc se compacte en une COLONNE de poissons superposés pendant que le
+      // thon le traverse. C'est ce qu'on voyait à l'écran.
+      //
+      // Sous la menace, donc : plus de cohésion, une séparation deux fois plus
+      // forte et sur un rayon deux fois plus large. C'est aussi ce que font les
+      // vrais bancs quand un prédateur frappe — ils explosent.
+      const panique = this.state === 'flee';
+      const rSep2 = panique ? 6400 : 1600;     // 80 px contre 40
       const mates = Ecosystem.groupMates(this);
       let cx = 0, cy = 0, avx = 0, avy = 0, sx = 0, sy = 0, n = 0, alarme = 0;
       for (const m of mates) {
@@ -1318,15 +1330,18 @@ class Entity {
         const d2 = U.dist2(this.x, this.y, m.x, m.y);
         if (d2 > 340 * 340) continue;
         cx += m.x; cy += m.y; avx += m.vx; avy += m.vy; n++;
-        if (d2 < 1600) { sx += (this.x - m.x); sy += (this.y - m.y); }
+        if (d2 < rSep2) { sx += (this.x - m.x); sy += (this.y - m.y); }
         if (m.state === 'flee') alarme++;      // la panique se propage de proche en proche
       }
       if (n > 0) {
-        ax += ((cx / n) - this.x) * 1.5;       // cohésion
-        ay += ((cy / n) - this.y) * 1.5;
+        if (!panique) {
+          ax += ((cx / n) - this.x) * 1.5;     // cohésion : seulement au calme
+          ay += ((cy / n) - this.y) * 1.5;
+        }
         ax += (avx / n - this.vx) * 2.2;       // alignement
         ay += (avy / n - this.vy) * 2.2;
-        ax += sx * 4.5; ay += sy * 4.5;        // séparation
+        const kSep = panique ? 9 : 4.5;
+        ax += sx * kSep; ay += sy * kSep;      // séparation
         // Assez de voisins affolés : on file avec eux sans avoir vu la menace
         if (alarme > n * 0.25 && this.state === 'wander') {
           maxSpeed = def.speed * 1.8;
@@ -1490,7 +1505,14 @@ class Entity {
       if (def.sprintSpeed && Math.random() < dt * 2) Particles.wake(this.x - this.size, this.y);
     } else if (this.state === 'flee' && this.target) {
       maxSpeed = def.speed * 2;
-      this.steerVers(this.x * 2 - this.target.x, this.y * 2 - this.target.y, maxSpeed, 4);
+      // EN ÉVENTAIL, pas en file. Fuir « à l'opposé exact » envoyait tous les
+      // voisins dans la même direction : le banc s'étirait en ligne au lieu de
+      // se disperser. Chacun a donc son propre écart d'angle (jusqu'à ±40°),
+      // fixé par sa phase — c'est stable dans le temps, donc il ne zigzague pas.
+      const dx = this.x - this.target.x, dy = this.y - this.target.y;
+      const a = Math.atan2(dy, dx) + Math.sin(this.phase * 3.7) * 0.7;
+      const d = Math.hypot(dx, dy) || 1;
+      this.steerVers(this.x + Math.cos(a) * d, this.y + Math.sin(a) * d, maxSpeed, 4);
     } else if (this.state === 'court' && this.target) {
       maxSpeed = def.speed * 1.5;
       this.steerVers(this.target.x, this.target.y, maxSpeed, 3);
@@ -1508,14 +1530,22 @@ class Entity {
       maxSpeed = def.speed * 1.35;   // en route vers la frayère
       this.steerVers(this._nursery.x, this._nursery.y, maxSpeed, 2.2);
     } else if (this.state === 'sleep') {
-      // UN DORMEUR NE BOUGE PLUS. `speed * 0,05` laissait une dérive lente, et
-      // l'errance continuait de le pousser : un crabe endormi traversait sa
-      // bande de sable pendant la nuit. On coupe la vitesse ET on annule
-      // l'accélération accumulée, sinon l'errance le fait glisser quand même.
-      maxSpeed = 0;
+      // UN DORMEUR NE SE DÉPLACE PLUS DE LUI-MÊME : on coupe l'errance et tout
+      // ce que le steering avait accumulé, sinon un crabe endormi traversait sa
+      // bande de sable pendant la nuit.
+      //
+      // Mais IL DOIT ENCORE SE FAIRE POUSSER. Une première version mettait
+      // `maxSpeed = 0`, ce qui annulait aussi l'anti-chevauchement : un banc
+      // qui s'endormait s'empilait en COLONNE VERTICALE, tous les poissons au
+      // même x, et y restait toute la nuit. Il garde donc juste de quoi
+      // s'écarter d'un voisin — pas de quoi partir en balade.
       this._axAcc = 0; this._ayAcc = 0;
       ax = 0; ay = 0;
-      this.vx *= 0.82; this.vy *= 0.82;
+      this._dort = true;
+      maxSpeed = def.speed * 0.3;
+      this.vx *= 0.86; this.vy *= 0.86;
+    } else {
+      this._dort = false;
     }
 
     // Fuite du curseur rapide (remous). Position monde du curseur : calculée

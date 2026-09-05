@@ -35,6 +35,12 @@ première mise en eau.
 python dev_server.py 8642      # puis http://localhost:8642/atelier.html
 ```
 
+**Le serveur sert le jeu à la RACINE** : ouvrir `http://localhost:8642` donne
+l'aquarium, pas l'atelier — tout aperçu automatique tombe donc sur le jeu. Deux
+liens évitent d'avoir à retaper l'URL : un bouton **🎨** en haut à droite de
+l'aquarium (affiché **uniquement en local** — c'est un outil de développement,
+pas une commande de jeu) et un **« 🐠 le jeu »** dans la barre de l'atelier.
+
 **Le rail de gauche** liste les 51 espèces — il lit `SPECIES`, donc toute espèce
 ajoutée au jeu y apparaît d'elle-même. Un 🎨 signale les 30 qui ont leur dessin
 dans la planche de design (§1 bis). Pastille verte = un dessin est actif,

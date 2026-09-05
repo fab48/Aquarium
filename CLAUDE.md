@@ -206,6 +206,43 @@ Deux mécaniques génériques en sont sorties :
   sur quelqu'un sans vouloir le manger : le Poisson Police se ruait sur les
   pétomanes pour les gronder… et les avalait (6 poissons-clowns en 3 min).
 
+### Un banc poursuivi s'ÉPARPILLE, il ne se resserre pas
+
+Tant que le banc erre, la cohésion des boids en fait une masse qui ondule d'un
+seul tenant — c'est ce qu'on veut. Mais **en fuite elle devient
+catastrophique** : tout le monde part dans la même direction ET converge vers le
+même centre, si bien que le banc se compacte en une **colonne de poissons
+superposés** pendant que le prédateur le traverse. C'est ce qu'on voyait à
+l'écran, et de loin ça ressemblait à des poissons endormis empilés.
+
+Trois règles, toutes appliquées quand `state === 'flee'` :
+
+- **plus de cohésion** — c'est elle qui les rassemble alors qu'ils devraient
+  exploser ;
+- **séparation doublée, sur un rayon doublé** (40 → 80 px) ;
+- **fuite en éventail** : « à l'opposé exact » envoyait tous les voisins dans la
+  même direction et étirait le banc en ligne. Chacun a son propre écart d'angle
+  (jusqu'à ±40°), fixé par sa phase — stable dans le temps, donc il ne zigzague
+  pas.
+
+Piège voisin, découvert en corrigeant le sommeil : **un dormeur doit encore se
+faire pousser.** Mettre `maxSpeed = 0` coupait aussi l'anti-chevauchement, et un
+banc qui s'endormait s'empilait en colonne pour la nuit. Il garde juste de quoi
+s'écarter d'un voisin, pas de quoi partir en balade.
+
+### Une bande de profondeur trop étroite entasse une espèce contre la plage
+
+L'Étoile de Mer avait `depthBand: [0, 1000]`. Or le fond dépasse 1000 px de
+profondeur dès x = 2600 : les 15 étoiles se retrouvaient donc **toutes dans les
+1 600 px qui suivent le rivage**, alors qu'il y a 89 rochers répartis sur les
+8 000 px du monde. Même chose pour le coquillage, l'oursin, le nudibranche,
+l'anguille-jardinière et le bernard-l'ermite.
+
+La borne haute d'une espèce de fond doit couvrir **tout le fond où elle est
+censée vivre**, pas la seule zone claire. Le corail et l'anémone font exception,
+et à juste titre : ils ont besoin de lumière. Mesuré après : l'étoile s'étale
+sur 3 268 px au lieu de 1 467.
+
 ### Trop-plein : caca, malaise, explosion
 
 Ce qui rentre ressort. Manger met un **caca** en file (`Entity.digestion`, un

@@ -27,10 +27,22 @@ const Main = {
     // Vue de départ : sur le rivage, un peu de plage à gauche et l'eau devant
     Camera.x = Camera.tx = Math.max(0, World.shoreX - Camera.w * 0.25);
     Camera.y = Camera.ty = -Camera.h * 0.15;
-    Background.init();
-    Ecosystem.init();
+
+    // SAUVEGARDE. La graine vient d'abord : le décor doit être reconstruit à
+    // l'identique AVANT qu'on y replace les créatures, sinon les espèces à
+    // habitat (étoile sur son rocher, hippocampe dans son herbier) atterrissent
+    // sur du sable nu. Une sauvegarde absente ou illisible donne un monde neuf,
+    // jamais une page blanche — c'est tout l'intérêt de la relire par `Save.lire`.
+    const sauvegarde = Save.lire();
+    Save.graine = sauvegarde ? sauvegarde.graine : (Math.random() * 0xffffffff) >>> 0;
+    Background.init(Save.graine);
+    if (!sauvegarde || !Save.restaurer(sauvegarde)) Ecosystem.init();
+    Save.brancher();
+
     Input.init(this.canvas);
     Legend.init();
+    this.initBarres();
+    this.initResetBtn();
 
     document.getElementById('info').innerHTML =
       'Molette : zoom · Clic molette (ou bords de l\'écran) : explorer<br>' +
@@ -67,6 +79,7 @@ const Main = {
     Food.update(dt);
     Ecosystem.update(dt, t);
     Particles.update(dt);
+    Save.update(dt);          // sauvegarde périodique (cf. save.js)
 
     const ctx = this.ctx;
     const s = this.dpr * Camera.zoom;
@@ -131,18 +144,107 @@ const Main = {
     }
   },
 
+  // Le bouton « recommencer ». La confirmation n'est pas une politesse : c'est
+  // la seule action du jeu qui détruise quelque chose, et elle est posée près
+  // de boutons parfaitement anodins.
+  initResetBtn() {
+    const btn = document.getElementById('reset-btn');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      if (confirm('Recommencer un aquarium tout neuf ?\nCelui-ci sera perdu.')) Save.recommencer();
+    });
+  },
+
+  // LES DEUX BARRES SONT LA MÊME BARRE, tournée de 90°. C'est ce que le HUD
+  // racontait déjà en mots (« Grand large · Eau claire · 34 m ») sans le montrer :
+  // à gauche quatre segments nommés, à droite un simple filet et une pastille.
+  // Elles partagent donc leur constructeur, leur mise à jour et leur CSS — la
+  // seule différence est l'axe. Deux barres écrites séparément divergent au
+  // premier réglage.
+  //
+  // Les segments sont proportionnels au monde RÉEL (le grand large fait les
+  // deux tiers de la largeur, les grands fonds la moitié de la profondeur) et
+  // rien n'est écrit en dur : si `CONFIG.PROFILE` ou `CONFIG.ZONES` change, les
+  // barres suivent.
+  initBarres() {
+    const bx = World.bandesX(), by = World.bandesY();
+    this._segsX = this.construireBarre('zone-bar', bx, b => b.x1 - b.x0);
+    this._segsY = this.construireBarre('depth-bar', by, b => b.d1 - b.d0);
+  },
+
+  construireBarre(id, bandes, taille) {
+    const bar = document.getElementById(id);
+    if (!bar) return null;
+    const total = bandes.reduce((a, b) => a + taille(b), 0) || 1;
+    const segs = [];
+    for (const b of bandes) {
+      const d = document.createElement('div');
+      d.className = 'seg';
+      // `grow` proportionnel sur une base nulle : chaque segment prend sa part
+      // du monde, mais jamais moins que la place de son libellé (`min-width` /
+      // `min-height: max-content`). Le Rivage ne fait que 7 % du monde — à la
+      // proportion exacte, il s'affichait « RIVAG ». Les segments qui ont de la
+      // place cèdent la différence.
+      d.style.flex = `${(taille(b) / total * 100).toFixed(2)} 1 0`;
+      d.textContent = b.label;
+      d.dataset.zone = b.id;
+      bar.appendChild(d);
+      segs.push(d);
+    }
+    return segs;
+  },
+
+  // Place le curseur d'une barre DANS LE SEGMENT RÉEL, pas à la proportion
+  // théorique : les segments trop étroits pour leur libellé sont élargis par la
+  // CSS, et un curseur calculé sur la taille du monde se retrouverait à côté.
+  majBarre(segs, bandes, i, f, marqueur, axe) {
+    if (!segs || i < 0) return;
+    const seg = segs[i];
+    const m = document.getElementById(marqueur);
+    if (!m || !seg) return;
+    const vertical = axe === 'y';
+    const pos = (vertical ? seg.offsetTop + seg.offsetHeight * f
+                          : seg.offsetLeft + seg.offsetWidth * f).toFixed(1);
+    m.style[vertical ? 'top' : 'left'] = `${pos}px`;
+    const cle = axe + bandes[i].id;
+    if (this['_z' + axe] === cle) return;          // ne touche au DOM qu'au changement
+    this['_z' + axe] = cle;
+    for (const d of segs) d.classList.toggle('on', d.dataset.zone === bandes[i].id);
+  },
+
   updateHUD() {
-    // Jauge de profondeur (GDD §4)
+    // LES DEUX BARRES SE LISENT PAREIL : le curseur suit le CENTRE de la vue,
+    // horizontalement pour l'une, verticalement pour l'autre.
+    const centerX = Camera.x + Camera.w / 2;
     const centerY = Camera.y + Camera.h / 2;
-    const depth = Math.max(0, centerY - CONFIG.SURFACE_Y);
-    const frac = U.clamp(depth / CONFIG.DEPTH_MAX, 0, 1);
-    document.getElementById('depth-marker').style.top = `calc(${(frac * 100).toFixed(1)}% - 7px)`;
+    const depth = centerY - CONFIG.SURFACE_Y;      // négatif au-dessus de l'eau
+
+    const bx = World.bandesX();
+    const zx = World.zoneX(centerX);
+    const ix = bx.findIndex(b => b.id === zx);
+    if (ix >= 0) {
+      const f = U.clamp((centerX - bx[ix].x0) / Math.max(1, bx[ix].x1 - bx[ix].x0), 0, 1);
+      this.majBarre(this._segsX, bx, ix, f, 'zone-marker', 'x');
+    }
+
+    const by = World.bandesY();
+    // La bande la plus profonde sert de repli : au-delà de `DEPTH_MAX` (le fond
+    // du monde), `findIndex` ne trouverait rien et le curseur resterait figé.
+    let iy = by.findIndex(b => depth >= b.d0 && depth < b.d1);
+    if (iy < 0) iy = depth < by[0].d1 ? 0 : by.length - 1;
+    const fy = U.clamp((depth - by[iy].d0) / Math.max(1, by[iy].d1 - by[iy].d0), 0, 1);
+    this.majBarre(this._segsY, by, iy, fy, 'depth-marker', 'y');
 
     const night = this.nightAmount();
     const zone = World.zoneAt(centerY);
     const clock = document.getElementById('clock');
     const icon = night > 0.5 ? '🌙' : (night > 0 ? '🌅' : '☀️');
-    clock.textContent = `${icon} ${zone.label} · ${Math.round(depth / CONFIG.PX_PER_METER)}m`;
+    // « Grand large · Eau claire · 34m » : la position se lit dans les DEUX
+    // sens. Une espèce ne se situe pas par sa seule profondeur — la Dorade
+    // Dorée et le Confetti partagent l'eau claire et ne se croisent pourtant
+    // jamais, l'une au large, l'autre au récif.
+    clock.textContent = `${icon} ${World.labelZoneX(centerX)} · ${zone.label}`
+                      + ` · ${Math.round(Math.max(0, depth) / CONFIG.PX_PER_METER)}m`;
     clock.style.color = 'rgba(255,255,255,.85)';
     clock.style.fontSize = '16px';
   },

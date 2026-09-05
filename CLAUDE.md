@@ -16,7 +16,11 @@ la liste de `boot.js`, pas à `index.html`.
 Lancer avec `python dev_server.py 8642` (config `.claude/launch.json`) — un
 `http.server` multi-thread qui envoie `Cache-Control: no-store`, et qui expose en
 plus deux routes d'écriture dans `Assets/` pour l'atelier des créatures
-(cf. [SPRITES.md](SPRITES.md) §2).
+(cf. [SPRITES.md](SPRITES.md) §2). Le port peut venir de la variable `PORT`
+(plusieurs sessions sur le même dépôt : à port fixe, la seconde ne démarre pas),
+et `--accueil atelier.html` met l'atelier à la racine — **un panneau d'aperçu ne
+sait ouvrir qu'une origine, jamais un chemin**, donc c'est la seule façon qu'il
+affiche autre chose que le jeu.
 
 ## Contrôles
 
@@ -100,6 +104,37 @@ Une émotion se **joue dans la durée** : `entity.emote(expr, durée)` déclench
 
 Une prise se lit en trois temps : impact (`Particles.chomp`), **pause de mastication** (`pred._chew`, ~0,55 s pendant laquelle il s'arrête net) avec la **queue de la proie qui dépasse de sa gueule** (`FishBody.drawMouthful`, appelé pour toutes les silhouettes), puis les témoins qui détalent.
 
+### La fréquence d'un gag, c'est son cooldown DIVISÉ PAR L'EFFECTIF
+
+Aucun cooldown du roster n'avait été réglé sur le nombre d'individus de
+l'espèce, et l'écart mesuré entre le gag le plus fréquent et le plus rare
+atteignait **cent fois** : le Fugu se gonflait toutes les 6,5 s (3 individus),
+le Dauphin faisait « BOUH ! » toutes les 3,4 s quelque part dans l'aquarium
+(9 individus), pendant que le Requin perdait une dent toutes les 11 minutes.
+
+`Ecosystem.cadence(e, parMinute)` déclare la fréquence voulue **pour tout
+l'aquarium** et en déduit le cooldown d'un individu, avec sa dispersion (sans
+elle, un groupe né ensemble joue sa scène en chœur). C'est ce qu'il faut
+utiliser pour tout nouveau gag périodique, plutôt qu'un `U.rand(a, b)` en dur.
+
+### Une réaction ne se déclenche que sur quelqu'un qui PASSE
+
+`Entity.passe(o)` — ni décor (`refuge`, `movement: 'fixed'`), ni immobile
+(`speedNow > 12`). **Un voisin qui ne peut pas partir est un voisin permanent**,
+donc toute réaction déclenchée par sa seule présence tourne en boucle sur la
+même victime, indéfiniment. Mesuré avant : la Rascasse piquait le Corail
+29 fois/min et l'Anémone 24 fois/min — le récif était vert de dégoût en
+permanence — et l'Anguille assommait **112 créatures de fond par minute**
+(coquillages, oursins, étoiles, concombres), toutes sonnées 4 à 7 % du temps.
+Après : ces piqûres ont disparu et le fond est sonné **0 à 2 %** du temps.
+
+L'Anémone et le Clown appliquaient déjà la règle pour choisir qui câliner ;
+elle vaut pour `piquer()`, `decharge()` et tout ce qui viendra. Le cooldown par
+victime est passé de 4 à 12 s dans la foulée, et le gonflement d'un piquant ne
+répond qu'à quelque chose d'**au moins 1,6 fois sa taille** : c'est un
+avertissement adressé à une menace, pas une respiration (2 % du temps gonflé
+contre un gonflement toutes les 6,5 s).
+
 ### Les gags sont des ANIMATIONS, pas des bulles
 
 Une bulle de BD ne raconte rien toute seule. Un gag lisible se construit avec :
@@ -118,24 +153,76 @@ Pièges de mise en scène déjà rencontrés :
 
 Garde-fou : le total de bulles était monté à ~930/min et saturait l'écran. Cible : **~250/min** pour tout l'aquarium.
 
-**État au 4 septembre 2026 : ~508/min, soit le double de la cible.** Le roster
-est passé de 10 gags sur 27 espèces à 29 sur 30, donc une hausse était
-inévitable ; le double ne l'est pas. Trois coupables ont déjà été bridés
-(1284 → 508) et la méthode pour trouver les suivants est de compter par
-**ligne d'appel** : envelopper `Particles.comic/shout/stars/…` et lire
-`new Error().stack` pour attribuer chaque bulle à son émetteur réel — compter
-par espèce ne suffit pas, l'essentiel part de `emoteVFX`, pas des gags.
+**Ce ne sont PAS les bulles de BD qui coûtent, ce sont les particules.**
+Audit du 5 septembre 2026, 18 min de simulation instrumentée : les bulles au
+sens strict tenaient déjà la cible (~285/min pour `comic` + `shout`), mais le
+jeu créait **35 700 particules par minute**. Trois postes en faisaient les deux
+tiers, aucun n'était un gag :
 
-Deux règles en sont sorties, toutes deux générales :
-- **`dizzy` est devenu une réaction de GROUPE** (au même titre que `scared` et
-  `eating`) depuis l'Anguille : une décharge assomme cinq poissons d'un coup.
-- **Une scène qui touche tout un banc ne doit émettre que sur une poignée.**
-  La figure des Confettis faisait rougir ses 40 membres d'un coup, soit
-  125 gouttes de sueur par minute à elle seule. Ne jamais émettre une bulle à chaque frame d'une scène (`Math.random() < dt * k`) — l'émettre une fois au démarrage (`if (e._xxxT < dt * 2)`).
+| Poste | Avant | Après | Ce que c'était |
+|---|---|---|---|
+| `Entity.breathe` | 4 357/min | ~1 300 | trois cadences de bulles pour 15 cétacés |
+| `GAGS.bulle_fofolle` | 5 550/min | ~1 400 | 3,5 bulles/s **par sardine** |
+| branche `sleep` (ZzZ) | 3 864/min | 402 | un « z » par dormeur, et l'aquarium dort à 46 % |
+| sable au contact du fond | 953/min | ~190 | émis à **chaque frame** passée contre le sable |
+| sillage de chasse | 1 179/min | ~450 | idem, sans garde |
+| `GAGS.anguille` (étincelles) | 632/min | ~180 | 9 étincelles/s pour un préavis d'une seconde |
+| `tryMate` (le baiser) | 390/min | ~40 | `Math.random() < dt*3` **à chaque frame** |
+| `emoteVFX('love')` | 237/min | ~50 | la parade est un événement de GROUPE |
 
-Les VFX sont throttlés par individu (`_vfxCd`) et les réactions de groupe (peur, régal) ne s'affichent que sur ~25 % des individus : sans ça un banc entier affiche vingt bulles d'un coup.
+Total vérifié après correction, sur 10 min de simulation :
+**15 456 particules créées par minute contre 35 736, soit −57 %** — bulles
+8 075 → 2 866 (−64 %), gerbes 2 164 → 898 (−59 %), ZzZ −90 %, cœurs −72 %,
+étincelles −68 %, nuages de sable −72 %.
+
+Le nombre de **bulles de BD**, lui, n'a presque pas bougé (534 → 514/min) — et
+c'est le vrai enseignement : **il était déjà à peu près à la cible.** Ce qui
+saturait la machine n'était pas ce qui parle, c'était ce qui scintille.
+
+Quatre règles générales en sont sorties, à respecter pour tout nouvel effet :
+
+- **La méthode d'audit reste la même** : compter par **ligne d'appel**, en
+  enveloppant `Particles.*` et en lisant `new Error().stack`. Compter par espèce
+  ne suffit pas — 63 % des bulles partaient du moteur, pas des gags.
+- **`Entity.VFX_GROUPE`** remplace le test en dur de `emoteVFX` : une table
+  `expression → part des individus qui montrent l'effet` (`scared`, `eating`,
+  `dizzy`, `love` à 10–22 %). Ajouter une ligne là plutôt qu'un `Math.random()`
+  chez l'appelant — c'est le seul endroit où l'on voit le budget d'un coup.
+  L'**expression n'est jamais filtrée** : c'est le visage qui raconte.
+- **Ne jamais émettre à chaque frame d'une scène** (`Math.random() < dt * k`) :
+  une fois au démarrage (`if (e._xxxT < dt * 2)`). Le baiser de `tryMate`
+  enfreignait la règle que le projet s'était donnée.
+- **Un effet infligé à une foule se borne en nombre.** Une décharge d'Anguille
+  lâchée dans un essaim de krill en assommait vingt d'un coup ; elle est bornée
+  aux **huit plus proches** et la gerbe de `assomme` suit le drapeau `vfx`.
+
+Les VFX restent throttlés par individu (`_vfxCd`).
 - `entity.js` — créature : boids contraints par type de liberté, faim, chasse avec ratés comiques (`missChance`), fuite, sommeil, cycle œuf→alevin→adulte→arête. **Reproduction (`tryMate`)** : deux adultes de la même espèce, tous deux `wellFed >= 1`, qui se croisent forment un couple (`_matingWith`) — ils **s'arrêtent, se font face et s'embrassent** (~1,6 s) avant que 1 à 3 œufs apparaissent selon leur forme. Seul celui dont l'`id` est le plus petit pond, sinon la portée est doublée. Manger ne pond jamais tout seul.
 - `gags.js` — **toutes les mises en scène comiques**, une fonction par espèce, appelées via `def.gag`. Séparées de `species.js` pour que les fiches restent des données lisibles.
+  Quatre scènes ne se déclenchaient **jamais** avant l'audit du 5 septembre 2026,
+  et leur correction dit chaque fois la même chose — il ne manquait pas un
+  réglage, il manquait une **intention** :
+  - **Requin Dents-Molles ↔ Poisson Dentiste** : 249 soins et 9 pertes de dent
+    en 18 min, zéro intersection. Le requin **va maintenant chercher** son
+    dentiste (`_figX` vers le plus proche, comme on migre vers une frayère), le
+    dentiste repère un édenté à 420 px au lieu de 200 (`neighbors` ne porte qu'à
+    ~195 px, même limite que pour les colosses), une dent tombe à **chaque**
+    prise et l'édentement dure assez pour faire le trajet. Le patient porte une
+    marque (`_soigneur`) pour que deux dentistes ne se le disputent pas.
+  - **Poisson-lune Bada-boum** : il ne coulait pas assez vite, et sa bande de
+    profondeur le retenait au-dessus du sable. `_coule` lève le rappel de bande
+    vers le bas, exactement comme `_surfacing` le lève vers le haut.
+  - **Pélican et Fou Moustachu** : ils dormaient 53 % et 45 % du temps alors que
+    leur gag ne se joue que sur une chasse. Les **aériens ne suivent plus le
+    sommeil de nuit** des poissons.
+  - **Espadon Voilier** : il avait 460 px/s de sprint et ne s'en servait que sur
+    trente pixels de chasse. Son **grand run** est une scène en trois temps
+    (montée au large → ligne droite plein gaz à ras de la surface → il lève le
+    pied, très fier). Deux mécanismes génériques ont servi : `_figSpeed`, pour
+    qu'une scène demande SA vitesse plutôt que le plafond de 1,6× des figures de
+    banc, et `_diveTargetY` pour le tenir à ras de l'eau — la cible de steering
+    est presque horizontale sur 2 400 px et ne suffit pas (mesuré : 196 px sous
+    la surface sans elle, 91 avec, pour 80 visés).
 - `legend.js` — panneau HTML (bouton ❔) expliquant chaque bulle de BD et chaque expression. **À tenir à jour** quand on ajoute un gag ou une émotion.
 - `idcard.js` — fiche d'identité au survol (régime, prédateurs, jauge de faim). « Mangé par » est **déduit** des tables `prey`, donc rien à ressaisir en ajoutant une espèce.
 - `ecosystem.js` — spawn par groupes, prédation, ponte, **grille spatiale** (`neighbors()` — à utiliser pour toute recherche de voisinage, jamais une boucle sur `entities`), plafonds de population (`popCap`), report de prédation (`refugeFloor`), immigration.
@@ -146,7 +233,7 @@ Six mécanismes le rendent stable **sans réglage espèce par espèce**. Les tou
 
 **Audit du 4 septembre 2026** — avant correction, l'aquarium s'effondrait par le haut : Orque **éteinte**, Requin à 1, Thon 22→2, Perroquet 19→2, Méduse 35→4 en 18 min, et **11 des 22 liens trophiques déclarés n'avaient jamais servi une seule fois**. Après les correctifs 1, 2 et 3 : **zéro espèce éteinte**, 20 liens sur 23 actifs, et **plus aucune mort de faim** en dehors du Fou Moustachu. La méthode : instrumenter `Entity.prototype.die` (cause de mort) et `Ecosystem.eat` (qui mange qui), puis faire tourner `Ecosystem.update` sans rendu — en appelant **aussi** `Food.update` et `Particles.update`, sinon arêtes et sable s'accumulent (artefact de mesure, pas un bug du jeu).
 
-1. **Plancton ambiant** (`World.planktonAt`) — broutent le niveau 1 de la chaîne : toute espèce sans `prey`, **et tout prédateur qui n'a qu'UNE seule espèce à son menu** (il n'a aucune marge si elle se raréfie — le Thon passait de 20 à 2 en 18 min). Le broutage plafonne la faim (jamais de mort de faim) mais ne rassasie pas complètement : nourrir reste utile, et la natalité naturelle est lente (GDD §9).
+1. **Plancton ambiant** (`World.planktonAt`) — broutent le niveau 1 de la chaîne : toute espèce sans `prey`, **tout prédateur qui n'a qu'UNE seule espèce à son menu** (il n'a aucune marge si elle se raréfie — le Thon passait de 20 à 2 en 18 min), **et tout EMBUSQUÉ IMMOBILE** : il ne peut pas aller chercher son repas, il dépend entièrement de ce qui veut bien passer devant son caillou. La Rascasse Épineuse (`fixed`, deux proies pourtant) mourait de faim à **5 exemplaires sur 6 en 10 min**. Le broutage plafonne la faim (jamais de mort de faim) mais ne rassasie pas complètement : nourrir reste utile, et la natalité naturelle est lente (GDD §9).
 2. **Report de prédation** (`Ecosystem.refugeFloor`) — une espèce tombée sous **~35 %** de son plafond n'est plus chassée, le temps qu'elle remonte. C'est ce qui empêche les extinctions en cascade.
 
    Cette proportion fixe l'effectif **d'équilibre** d'une espèce chassée, pas seulement son seuil de secours : dès que la prédation est efficace, la proie descend jusqu'à son plancher et s'y stabilise. À 22 % le banc de Confetti tombait à 21 pour un plafond de 96 — le banc le plus visible du jeu disparaissait.
@@ -206,6 +293,42 @@ Deux mécaniques génériques en sont sorties :
   sur quelqu'un sans vouloir le manger : le Poisson Police se ruait sur les
   pétomanes pour les gronder… et les avalait (6 poissons-clowns en 3 min).
 
+### Les deux barres du HUD sont la MÊME barre
+
+Le HUD le disait déjà en mots — « Grand large · Eau claire · 34 m », la position
+se lit dans les deux sens — mais il ne le montrait pas : à gauche quatre
+segments nommés, à droite un simple filet gris avec une pastille. Impossible de
+savoir qu'on était dans la *zone trouble* sans lire le texte.
+
+Les deux barres partagent donc **leur constructeur, leur mise à jour et leur
+CSS** (`Main.construireBarre` / `Main.majBarre`, classe `.hud-bar` et son
+modificateur `.vertical`) : la seule différence est l'axe. Deux barres écrites
+séparément divergent au premier réglage.
+
+- **Chacune a sa source de vérité dans `world.js`** : `bandesX()` pour les zones
+  horizontales, `bandesY()` pour les bandes de profondeur, même forme. Rien
+  n'est écrit en dur — si `CONFIG.PROFILE` ou `CONFIG.ZONES` change, les barres
+  suivent.
+- **L'air y figure**, au même titre que la plage horizontalement : c'est la part
+  du monde qui n'est pas de l'eau, et le centre de la vue peut y monter. La
+  dernière zone de `CONFIG.ZONES` est déclarée à 99999 (c'est un test
+  d'appartenance, pas une borne d'affichage) : `bandesY()` la ramène à
+  `DEPTH_MAX`, sinon les grands fonds écrasent toute la barre.
+- **Le texte tourne avec la barre** (`writing-mode: vertical-rl`) : à 22 px de
+  large, « Zone trouble » ne tient pas à l'horizontale, et élargir la barre
+  mangerait l'aquarium.
+- **Le curseur se place dans le segment RÉEL**, jamais à la proportion
+  théorique. Les segments trop petits pour leur libellé sont élargis par la CSS
+  (`min-width` / `min-height: max-content`) — le Rivage ne fait que 7 % du monde,
+  la Surface 3,5 % de la profondeur — et un curseur calculé sur la taille du
+  monde se retrouverait à côté.
+
+Piège de vérification : **un panneau d'aperçu masqué gèle les transitions CSS**
+en même temps que `requestAnimationFrame`. Un test qui mesure la position du
+curseur juste après l'avoir posée le trouve immobile et conclut à tort que rien
+ne bouge. Mesurer avec `transition: none`, ou après avoir remis l'onglet au
+premier plan.
+
 ### Les quatre zones, de gauche à droite
 
 Le monde ne se lisait que **verticalement** (les bandes de profondeur).
@@ -223,16 +346,65 @@ figés (si `CONFIG.PROFILE` change, ils suivent) :
 | **mer** | jusqu'à 1400 px | la pleine eau |
 | **haute mer** | au-delà | le grand large et les abysses |
 
+Le HUD les affiche : une **barre horizontale** (`Main.initZoneBar`, pendant de la
+jauge de profondeur) dont les segments sont construits à partir de
+`World.bandesX()` — largeurs proportionnelles au monde réel, donc le grand large
+occupe bien les deux tiers. L'heure se lit désormais dans les deux sens :
+« Grand large · Eau claire · 34 m ». La fiche d'identité aussi, avec une ligne
+**Vit** (`IdCard.habitatOf`) : la seule profondeur ne situe pas une espèce — la
+Dorade Dorée et le Poisson Confetti partagent l'eau claire et ne se croisent
+jamais, l'une au large, l'autre au récif.
+
 Chaque espèce a une **bande horizontale** (`Entity.bandeX`) : la portion du monde
-où sa bande de profondeur existe vraiment, plus 500 px de marge de confort. Le
+où sa bande de profondeur existe vraiment, plus une marge de confort. Le
 rappel y est **souple** — une accélération proportionnelle au dépassement, très
 assouplie en chasse et en fuite (×0,25) pour qu'un prédateur ne lâche pas sa
 proie à la frontière.
+
+Trois corrections d'espèce en sont sorties, toutes du même type — **une bande de
+profondeur mal placée met une espèce dans la mauvaise zone horizontale**, puisque
+l'une découle de l'autre :
+
+- La **Murène du Récif** commençait à 350 px de profondeur, donc son rocher
+  tombait vers x = 1600 — la frontière du haut-fond, là où il y a déjà foule.
+  Elle commence à 650 (x ≈ 1980, en pleine mer). Sa borne basse, en revanche, ne
+  peut pas descendre bien plus : `nearestPreyFor` filtre par bande, et une murène
+  posée à 2000 px n'aurait plus **aucune** proie à portée.
+- Conséquence : le **Confetti sort de son menu** (les deux bandes ne se
+  recouvrent plus que sur 100 px, le lien était déclaré mais ne pouvait presque
+  jamais servir). Le **Poisson Coffre** le remplace — 350 px de recouvrement, il
+  nage atrocement mal, et il n'avait **aucun prédateur**.
+- Audit à refaire après toute modification de bande : pour chaque paire
+  prédateur/proie, mesurer le recouvrement en x **et** en y. En dessous de 300 px
+  en x ou 120 px en y, le lien est décoratif.
 
 **Souple, et pas un mur, c'est le point important** : un mur dur aligne tous ceux
 qui s'y pressent sur le même pixel, ce qui est exactement le défaut qu'on
 corrige. Mesuré après : 27 créatures au rivage sur 569, contre un entassement
 systématique avant.
+
+Trois règles apprises en corrigeant le **« mur invisible »** que le joueur voyait
+en pleine mer — un banc de sardines aplati contre une vitre, au milieu de l'eau :
+
+- **La bande ne commence JAMAIS avant la barrière de rivage de l'espèce**
+  (`limiteLarge`). Sinon les deux contraintes se battent : le rappel souple tire
+  vers la côte pendant que le mur dur interdit d'y aller, et tout le banc reste
+  collé au mur. Mesuré avant : **67 % des Sardines Bulle-fofolle et 79 % des
+  Poissons Volants** tenaient à moins de 40 px de leur barrière ; après : **0 %**.
+- **La barrière dure elle-même donne à chacun sa distance** (`+ (id % 7) * 26`).
+  Un `clamp` commun pose tous ceux qui le touchent sur le même x — c'est la même
+  leçon que pour les créatures de fond, et elle vaut partout.
+- **La marge de confort suit la VITESSE** (`400 + speed * 6`). À marge constante,
+  une sardine à 90 px/s se retrouvait dans un couloir de 900 px qu'elle
+  traversait en dix secondes : doux ou non, ça se lit comme une cage.
+
+Corollaire d'équilibre : un `offshore` réglé avant le plancher générique de
+150 px d'eau est probablement trop grand aujourd'hui. La Sardine et le Poisson
+Volant sont passés de 950 à 260 — ils ont de nouveau droit au rivage, comme le
+Confetti, et le plancher générique suffit à les tenir hors du ressac.
+
+Mesuré sur l'ensemble : **rivage 17 · mer 122 · grand large 264** sur
+403 adultes, et **zéro nageur sur le sable sec**.
 
 ### `speedNow` est un EFFORT, pas une vitesse
 
@@ -247,6 +419,32 @@ Deux helpers pour ça, à utiliser partout : **`FishBody.allure(e)`** (0 arrêt�
 **`FishBody.battement(e)`**, qui en tire une fréquence bornée et pondérée par le
 gabarit — un gros animal bat lentement, c'est la première chose qu'on lit dans
 une nage.
+
+### Une fréquence variable s'INTÈGRE — jamais `sin(t * f)`
+
+C'est la vraie cause du tortillement de l'Anguille, et elle survivait à la
+correction de sa fréquence. **`f` dépend de la vitesse, donc elle change à chaque
+frame** ; or dans `t · f`, une variation Δf déplace la phase de `t · Δf`. Après
+dix minutes de jeu (t = 600), un frémissement de vitesse fait sauter l'animation
+de plusieurs tours **entre deux frames**. Ça ne se lit pas comme une fréquence,
+ça se lit comme du bruit.
+
+Mesuré sur l'Anguille, en avance de phase par seconde :
+
+| | à t = 30 s | à t = 600 s |
+|---|---:|---:|
+| `sin(t * f)` | 3,2 tours/s | **79,8 tours/s** |
+| phase intégrée | 0,67 tours/s | 0,57 tours/s |
+
+D'où **`FishBody.phaseNage(e, f, t)`**, qui accumule `f · dt` et rend un angle.
+Les rapports de fréquence CONSTANTS (une nageoire qui bat à 0,7 fois la queue)
+peuvent la multiplier sans danger — c'est la variation de `f` qui casse, pas son
+échelle. Trois appelants : le ruban de l'Anguille, la queue des sprites vectoriels
+et le battement des nageoires.
+
+Corollaire à retenir : **plus la partie dure, plus l'artefact est violent**. Il
+est invisible en test court et flagrant après dix minutes, donc il faut le
+chercher en avançant l'horloge, pas en regardant une seconde de jeu.
 
 ### Un banc poursuivi s'ÉPARPILLE, il ne se resserre pas
 
@@ -368,6 +566,32 @@ Trois planchers génériques, tous mesurés :
   bande qui commence à 0, ils se posaient donc jusqu'au rivage exact et on en
   trouvait sur le **sable sec**. Il leur faut désormais `size * 3 + 40` px d'eau,
   au spawn (`spawnGroups`) **et** en reptation (`bornesReptation`).
+- **Et les SITES D'HABITAT** (`Ecosystem.sitesHabitat`, mutualisé entre le spawn,
+  la répartition des groupes et la ponte). Ils étaient filtrés sur la seule bande
+  de profondeur : une étoile a `depthBand[0] = 0`, donc un rocher posé pile sur
+  la ligne d'eau passait le test — et comme le tirage ajoute ensuite ±40 à ±90 px
+  de dispersion, on retrouvait des étoiles sur le sable sec, **à deux exemplaires
+  au pixel près**. Mesuré après : 0 créature hors de l'eau.
+
+### Vivre DANS son refuge (`anchorToRefuge`)
+
+Le Poisson-clown Chatouille était ancré à une **copie des coordonnées** de
+l'anémone la plus proche au moment du spawn. Deux conséquences : un clown né
+d'une ponte ou arrivé par immigration restait ancré à un point d'eau vide, et
+personne ne rejoignait jamais une anémone. Il garde maintenant une **vraie
+référence** (`_hote`), revue quand elle disparaît (recherche rare, elle balaie
+toutes les entités).
+
+Et le rayon de confort **se referme la nuit** : dedans pour dormir, autour le
+reste du temps. Sinon il passe la nuit à 120 px de son anémone, en pleine eau,
+c'est-à-dire loin de la seule chose qui le protège. Mesuré au cœur de la nuit,
+distance à l'hôte : **médiane 103 px et jusqu'à 377 → médiane 26 px**, tous
+endormis.
+
+Le guili suit la même logique : il ne se déclenche que sur **quelqu'un qui
+passe** (`speedNow > 14`, comme le câlin de l'Étoile) et jamais pendant le
+sommeil. Se coller au premier voisin immobile, ce n'est pas la même scène — et
+ça l'emmenait loin de chez lui pour rien.
 
 ### Un dormeur ne bouge plus
 
@@ -632,9 +856,53 @@ Quatre règles :
   **déterministes**, tirés de l'identifiant et mis en cache comme `Entity.color`),
   **`degrade`** (dont le premier arrêt est la couleur *résolue* : un dégradé à
   couleurs fixes annulerait la variation individuelle),
-  **`alpha`** et **`lueur`**. Le halo de `lueur` passe par `FishBody.halo` (image
-  en cache) et non par un `shadowBlur`, qui travaille en pixels **écran** et
-  grossirait donc sur un petit poisson vu de loin.
+  **`alpha`**, **`lueur`** et **`reflet`**. Le halo de `lueur` passe par
+  `FishBody.halo` (image en cache) et non par un `shadowBlur`, qui travaille en
+  pixels **écran** et grossirait donc sur un petit poisson vu de loin.
+- **Un reflet est DÉCOUPÉ dans le contour, pas peint par-dessus.** La bande de
+  lumière sur le dos se dessinait à la main dans un calque : figée, elle ne
+  suivait pas l'ondulation du corps. `FishBody.reflet` la découpe dans le tracé
+  **déformé** (`ctx.clip()` sur le chemin courant), donc elle ondule avec la nage
+  et ne déborde jamais — et elle s'éteint à ses pointes, sans quoi un aplat aux
+  bouts francs se lit comme un trait de peinture. Elle est peinte **en dernier** :
+  son `beginPath()` détruirait le tracé dont le contour a encore besoin, alors
+  que le découpage, lui, survit au `save`/`restore`.
+- **La transition d'un dégradé a un début ET une fin.** Avec une seule longueur,
+  un fondu court était forcément collé à un bord ; il faut deux arrêts pour poser
+  une frontière franche au *milieu* d'un corps.
+- **Une baleine ne bat pas comme un requin.** Un cétacé porte une caudale
+  HORIZONTALE qu'il bat de haut en bas — vu de côté, un vrai mouvement vertical ;
+  un poisson balaie une caudale VERTICALE de gauche à droite, ce qui se lit comme
+  un balancement horizontal, la queue qui coulisse d'avant en arrière. `tailAxe`
+  (degrés, 90 par défaut) donne son axe à l'ondulation. L'axe **tourne** le
+  déplacement sans en changer la norme (mesuré : 34,54 px quel que soit l'angle),
+  et 90° reproduit le comportement d'avant au pixel près.
+- **Un éditeur à l'arrêt doit rendre la POSE DE REPOS, pas la dernière frame.**
+  Figer sur la phase courante laisse le dessin déformé, donc décalé de ses
+  propres poignées. `e._repos` (posé par l'atelier seul) court-circuite toute
+  déformation dans `drawSprite`. Remettre la phase à zéro ne suffit pas : une
+  queue à ondes et un tentacule gardent un `− u · ondes` dans leur sinus et
+  restent courbés à phase nulle. Mesuré : écart au repos **0,000000 px** sur les
+  20 formes du Confetti, contre 10,06 px en animation.
+- **Un aperçu qui recrée son entité à chaque frame FIGE toute l'animation.**
+  `FishBody.phaseNage` intègre la fréquence (`phase += f · dt`) sur l'entité ;
+  un poisson neuf a toujours `dt = 0`, donc une phase clouée. L'atelier faisait
+  exactement ça : queue et appendices immobiles, visage animé — ce qui se lit
+  comme « un minuscule tremblement », pas comme un bug. Mesuré sur le Confetti :
+  course du bout de la caudale **0,00 px** avec un acteur neuf, **36,6 px** avec
+  un acteur réutilisé. Tout aperçu hors jeu doit garder ses entités.
+  Corollaire : il doit aussi leur donner une **vitesse** (`vx`), car
+  `FishBody.allure` la lit sur `vx/vy` et non sur `speedNow` — sinon on juge les
+  amplitudes sur un poisson qui fait la planche, à un tiers de sa cadence.
+- **Un réglage d'animation qui ne se voit pas doit se MESURER dans l'outil.**
+  L'amplitude d'un appendice était annoncée en degrés mais convertie par `/360`
+  (donc divisée par deux), et sa pondération vaut 1 sur l'ancre — là où le bras
+  de levier est nul — et 0 au bord du rayon : le déplacement plafonne vers
+  0,25·r. Relevé sur le Confetti, « 20° » déplaçait **1,4 px** sur un dessin de
+  150, soit 0,26 px à l'échelle du jeu. Corrigé (`/180`, plus le facteur
+  d'effort `vigueur` déjà appliqué à la queue), mais la vraie leçon est que
+  l'atelier affiche maintenant le **débattement obtenu en pixels**, en rouge
+  sous 1 % : un curseur dont on ne peut pas lire l'effet se règle à l'aveugle.
 - **Un accessoire de gag enfermé dans une silhouette disparaît avec elle.** La
   danse du Crabe Disco a déjà été hissée dans `FishBody.choregraphie()`,
   appliquée AUTOUR du corps quel qu'il soit. Restent la **poche du Pélican**, la
@@ -666,6 +934,13 @@ Quatre règles :
   C'est ce que l'atelier appelle « aplatir » : les calques ne sont pas fondus
   (un corps et sa rayure n'ont pas la même couleur), ils forment un **bloc
   animé** qui se déplace, tourne et bat d'un seul tenant.
+- **La cadence se règle, mais APRÈS la bride.** `vitesse` (tout le dessin) et
+  `vitesseQueue` (l'ondulation du corps seule) multiplient la fréquence une fois
+  le plafond appliqué — posés avant, ils n'auraient aucun effet sur les petits
+  poissons, qui saturent déjà ce plafond et sont précisément ceux qu'on veut
+  ralentir. Chaque appendice garde en plus la sienne (`fins[].vitesse`), et
+  l'atelier réunit les trois au même endroit : c'est le **rapport** entre ces
+  rythmes qui fait une nage, pas leur valeur absolue.
 - **La fréquence de battement est bridée, et calée sur le gabarit.** Deux
   brides, toutes deux mesurées. Le relevé de départ sur 12 espèces montait à
   **13,4 rad/s** (période 0,47 s) et, pire, ne dépendait pas du tout de la
@@ -721,14 +996,19 @@ sable 12 % → 4,3 %.
 - `svgexport.js` / `svgimport.js` — les deux sens du pont : rejouer une silhouette procédurale dans un faux contexte 2D qui enregistre au lieu de peindre pour la sortir en SVG, et échantillonner un dessin vectoriel pour le faire entrer.
 - `ANCHOR_TOOL.md` — spécification du « poseur d'ancrages », l'outil construit à part (Artifact autonome, hors dépôt) dont l'atelier reprend les capacités.
 - `atelier.html` — **l'outil unique** (page à part, servie par le même serveur de dev) : importer, poser les ancres et les nageoires, calibrer le visage, peindre les calques, prévisualiser avec le VRAI rendu du jeu, et **enregistrer directement dans `Assets/`**. Une espèce s'active par le manifeste `Assets/sprites.json`, sans toucher au code. **[SPRITES.md](SPRITES.md) est le contrat complet.**
-  Trois règles d'interface, apprises en le rangeant : le haut du panneau
+  Cinq règles d'interface, apprises en le rangeant : le haut du panneau
   appartient à l'**outil sélectionné** et l'annonce (le reste est en sections
   repliables dont l'état est retenu **hors du DOM** — le panneau est reconstruit
-  à chaque geste) ; l'**aide est un calque** (bouton 💡), elle occupait les deux
-  tiers de la colonne ; et le rail range les 51 espèces **par état**
-  d'avancement, pas dans l'ordre de `SPECIES`, avec un filtre — la rubrique
-  « sans dessin de référence » est la liste, tenue à jour toute seule, de ce
-  qu'il reste à dessiner.
+  à chaque geste) ; ce qui vaut pour le **dessin entier** (animer, recadrer,
+  comparer, enregistrer) n'a rien à faire dans ce panneau et vit dans **deux
+  barres** en haut — un champ de saisie n'y survivait de toute façon pas, il
+  perdait le focus au premier re-rendu ; l'**aide est un calque** (bouton 💡),
+  elle occupait les deux tiers de la colonne ; un calque s'**éteint**
+  provisoirement (👁 / Isoler), réglage de travail jamais enregistré, mais qui
+  doit passer par `decalerCalques()` comme toute autre liste d'indices ; et le
+  rail range les 51 espèces **par état** d'avancement, pas dans l'ordre de
+  `SPECIES`, avec un filtre — la rubrique « sans dessin de référence » est la
+  liste, tenue à jour toute seule, de ce qu'il reste à dessiner.
 - `decoupe_planche.py` — découpe `Assets/Concepts/Design Final.png` (les 30
   créatures dessinées) en **un repère par espèce** dans `Assets/Reperes/`.
   L'atelier les pose tout seuls en calque de repérage. Les 17 vignettes qui
@@ -772,6 +1052,41 @@ de profil. Trois verrous, tous nécessaires :
 Mesuré sur 45 s : baleine, cachalot, orque et calamar géant à **0 demi-tour/min**
 (contre 0,4 à 2,7 avec le seuil nu), et moins de 1 % du temps de profil pour les
 petites espèces.
+
+**Squash & stretch.** Comprimer la silhouette en x et rien d'autre, c'est une
+feuille de papier qu'on tourne sur la tranche : elle s'amincit jusqu'à
+disparaître. Un vrai virage conserve le volume — ce que le corps perd en largeur,
+il le reprend en hauteur — et la queue traîne derrière la tête avant de fouetter
+dans le nouveau sens. Deux déformations, posées **après la rotation**, donc dans
+le repère du CORPS (sinon le cisaillement décale le bas du poisson par rapport au
+haut au lieu de la queue par rapport à la tête) :
+
+```js
+const vir = 1 - Math.abs(flipX);      // 0 en ligne droite, 1 au plus fort du virage
+ctx.transform(1, vir * 0.5, 0, 1, 0, 0);   // la queue traîne
+ctx.scale(1, 1 + vir * 0.3);               // le volume se reporte en hauteur
+```
+
+Le signe du cisaillement s'inverse tout seul avec le miroir, au moment précis où
+la silhouette est sur la tranche : c'est ce qui fait lire un coup de queue
+continu et non un à-coup. Contrôle non visuel (rendu hors écran, emprise de
+l'encre) sur un thon : largeur 59 → 7 px pendant que la hauteur passe de 25 à
+**41**.
+
+**L'inclinaison est bridée CONTINÛMENT, pas par paliers.** Deux brides, toutes
+deux fonction du gabarit : `maxTilt` pour la nage
+(`clamp(0,95 − size × 0,0095)`, de 0,75 rad pour un confetti à 0,26 pour un
+colosse) et **`visee` pour `_faceAt`** (`clamp(1,7 − size × 0,045)`). C'est cette
+seconde qui manquait : viser quelqu'un autorisait 1,4 rad — **80°, c'est-à-dire
+debout sur la queue**. Le coupable n'était pas le requin mais le Thon arrêté à la
+station de nettoyage du Poisson Dentiste, qui pointait vers le petit nettoyeur
+flottant au-dessus de lui. Mesuré sur 40 s, toutes espèces de plus de 20 :
+**479 frames au-delà de 0,9 rad → 0**, pointe maximale 0,80 rad (le Perroquet,
+qui est petit et a le droit d'être expressif).
+
+Un piège de paliers en passant : le Thon fait 26, il tombait donc du bon côté
+d'un seuil « ≥ 30 » et gardait la bride des petits poissons. Les seuils en
+paliers laissent toujours quelqu'un juste en dessous.
 
 Hors champ `draw` n'est pas appelé : au retour, la créature se **pose** dans son
 sens courant plutôt que de faire un demi-tour fantôme.
@@ -821,7 +1136,53 @@ commandes canvas, pas leur rastérisation.
 
 Le rendu procédural n'est donc **pas** le goulot — passer à des sprites optimiserait la partie déjà la moins chère. Le coût est dans les recherches de voisinage. Utiliser systématiquement `Ecosystem.neighbors()` (grille spatiale) et `Ecosystem.bySpecies[id]` plutôt que de balayer `entities`.
 - `input.js` — molette (vertical) / shift+molette + drag (bi-axial), clic = nourrir + splash/sable, clic maintenu = bulles, souris rapide = remous + fuite des petits.
-- `main.js` — boucle, cycle jour/nuit (`Main.nightAmount()`), HUD (jauge de profondeur, zone, heure).
+- `main.js` — boucle, cycle jour/nuit (`Main.nightAmount()`), HUD (les deux barres de position, heure).
+- `save.js` — sauvegarde/restauration (voir la section **Sauvegarde**). À ajouter à `js/boot.js`, comme tout nouveau fichier.
+
+## Sauvegarde (`js/save.js`)
+
+L'aquarium se retrouve tel qu'on l'a laissé, sur le web comme sur mobile.
+`localStorage`, clé `aquarium.sauvegarde`, **9 à 10 ko pour ~550 créatures**.
+
+Ce qu'on enregistre : la **graine du monde**, l'heure qu'il était, la caméra, et
+par créature son espèce, sa position (entière), son stade et son banc. Pas
+d'âge, pas de faim, pas de vélocité, pas de particules. Cinq points qui ne se
+devinent pas :
+
+- **La graine d'abord.** `Background.init(graine)` construit 260 rochers, les
+  herbiers et les cheminées **au hasard** ; sans graine, `habitatSpots` change
+  d'une session à l'autre et une étoile de mer restaurée sur son rocher se
+  réveille sur du sable nu. `U.semer` / `U.alea` / `U.oublier` : le mode semé ne
+  vaut QUE pour la génération du décor — la simulation doit garder du vrai
+  hasard, sinon toutes les parties se déroulent à l'identique. Le décor est donc
+  reconstruit **avant** qu'on y replace les créatures.
+- **Les bancs sont renumérotés.** `groupId` est un compteur global qui n'a aucun
+  sens d'une session à l'autre. Sans lui, un banc de confettis se rouvre en
+  quarante poissons solitaires — et sa figure en cœur, qui exige un chef de
+  banc, ne se joue plus jamais.
+- **Ne pas retenir l'âge est un choix, pas un oubli.** Le constructeur donne
+  déjà un âge aléatoire aux adultes créés directement, précisément pour qu'une
+  classe d'âge entière ne meure pas d'un coup.
+- **Le monde ne vit pas pendant l'absence, et il n'y a rien à coder pour ça** :
+  `requestAnimationFrame` est en pause dès que l'onglet est caché (le « piège
+  dev connu » plus bas est ici une fonctionnalité). On ne rejoue rien au retour.
+- **`visibilitychange` fait foi, pas `beforeunload`** : sur mobile, une
+  application passée en arrière-plan peut être tuée sans jamais le déclencher.
+  Il y a en plus une sauvegarde périodique (20 s de jeu) et `pagehide`.
+
+Toutes les entrées de secours sont vérifiées : JSON tronqué, illisible, vide,
+mauvaise version, graine absente, `pop` vide, espèce disparue du code, positions
+`NaN`, `localStorage` qui lève (mode privé, quota) — chacune donne un monde neuf
+ou une restauration partielle, **jamais une exception ni une page blanche**. Une
+espèce inconnue est sautée, l'immigration la ramènera si elle existe encore ; un
+quota dépassé désactive la sauvegarde au lieu de relancer une exception toutes
+les vingt secondes.
+
+Le bouton **↻** (en haut à gauche, avec confirmation) efface et recharge. Il est
+volontairement **hors de la barre d'action** : c'est la seule commande qui
+détruise quelque chose, elle n'a rien à faire à côté de « nourrir » — et la
+barre est calibrée au pixel pour tenir dans les 375 px d'un petit téléphone, un
+septième bouton la ferait déborder.
 
 ## Reste à faire (extension du GDD)
 

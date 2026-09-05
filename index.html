@@ -9,7 +9,15 @@
 <body>
 <canvas id="game"></canvas>
 <div id="hud">
-  <div id="depth-gauge"><div id="depth-marker"></div></div>
+
+  <!-- Pendant HORIZONTAL de la jauge de profondeur : les quatre zones de
+       gauche à droite. Les segments sont construits par `Main.initZoneBar` à
+       partir de `World.bandesX()`, jamais écrits en dur — si le relief change,
+       la barre suit. -->
+  <div id="zone-bar" class="hud-bar"><div id="zone-marker" class="hud-marker"></div></div>
+  <!-- Le PENDANT VERTICAL, construit par le même code (`Main.initBarres`) et
+       stylé par la même classe : c'est la même barre tournée de 90°. -->
+  <div id="depth-bar" class="hud-bar vertical"><div id="depth-marker" class="hud-marker"></div></div>
   <div id="clock">☀️</div>
   <div id="food-bar">
     <button class="food-btn active" data-food="generic" title="Graines standard">🌾</button>
@@ -19,6 +27,12 @@
     <button id="info-btn" title="Fiches d'identité au survol">🔍</button>
     <button id="legend-btn" title="Légende des bulles et des expressions">❔</button>
   </div>
+  <!-- RECOMMENCER : volontairement À L'ÉCART de la barre d'action. C'est la
+       seule commande du jeu qui détruit quelque chose, elle n'a rien à faire à
+       côté de « nourrir », qu'on presse cent fois par séance. Et la barre est
+       déjà calibrée au pixel pour tenir dans les 375 px d'un petit téléphone :
+       un septième bouton la ferait déborder. -->
+  <button id="reset-btn" title="Recommencer un aquarium tout neuf">↻</button>
   <div id="info"></div>
 </div>
 <!-- LIEN VERS L'ATELIER DES CRÉATURES.
@@ -26,10 +40,12 @@
      l'aquarium, et le seul moyen d'atteindre l'atelier était de taper
      /atelier.html à la main. Le lien n'apparaît qu'en LOCAL — c'est un outil de
      développement, pas une commande de jeu. -->
-<a id="atelier-link" href="atelier.html" title="Atelier des créatures" hidden>🎨</a>
+<a id="atelier-link" href="atelier.html" title="Atelier des créatures">🎨 <span>atelier</span></a>
 <script>
-  if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname))
-    document.getElementById('atelier-link').hidden = false;
+  // Masqué HORS localhost seulement : caché par défaut, il ne se voyait pas non
+  // plus en local si le script échouait avant. Le sens du test est inversé.
+  if (!/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname))
+    document.getElementById('atelier-link').hidden = true;
 </script>
 <script src="js/boot.js"></script>
 </body>

@@ -105,4 +105,58 @@ const World = {
     if (x < z.hauteMer) return 'mer';
     return 'haute mer';
   },
+
+  // Les quatre zones sous forme de liste : identifiant, libellé affiché et
+  // bornes réelles. Une seule source pour le HUD, les fiches d'identité et
+  // l'audit des proies — et comme les bornes sortent de `zonesX`, elles
+  // suivent le relief.
+  bandesX() {
+    const z = this.zonesX;
+    return [
+      { id: 'plage',     label: 'Plage',       x0: 0,          x1: z.rivage },
+      { id: 'rivage',    label: 'Rivage',      x0: z.rivage,   x1: z.mer },
+      { id: 'mer',       label: 'Mer',         x0: z.mer,      x1: z.hauteMer },
+      { id: 'haute mer', label: 'Grand large', x0: z.hauteMer, x1: CONFIG.WORLD_WIDTH },
+    ];
+  },
+
+  // Le pendant VERTICAL de `bandesX()`, même forme et même rôle : la barre de
+  // profondeur est construite par le même code que la barre des zones, il lui
+  // faut donc la même liste. L'air y figure au même titre que la plage y figure
+  // horizontalement — c'est la part du monde qui n'est pas de l'eau, et le
+  // centre de la vue peut y monter (`Camera.clampTarget` autorise -35 % de la
+  // hauteur d'écran).
+  //
+  // La dernière zone est déclarée à 99999 dans `CONFIG.ZONES` (c'est un test
+  // d'appartenance, pas une borne d'affichage) : elle est ramenée à la
+  // profondeur réelle du monde, sinon les grands fonds écraseraient toute la
+  // barre à eux seuls.
+  AIR_VISIBLE: 300,
+
+  bandesY() {
+    const bandes = [{ id: 'air', label: 'Air', d0: -this.AIR_VISIBLE, d1: 0 }];
+    for (const z of CONFIG.ZONES) {
+      bandes.push({ id: z.id, label: z.label, d0: z.from, d1: Math.min(z.to, CONFIG.DEPTH_MAX) });
+    }
+    return bandes;
+  },
+
+  labelZoneX(x) {
+    const b = this.bandesX().find(b => b.id === this.zoneX(x));
+    return b ? b.label : '';
+  },
+
+  // Les zones traversées par un intervalle [x0, x1] — « Mer → Grand large ».
+  labelBande(x0, x1) {
+    const noms = this.bandesX().filter(b => x1 > b.x0 && x0 < b.x1).map(b => b.label);
+    if (!noms.length) return '—';
+    return noms.length === 1 ? noms[0] : `${noms[0]} → ${noms[noms.length - 1]}`;
+  },
+
+  // Idem verticalement, à partir d'une bande de profondeur.
+  labelProfondeur(d0, d1) {
+    const noms = CONFIG.ZONES.filter(z => d1 > z.from && d0 < z.to).map(z => z.label);
+    if (!noms.length) return '—';
+    return noms.length === 1 ? noms[0] : `${noms[0]} → ${noms[noms.length - 1]}`;
+  },
 };

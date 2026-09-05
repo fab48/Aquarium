@@ -789,6 +789,29 @@ Le seul cas *volontaire* de proie sereine est le halo du Poisson-lanterne : une
 crevette hypnotisée est censée nager droit dans la gueule. Il est donc exclu du
 décompte.
 
+### Le zoom, et un piège qui a coûté cher
+
+`Camera.zoom` et la taille de vue (`w = vw / zoom`) sont **liés** : poser `zoom`
+à la main laisse `w`/`h` au facteur précédent, et tout ce qui les lit travaille
+alors en dimensions fausses — le décor étant un dégradé étiré aux dimensions de
+la VUE, l'écran se retrouve à moitié peint. C'est exactement ce qui arrivait au
+chargement d'une sauvegarde faite à un zoom ≠ 1, et il fallait un coup de
+molette (le seul chemin qui appelait `updateSize`) pour que tout se remette
+d'aplomb. **Passer par `Camera.setZoom()`, jamais par `Camera.zoom = …`.**
+
+Les deux bornes ne se règlent pas de la même façon :
+
+- **`ZOOM_MAX` est un choix de mise en scène** : 3,2 (au lieu de 1,6), parce que
+  tout le travail du projet est sur les visages et qu'à 1,6 on ne voyait pas
+  vraiment une créature de près.
+- **Le dézoom est une question de PERF.** Il n'ajoute aucune entité à la
+  simulation, mais multiplie ce qu'il faut dessiner : à 0,35 la vue couvre trois
+  fois plus de monde qu'à 1. Le plancher est donc adaptatif
+  (`Camera.zoomMinPerf`), remonté par `Main.adaptResolution` **après** la
+  résolution — c'est le levier le moins visible qui passe en premier — et jamais
+  redescendu tout seul, le pompage du cadrage se voyant bien plus qu'une frame
+  lente.
+
 ### Le ciel
 
 Il valait un dégradé deux couleurs et un disque de 24 px qui changeait de teinte
@@ -811,6 +834,14 @@ Il valait un dégradé deux couleurs et un disque de 24 px qui changeait de tein
   dans son coin. Plus l'astre est bas, plus la traînée est **longue et vive** :
   à intensité fixe elle était invisible sur l'eau sombre de la nuit (mesuré en
   lisant les pixels : 273 sous la lune contre 161 de part et d'autre).
+
+Sixième règle : **les trois houles ne défilent pas à la même vitesse.** Elles
+suivaient toutes exactement la caméra, donc restaient rigoureusement solidaires
+— ce qui annulait le relief qu'on avait cherché à donner en variant leur hauteur
+et leur pâleur. Chaque houle a maintenant sa parallaxe (`p` : 0,86 / 0,94 / 1) ;
+les écarts restent petits, plus francs le décalage se lirait comme un défaut
+d'alignement. **La houle du devant garde `p: 1`** — c'est sur elle qu'est calée
+l'écume du rivage, qui a sa propre formule.
 
 Piège rencontré : **un nuage se dessine en UN SEUL tracé.** Rempli bulle par
 bulle, chaque recouvrement cumulait l'alpha et le nuage se lisait comme une
@@ -1028,6 +1059,57 @@ Ordre de rendu : les **rochers avant le sable** (celui-ci recouvre leur base et 
 Les **créatures** posées au sol suivent la même règle : `GROUND_RENDERS` (worm, crab, shell, star, anemone, eel) pivote avec `World.slopeAt`. Les espèces `flatGround` (ver-tapis) apparaissent en plus sur une **terrasse** — `World.init` aplanit des groupes de colonnes exprès, sinon une créature horizontale paraît posée de travers.
 
 Les espèces peuvent réclamer un **habitat** (`habitat: 'rock' | 'weed'`) : elles apparaissent alors sur les positions de décor correspondantes (`Background.habitatSpots`) — étoiles sur les rochers, hippocampes dans les herbiers. Le décor est donc initialisé **avant** l'écosystème dans `Main.init`.
+
+### Un poisson TOURNE, il ne recule pas
+
+Mesuré avant correction : un gros poisson passait **21 % de son temps à nager à
+reculons**, jusqu'à 3,8 fois sa vitesse de croisière. La cause n'est pas la
+nage, c'est l'hystérésis d'orientation ci-dessous : elle est là pour empêcher la
+baleine de clignoter, mais elle laissait le corps filer dans un sens pendant que
+la tête regardait encore dans l'autre — pendant près d'une seconde pour un gros
+gabarit.
+
+**La patience protège de l'hésitation, pas de la décision.** Elle cède donc
+d'autant plus vite que l'intention est franche (`Entity.PATIENCE_REMISE`,
+pondérée par `|dirX| / seuil`) : un `vx` qui traîne autour de zéro garde toute
+sa patience, un poisson qui repart franchement dans l'autre sens n'en garde
+presque rien. Mesuré : **2,5 % → 1,2 % pour un moyen, 1,7 % → 0,8 % pour un
+petit.**
+
+Deux enseignements, tous deux contre-intuitifs et tous deux mesurés :
+
+- **Les colosses en sont EXCLUS** (`size >= 70`). Leur remettre la patience
+  doublait leurs demi-tours — 1,6 à 3,2 par minute pour la Baleine Gros Dodo —
+  pour un gain quasi nul sur la marche arrière (3,3 % → 2,8 %). La patience a
+  été écrite pour eux ; on ne la leur retire pas.
+- **Une brise sur la vitesse arrière a été essayée puis RETIRÉE.** Elle semblait
+  la réponse évidente (« un gros poisson ne peut pas reculer ») ; elle mesurait
+  moins bien que la patience seule (gros : 4,7 % sans elle, 7,9 % avec). Elle
+  se mordait la queue — en effaçant la vitesse arrière, elle réduisait la
+  franchise perçue, donc rallongeait la patience, donc prolongeait l'état
+  qu'elle prétendait corriger. Ne pas la réintroduire sans mesurer.
+
+### Le demi-tour est une FEUILLE QUI S'ENROULE
+
+L'ancien demi-tour écrasait la silhouette jusqu'à **5 % de sa largeur** : le
+poisson devenait un trait, disparaissait une frame ou deux et réapparaissait
+miroité. C'est ça qu'on lisait comme un « flip brutal » — pas la vitesse du
+demi-tour, mais le passage par le néant.
+
+Une feuille qui s'enroule ne disparaît jamais : elle se met de trois quarts, et
+c'est la **courbure** qui raconte la rotation. Quatre réglages, tous dans
+`orientation()` et `draw()` :
+
+- **largeur minimale 0,34** au lieu de 0,05 — c'est le changement qui fait tout ;
+- **l'arc** (`_vir`, cisaillement en y le long du corps) : la queue traîne
+  derrière la tête et le corps se creuse en C ;
+- **le volume** : ce que le corps perd en largeur, il le reprend en hauteur ;
+- **le roulis** (`_virSens`) : il s'incline dans son virage.
+
+`_vir` suit un `smoothstep` du sinus, pas le pivotement linéaire : la
+déformation s'installe et se retire en douceur. Contrôle : rendre la même
+silhouette à neuf valeurs de `_flipX` de −1 à +1 et regarder la planche — avant,
+la case du milieu est un trait.
 
 ### Le retournement (`Entity.orientation`)
 

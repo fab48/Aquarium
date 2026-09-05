@@ -525,3 +525,69 @@ l'écran, cela fait environ **1,3 ms**. Le reste des 18 ms est du remplissage.
 - **Le halo bioluminescent.** Pré-rendu et mémoïsé par couleur.
 - **Le nombre d'entités simulées**, depuis le culling.
 - **La grille spatiale** (0,3 ms) et les particules (0,16 ms).
+
+---
+
+## 8. Deuxième passe (2026-09-05) — la simulation était devenue le goulot
+
+Toutes les mesures précédentes ont été faites en **rastérisation logicielle**,
+où le décor domine. Sur une machine à canvas accéléré, le classement s'inverse
+complètement — et c'est le cas de la plupart des joueurs.
+
+Profil de départ, frames RÉELLES (pas de différence synthétique), 564 entités,
+216 créatures à l'écran, zoom 0,8 :
+
+| Poste | ms |
+|---|---|
+| frame complète | 13,5 |
+| dessin des créatures | 6,6 |
+| simulation | 5,8 |
+| décor | 0,2 |
+
+Deux corrections, chacune mesurée sur la frame réelle.
+
+### 8.1 Le voisinage : une boîte englobante avant le test exact
+
+`Ecosystem.update` passait **2,4 ms sur 7,2 en recherches de voisinage**. La
+cause tient en une phrase : la grille fait 130 px et on en balaie 3×3, donc
+chaque créature examine une vingtaine de voisins — alors que **deux confettis de
+11 px se touchent à 21 px**. Neuf tests sur dix portaient sur des voisins hors de
+portée, et chacun payait un appel à `U.dist2`.
+
+Un écart en x, puis en y, avant le test exact — le filtre que fait n'importe
+quelle boîte englobante. Mesuré : voisinage **2,4 → 1,23 ms**, `Ecosystem.update`
+**7,17 → 3,87 ms** sur la même page (−41 % par entité).
+
+La même grille sert une baleine de 190 px et une crevette de 7 : c'est ce
+déséquilibre qui rend l'écrémage payant. Une grille par classe de taille serait
+la suite logique, si le besoin revient.
+
+### 8.2 Le visage a un niveau de détail
+
+`drawFace` trace une vingtaine de chemins — œil, blanc, pupille, reflet,
+paupière, sourcil, bouche, lèvres, dents, langue, joues. C'est tout le charme de
+l'aquarium… tant qu'on le voit. Sur un Confetti de 14 px à un zoom de 0,8, l'œil
+entier fait 2,5 px de rayon et le sourcil est **sous-pixel**.
+
+`FishBody.face` est le point d'entrée unique de tous les visages : sous
+`size * Camera.zoom < 10`, il bascule sur `faceMinimale` — l'œil, et le fait
+qu'il soit ouvert ou fermé (un aquarium endormi doit se lire de loin). On ne
+supprime que ce qui ne se voyait pas, et **s'approcher rend le détail
+immédiatement**.
+
+Mesuré : dessin des créatures **6,6 → 3,6 ms** avec *plus* de monde à l'écran
+(232 contre 216), frame **13,5 → 11 ms**.
+
+### 8.3 Rappel de méthode
+
+Les mesures par **différence** sur le rendu sont ici inutilisables : Canvas 2D
+empile les commandes, et selon l'ordre le même poste ressort à 0,9 ms ou à
+6,8 ms — on obtient même des pourcentages négatifs. **Le seul chiffre fiable est
+la frame réelle**, chronométrée dans la boucle et prise en médiane. Tout ce
+paragraphe a été mesuré ainsi.
+
+### 8.4 Particules
+
+La refonte du vocabulaire des marques d'émotion (cf. `EMOTIONS.md` §3 bis) a
+retiré au passage ~1 270 particules/min. Cumul depuis le relevé initial :
+**35 736 → 13 728 particules créées par minute, soit −62 %.**

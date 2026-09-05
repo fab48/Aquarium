@@ -86,9 +86,19 @@ const Particles = {
     }
   },
 
-  // Goutte de gêne façon manga
-  sweat(x, y) {
-    this.spawn({ type: 'sweat', x, y, vx: U.rand(10, 30), vy: -30, life: 0.9 });
+  // LA GOUTTE DE GÊNE. Elle ne servait à rien parce qu'on ne la voyait pas :
+  // un petit ovale bleu pâle de 5 px, à côté d'un poisson, EST une bulle — et
+  // l'aquarium en émet près de trois mille par minute. Elle avait en plus trois
+  // sens (gêné, honteux, triste), donc rien à dire de précis.
+  //
+  // Elle n'a plus qu'un sens (la gêne) et une vraie identité de manga : plus
+  // grosse, penchée dans le sens de sa fuite, opaque, avec un reflet blanc et
+  // un liseré sombre. Le liseré est ce qui compte : les bulles sont dessinées
+  // au TRAIT clair sur fond sombre, la goutte est un aplat cerné — à taille
+  // égale, on ne peut plus les confondre.
+  sweat(x, y, taille = 20) {
+    this.spawn({ type: 'sweat', x, y, vx: U.rand(14, 34), vy: -34,
+      r: U.clamp(taille * 0.38, 6, 11), life: 1.1 });
   },
 
   // Petite veine de colère
@@ -173,6 +183,20 @@ const Particles = {
   },
 
   // Pet : nuage verdâtre + bulles qui montent (Poisson Perroquet Pétomane)
+  // ÉCŒURÉ : le petit nuage vert. Même vocabulaire que le prout ci-dessous,
+  // volontairement — c'est le même sens, « ça sent mauvais ». Le dégoût partait
+  // avant en gerbe de points verts (124/min), indiscernable des quatre autres
+  // gerbes du jeu ; un nuage se reconnaît du premier coup d'œil et le lecteur
+  // n'a qu'un symbole à apprendre au lieu de deux.
+  stink(x, y, taille = 20) {
+    const n = U.clamp(Math.round(taille * 0.16), 2, 5);
+    for (let i = 0; i < n; i++) {
+      this.spawn({ type: 'stink', x: x + U.rand(-5, 5), y: y + U.rand(-4, 4),
+        vx: U.rand(-14, 14), vy: U.rand(-24, -10),
+        r: U.clamp(taille * 0.22, 3, 9) * U.rand(0.7, 1.2), life: U.rand(0.8, 1.5) });
+    }
+  },
+
   fart(x, y) {
     this.comic(x, y - 6, '💨');
     for (let i = 0; i < 10; i++) {
@@ -292,12 +316,28 @@ const Particles = {
         ctx.quadraticCurveTo(sx - w, sy - w, sx, sy - r);
         ctx.fill();
       } else if (p.type === 'sweat') {
-        ctx.fillStyle = 'rgba(150,215,255,0.9)';
+        // Penchée dans le sens où elle part : une goutte de sueur de manga
+        // gicle, elle ne tombe pas droit.
+        const r = p.r ?? 6;
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(Math.atan2(p.vy, p.vx) + Math.PI / 2);
         ctx.beginPath();
-        ctx.moveTo(sx, sy - 6);
-        ctx.quadraticCurveTo(sx + 4.5, sy + 1, sx, sy + 5);
-        ctx.quadraticCurveTo(sx - 4.5, sy + 1, sx, sy - 6);
+        ctx.moveTo(0, -r);
+        ctx.quadraticCurveTo(r * 0.72, r * 0.16, 0, r * 0.82);
+        ctx.quadraticCurveTo(-r * 0.72, r * 0.16, 0, -r);
+        ctx.fillStyle = 'rgba(126,196,255,0.95)';
         ctx.fill();
+        ctx.strokeStyle = 'rgba(28,60,96,0.85)';
+        ctx.lineWidth = Math.max(1, r * 0.16);
+        ctx.stroke();
+        // Le reflet : c'est lui qui donne le volume et achève de la distinguer
+        // d'une bulle, qui n'est qu'un cercle vide.
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.beginPath();
+        ctx.ellipse(-r * 0.22, r * 0.16, r * 0.16, r * 0.26, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
       } else if (p.type === 'anger') {
         // veine croisée façon manga
         ctx.strokeStyle = '#e0424f'; ctx.lineWidth = 2.4; ctx.lineCap = 'round';

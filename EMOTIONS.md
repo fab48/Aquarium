@@ -127,6 +127,44 @@ c'est le visage qui raconte, la gerbe ne fait que ponctuer.**
 
 ---
 
+## 3 bis. UN SIGNE, UN SENS — ou pas de signe du tout
+
+Relevé du 5 septembre 2026 sur 4 minutes : la couche d'effets d'émotion pesait
+**~580 marques par minute**, et deux formes génériques en portaient l'essentiel :
+
+| Forme | /min | Sens qu'elle portait |
+|---|---|---|
+| `burst` (gerbe de points) | **352** | surpris, écœuré, apeuré, en train de manger |
+| `sweat` (goutte) | **87** | gêné, honteux, triste |
+
+Quatre sens pour une gerbe, distingués par une **couleur** : à l'échelle d'un
+poisson de 15 px, dans une eau déjà teintée, cinq points colorés ne veulent rien
+dire. Et une petite goutte bleu pâle est indiscernable d'une **bulle**, dont
+l'aquarium en émet près de trois mille par minute.
+
+La règle appliquée : soit une émotion a un signe **qui n'appartient qu'à elle**,
+soit elle n'en a pas et son visage suffit. Ce qui a été retiré :
+
+- **`surprise`** — l'œil rond, les sourcils au plafond et la bouche en o disent
+  tout. C'était le premier poste de la couche (157/min).
+- **`eating`** — la mastication et la queue de la proie qui dépasse de la gueule
+  le racontent déjà, et bien mieux.
+- **la gerbe de `scared`** — le « ! » est le signal, les points bleus n'ajoutaient
+  rien.
+- **la goutte de `sad`** — sourcils tombants et bouche en arc inversé suffisent,
+  et ça libère la goutte pour un seul sens.
+
+Et `disgust` passe de la gerbe verte au **nuage vert**, qui est déjà le
+vocabulaire du prout : un lecteur apprend un symbole au lieu de deux.
+
+La goutte, elle, a été **redessinée** : plus grosse, penchée dans le sens de sa
+fuite, opaque, avec un reflet blanc et un **liseré sombre**. Le liseré est ce qui
+compte — les bulles sont des cercles au trait clair, la goutte est un aplat
+cerné ; à taille égale on ne peut plus les confondre.
+
+Le tableau de `emoteVFX` est explicite exprès : c'est le seul endroit où l'on
+voit d'un coup d'œil quelle émotion coûte une marque et laquelle s'en passe.
+
 ## 4. Idées de gags à brancher
 
 Le socle est prêt, il ne manque que la mise en scène :

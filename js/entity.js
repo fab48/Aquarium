@@ -150,6 +150,11 @@ class Entity {
   // c'est le seul endroit où l'on voit le budget d'un coup d'œil.
   static VFX_GROUPE = { scared: 0.1, eating: 0.1, dizzy: 0.1, love: 0.22 };
 
+  // Part de la patience d'orientation qu'une intention FRANCHE peut réclamer.
+  // À 0 on retrouve le comportement d'origine — la patience s'applique en
+  // entier quoi que veuille le poisson, et il nage à reculons en attendant.
+  static PATIENCE_REMISE = 0.85;
+
   // Joue une émotion DANS LA DURÉE : montée rapide, tenue, retombée douce.
   // `emoteK()` renvoie l'intensité 0→1 que le visage utilise pour interpoler,
   // ce qui évite les expressions qui claquent d'une frame à l'autre.
@@ -184,36 +189,60 @@ class Entity {
     return U.clamp(Math.min(inK, outK) * overshoot, 0, 1);
   }
 
-  // Effets qui accompagnent l'émotion (le visage seul ne suffit pas à la lire).
-  // Throttlés : sans ça, un banc entier qui prend peur affiche 20 bulles d'un coup.
+  // UN SIGNE, UN SENS — ou pas de signe du tout.
+  //
+  // Relevé du 5 septembre 2026 sur 4 minutes : la couche d'effets d'émotion
+  // pesait ~580 marques par minute, et **`burst` en faisait 352 à lui seul pour
+  // quatre sens sans rapport** — surpris (157), écœuré (124), apeuré (65),
+  // en train de manger (6) — que rien ne distinguait qu'une couleur. À l'échelle
+  // d'un poisson de 15 px, dans une eau déjà teintée, cinq points colorés ne
+  // veulent rien dire. Même défaut pour `sweat` : 87/min pour trois émotions,
+  // et une petite goutte bleu pâle est indiscernable d'une BULLE, dont
+  // l'aquarium en émet près de trois mille par minute.
+  //
+  // Le projet a déjà sa règle : « le visage raconte, la marque ne fait que
+  // ponctuer ». Donc soit une émotion a un signe qui n'appartient qu'à elle,
+  // soit elle n'en a pas et son visage suffit. Ce qui a été retiré :
+  //
+  //   - `surprise` — l'œil rond, les sourcils au plafond et la bouche en o
+  //     disent tout. La gerbe blanche était le premier poste de la couche.
+  //   - `eating` — la mastication et la queue de la proie qui dépasse de la
+  //     gueule le racontent déjà, et bien mieux.
+  //   - la gerbe de `scared` — le « ! » est le signal ; les points bleus
+  //     n'ajoutaient rien.
+  //   - la goutte de `sad` — sourcils tombants et bouche en arc inversé
+  //     suffisent, et ça libère la goutte pour un seul sens.
+  //
+  // Et `disgust` passe de la gerbe verte au NUAGE vert, qui est déjà le
+  // vocabulaire du prout : un lecteur apprend un symbole au lieu de deux.
+  //
+  // Le tableau est explicite exprès — c'est le seul endroit où l'on voit d'un
+  // coup d'œil quelle émotion coûte une marque, et laquelle s'en passe.
   emoteVFX(expr) {
     if ((this._vfxCd ?? 0) > 0) return;
     // Les réactions de GROUPE ne s'affichent que sur une fraction des individus,
-    // sinon un banc entier montre vingt bulles d'un coup. `dizzy` y est depuis
+    // sinon un banc entier montre vingt marques d'un coup. `dizzy` y est depuis
     // l'Anguille (une décharge assomme cinq poissons à la fois) ; `love` depuis
-    // la mesure du 5 septembre 2026 : la migration de ponte met des dizaines de
-    // créatures en parade au même moment, et `loveBurst` était le deuxième
-    // émetteur du jeu (237 gerbes/min pour cette seule ligne). L'expression,
-    // elle, n'est jamais filtrée — c'est le VISAGE qui raconte, pas la gerbe.
+    // la migration de ponte, qui met des dizaines de créatures en parade au même
+    // moment. L'expression, elle, n'est JAMAIS filtrée — c'est le visage qui
+    // raconte, la marque ne fait que ponctuer.
     const part = Entity.VFX_GROUPE[expr];
     if (part !== undefined && Math.random() > part) return;
-    this._vfxCd = U.rand(2.5, 5);
     const x = this.x, y = this.y - this.size * 1.1, s = this.size;
     switch (expr) {
-      case 'scared': Particles.comic(x, y, '!'); Particles.burst(x, y, '#bfe6ff', 5); break;
-      case 'happy': Particles.sparkles(x, y, 5); break;
-      case 'love': Particles.loveBurst(x, y, 3); break;
-      case 'dizzy': Particles.stars(x, y); Particles.spin(x, y, s); break;
+      case 'scared':   Particles.comic(x, y, '!'); break;              // le cri
+      case 'happy':    Particles.sparkles(x, y, 5); break;             // les étincelles
+      case 'wink':     Particles.sparkles(x, y, 3); break;
+      case 'love':     Particles.loveBurst(x, y, 3); break;            // les cœurs
+      case 'dizzy':    Particles.stars(x, y); Particles.spin(x, y, s); break;
+      case 'angry':    Particles.anger(x + s * 0.4, y); break;         // la veine
       case 'blush':
-      case 'ashamed': Particles.sweat(x + s * 0.5, y); break;
-      case 'angry': Particles.anger(x + s * 0.4, y); break;
-      case 'eating': Particles.burst(x, y, '#ffe6a8', 3); break;
-
-      case 'disgust': Particles.burst(x, y, '#8fbf6a', 5); break;
-      case 'surprise': Particles.burst(x, y, '#ffffff', 6); break;
-      case 'wink': Particles.sparkles(x, y, 3); break;
-      case 'sad': Particles.sweat(x + s * 0.4, y); break;
+      case 'ashamed':  Particles.sweat(x + s * 0.5, y, s); break;      // la goutte de gêne
+      case 'disgust':  Particles.stink(x, y + s * 0.2, s); break;      // le nuage vert
+      // `surprise`, `eating`, `sad` : rien. Leur visage se suffit.
+      default: return;
     }
+    this._vfxCd = U.rand(2.5, 5);
   }
 
   // ---------------------------------------------------------------------------
@@ -1565,6 +1594,18 @@ class Entity {
         }
       }
       if (!poussable) continue;
+      // ÉCART EN X D'ABORD. La grille fait 130 px et on en balaie 3×3, donc
+      // chaque créature examine une vingtaine de voisins — alors que deux
+      // confettis de 11 px se touchent à 21 px. Neuf tests sur dix portaient
+      // donc sur des voisins hors de portée, et chacun payait un appel à
+      // `U.dist2` (deux soustractions, deux multiplications, une addition).
+      // Une soustraction et une comparaison suffisent à les écarter : c'est le
+      // même filtre que fait une boîte englobante avant un test exact.
+      const dx = this.x - o.x;
+      const porteeMax = (this.size + o.size) * 1.5;
+      if (dx > porteeMax || dx < -porteeMax) continue;
+      const dy = this.y - o.y;
+      if (dy > porteeMax || dy < -porteeMax) continue;
       if (o.def.size >= 70 || o.def.filterFeeder) continue;   // on ne pousse pas un colosse
       // Un DORMEUR ne se fait pas pousser : c'est celui qui passe qui contourne.
       // Sans ça, le moindre thon traversant un banc endormi le dispersait, et
@@ -1572,7 +1613,7 @@ class Entity {
       if (this.state === 'sleep' && o.state !== 'sleep') continue;
       const dortLautre = o.state === 'sleep' && this.state !== 'sleep';
       const minD = (this.size + o.size) * (dortLautre ? 1.5 : 0.95);
-      const d2 = U.dist2(this.x, this.y, o.x, o.y);
+      const d2 = dx * dx + dy * dy;
       if (d2 < minD * minD) {
         const d = Math.max(Math.sqrt(d2), 0.5), push = (minD - d) / minD;
         // direction de séparation ; deux entités exactement superposées se
@@ -1909,6 +1950,7 @@ class Entity {
     if (this._flipX === undefined || ecart > 0.25) {
       if (dirX > flipAt) this._facing = 1; else if (dirX < -flipAt) this._facing = -1;
       this._flipX = this._facing;
+      this._vir = 0;                 // posé à plat : aucune déformation de virage
       return this._facing;
     }
     const dt = U.clamp(ecart, 0, 0.05);
@@ -1917,24 +1959,62 @@ class Entity {
     let veut = this._facing;
     if (dirX > flipAt) veut = 1; else if (dirX < -flipAt) veut = -1;
     if (veut !== this._facing && this._flipX === this._facing) {
-      const patience = this._faceAt ? 0 : 0.2 + Math.min(1, this.def.size / 90);
+      // LA PATIENCE PROTÈGE DE L'HÉSITATION, PAS DE LA DÉCISION.
+      // Elle existe pour que la baleine ne pivote pas sur place quand son `vx`
+      // traîne autour de zéro. Mais appliquée telle quelle à une intention
+      // FRANCHE — un requin qui repart chercher une proie derrière lui — elle
+      // le faisait nager à reculons pendant une seconde entière : mesuré,
+      // 21 % du temps pour un gros poisson, jusqu'à 3,8 fois sa vitesse.
+      //
+      // Elle cède donc d'autant plus vite que la volonté est nette. Le cas
+      // « hésitation » (dirX à peine au-dessus du seuil) garde toute sa
+      // patience ; le cas « il fonce dans l'autre sens » ne garde presque rien.
+      // LES COLOSSES EN SONT EXCLUS, et c'est mesuré : la patience a été écrite
+      // pour eux (une baleine coincée de profil, qui pivote sur place en
+      // continu), et la leur remettre doublait leurs demi-tours — 1,6 à
+      // 3,2 par minute pour la Baleine Gros Dodo — pour un gain quasi nul sur
+      // la marche arrière (3,3 % → 2,8 %). Sous le seuil, en revanche, le gain
+      // est franc : un poisson moyen passe de 2,7 % à 1,3 %, un petit de 2,2 %
+      // à 0,7 %. La marge décroît quand même avec le gabarit à l'intérieur de
+      // la plage, pour qu'il n'y ait pas de marche à 70.
+      const franchise = U.clamp(Math.abs(dirX) / (flipAt * 4), 0, 1);
+      const marge = this.def.size >= 70 ? 0
+                  : Entity.PATIENCE_REMISE * U.clamp(1 - this.def.size / 90, 0.25, 1);
+      const patience = this._faceAt ? 0
+                     : (0.2 + Math.min(1, this.def.size / 90)) * (1 - franchise * marge);
       this._flipHold = (this._flipHold ?? 0) + dt;
       if (this._flipHold >= patience) { this._facing = veut; this._flipHold = 0; }
     } else if (veut === this._facing) this._flipHold = 0;
 
     // --- 2. Le demi-tour lui-même. Un colosse ne pivote pas comme un alevin :
-    // la durée suit le gabarit (~0,22 s pour un confetti, ~0,75 s pour une baleine).
-    const duree = 0.22 + Math.min(0.55, this.def.size / 260);
+    // la durée suit le gabarit (~0,26 s pour un confetti, ~0,9 s pour une baleine).
+    const duree = 0.26 + Math.min(0.65, this.def.size / 220);
     const pas = dt * 2 / duree;
+    const avant = this._flipX;
     if (this._flipX < this._facing) this._flipX = Math.min(this._facing, this._flipX + pas);
     else if (this._flipX > this._facing) this._flipX = Math.max(this._facing, this._flipX - pas);
+    if (this._flipX !== avant) this._virSens = Math.sign(this._flipX - avant);
 
-    // Adouci aux extrémités (sinus) : le demi-tour démarre et s'achève en
-    // douceur au lieu de s'arrêter net une fois le poisson à plat.
-    const k = Math.sin(this._flipX * Math.PI / 2);
-    // Jamais exactement 0 : une matrice d'échelle nulle est dégénérée, et le
-    // poisson disparaîtrait complètement pendant une frame ou deux.
-    return Math.abs(k) < 0.05 ? (this._flipX < 0 ? -0.05 : 0.05) : k;
+    // UNE FEUILLE QUI S'ENROULE, PAS UNE PAGE QU'ON TOURNE.
+    //
+    // L'ancienne version écrasait la silhouette jusqu'à 5 % de sa largeur : le
+    // poisson devenait un trait, disparaissait une frame ou deux, et
+    // réapparaissait miroité. C'est ça qu'on lisait comme un « flip brutal » —
+    // pas la vitesse du demi-tour, mais le passage par le néant.
+    //
+    // Une feuille qui s'enroule ne disparaît jamais : elle se met de trois
+    // quarts, et c'est la COURBURE qui raconte la rotation. On ne descend donc
+    // plus sous `LARGEUR_MIN` (un tiers), et le reste du virage est porté par
+    // l'arc et le roulis, posés dans `draw` à partir de `_vir`.
+    //
+    // `_vir` monte à 1 au milieu du virage et redescend — mais en `smoothstep`
+    // du sinus, pour que la déformation s'installe et se retire en douceur au
+    // lieu de suivre linéairement le pivotement.
+    const u = Math.sin(this._flipX * Math.PI / 2);       // -1 → 1, adouci aux bouts
+    const brut = 1 - Math.abs(u);
+    this._vir = brut * brut * (3 - 2 * brut);
+    const LARGEUR_MIN = 0.34;
+    return (u < 0 ? -1 : 1) * U.lerp(LARGEUR_MIN, 1, Math.abs(u));
   }
 
   draw(ctx, t) {
@@ -2030,10 +2110,22 @@ class Entity {
     // pas le bas du poisson par rapport au haut. Son signe s'inverse tout seul
     // avec le miroir, au moment précis où la silhouette est sur la tranche —
     // c'est ce qui fait lire un coup de queue continu et non un à-coup.
-    const vir = 1 - Math.abs(flipX);      // 0 en ligne droite, 1 au plus fort du virage
+    const vir = this._vir ?? 0;           // 0 en ligne droite, 1 au plus fort du virage
     if (vir > 0.01) {
-      ctx.transform(1, vir * 0.5, 0, 1, 0, 0);
-      ctx.scale(1, 1 + vir * 0.3);
+      // L'ARC : la queue traîne derrière la tête et le corps se creuse en C,
+      // comme une feuille qui s'enroule. C'est un cisaillement en y le long de
+      // l'axe du corps — posé APRÈS la rotation, donc dans le repère du CORPS,
+      // sinon c'est le bas du poisson qui glisse par rapport au haut. Son signe
+      // s'inverse tout seul avec le miroir, au moment précis où la silhouette
+      // est de trois quarts : c'est ce qui fait lire un coup de queue continu.
+      ctx.transform(1, vir * 0.62, 0, 1, 0, 0);
+      // Le VOLUME : ce que le corps perd en largeur, il le reprend en hauteur.
+      // Sans ça il maigrit au lieu de tourner.
+      ctx.scale(1, 1 + vir * 0.34);
+      // Le ROULIS : il s'incline dans son virage, comme tout ce qui tourne
+      // vite. Léger — c'est la touche qui empêche la déformation de paraître
+      // plate — et dans le sens du virage, d'où `_virSens`.
+      ctx.rotate(vir * 0.22 * (this._virSens ?? 1));
     }
     // Le dauphin se tord de rire : il roule sur lui-même
     if (this._farceRoll) ctx.rotate(Math.sin(this._farceRoll) * 0.5);

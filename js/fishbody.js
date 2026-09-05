@@ -12,10 +12,45 @@ const FishBody = {
   // l'expression se JOUE dans la durée au lieu de claquer d'un coup.
   //
   // Raccourci depuis une silhouette : FishBody.face(ctx, taille, entité, t)
+  // NIVEAU DE DÉTAIL. `drawFace` trace une vingtaine de chemins — œil, blanc,
+  // pupille, reflet, paupière, sourcil, bouche, lèvres, dents, langue, joues.
+  // C'est ce qui fait tout le charme de l'aquarium… tant qu'on le voit. Sur un
+  // Confetti de 14 px vu à un zoom de 0,8, l'œil entier fait 2,5 px de rayon et
+  // le sourcil est sous-pixel : on paye vingt chemins pour trois pixels.
+  //
+  // Sous le seuil, on ne garde donc que ce qui reste LISIBLE à cette taille :
+  // l'œil, et le fait qu'il soit ouvert ou fermé. C'est invisible par
+  // construction — on ne supprime que ce qui ne se voyait déjà pas — et ça
+  // dépend du zoom, donc s'approcher rend le détail immédiatement.
+  //
+  // Le seuil porte sur l'œil, pas sur le corps : c'est lui la plus petite
+  // pièce qui compte.
   face(ctx, size, e, t) {
     const v = this.visageDe(e);
+    if (size * Camera.zoom < 10) { this.faceMinimale(ctx, size, e, t, v.pal); return; }
     this.drawFace(ctx, size, e.expression, t + (e.phase || 0),
                   e.emoteK ? e.emoteK() : 1, e._eyeLook, false, v.pal, v.style);
+  },
+
+  faceMinimale(ctx, size, e, t, pal) {
+    const V = pal || this.VISAGE;
+    const em = this.EMOTIONS[e.expression] || this.EMOTIONS.idle;
+    const x = size * 0.55, y = -size * 0.18, r = Math.max(1.6, size * 0.22);
+    // Yeux clos : un trait. C'est la seule information du visage qui survive à
+    // cette taille, et c'est celle qui compte — un aquarium endormi doit se
+    // lire de loin.
+    if (em.lid > 0.85) {
+      ctx.strokeStyle = V.encre;
+      ctx.lineWidth = Math.max(1, size * 0.07);
+      ctx.beginPath();
+      ctx.moveTo(x - r * 0.9, y); ctx.lineTo(x + r * 0.9, y);
+      ctx.stroke();
+      return;
+    }
+    ctx.fillStyle = V.blanc;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = V.pupille;
+    ctx.beginPath(); ctx.arc(x + r * 0.18, y, r * 0.55, 0, Math.PI * 2); ctx.fill();
   },
 
   // Table des émotions. tout est relatif à la taille du visage.

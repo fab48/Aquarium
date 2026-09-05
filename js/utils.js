@@ -2,9 +2,31 @@
 const U = {
   clamp: (v, a, b) => Math.max(a, Math.min(b, v)),
   lerp: (a, b, t) => a + (b - a) * t,
-  rand: (a, b) => a + Math.random() * (b - a),
+  // --- Tirage, avec un mode SEMÉ pour la génération du monde -----------------
+  // Le décor (260 rochers, herbiers, cheminées, étoiles du ciel) est tiré au
+  // hasard à chaque chargement. Sans graine, l'aquarium n'a pas la même tête
+  // d'une session à l'autre — et surtout `Background.habitatSpots` change, donc
+  // une étoile de mer restaurée sur son ancien rocher se retrouverait sur du
+  // sable nu. La graine est ce qui permet à la sauvegarde de ne contenir QUE
+  // des positions et de tenir en quelques kilo-octets.
+  //
+  // Le mode semé ne vaut que pour `Background.init` : la simulation doit garder
+  // du vrai hasard, sinon toutes les parties se déroulent à l'identique.
+  _s: null,
+  semer(graine) { U._s = (graine >>> 0) || 1; },
+  oublier() { U._s = null; },
+  alea() {
+    if (U._s === null) return Math.random();
+    let x = U._s;                       // xorshift32 : largement assez pour du décor
+    x ^= x << 13; x >>>= 0;
+    x ^= x >>> 17;
+    x ^= x << 5;  x >>>= 0;
+    U._s = x;
+    return x / 4294967296;
+  },
+  rand: (a, b) => a + U.alea() * (b - a),
   randInt: (a, b) => Math.floor(U.rand(a, b + 1)),
-  pick: arr => arr[Math.floor(Math.random() * arr.length)],
+  pick: arr => arr[Math.floor(U.alea() * arr.length)],
   dist2: (ax, ay, bx, by) => { const dx = bx - ax, dy = by - ay; return dx * dx + dy * dy; },
   angleLerp(a, b, t) {
     let d = b - a;

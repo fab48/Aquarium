@@ -22,14 +22,25 @@ const Background = {
   // Largeur de la bande de ciel qui se reboucle (étoiles, nuages)
   CIEL_LARGEUR: 3200,
 
-  init() {
+  // `graine` rend le décor REPRODUCTIBLE : c'est la seule chose que la
+  // sauvegarde a besoin de retenir du monde. Tous les tirages de cette méthode
+  // passent donc par `U.alea()` (semé), jamais par `Math.random()` — sinon
+  // l'aquarium ne se rouvre pas tel qu'on l'a laissé, et les espèces à habitat
+  // (étoile sur un rocher, hippocampe dans un herbier) se réveillent sur du
+  // sable nu. Le hasard normal reprend dès la sortie.
+  init(graine) {
+    U.semer(graine);
+    try { this._construire(); } finally { U.oublier(); }
+  },
+
+  _construire() {
     // Rochers ANGULEUX : un polygone irrégulier par rocher (rayon bruité autour
     // du centre), bien plus minéral que des galets arrondis.
     for (let i = 0; i < 260; i++) {
       const x = U.rand(World.shoreX, CONFIG.WORLD_WIDTH);
       // Éventail large : des cailloux jusqu'à de vrais blocs qui structurent le
       // fond. Un rocher sur cinq est un gros massif.
-      const gros = Math.random() < 0.2;
+      const gros = U.alea() < 0.2;
       const w = gros ? U.rand(190, 420) : U.rand(30, 160);
       const h = gros ? U.rand(90, 210) : U.rand(20, 75);
       const n = U.randInt(5, 8);
@@ -53,15 +64,15 @@ const Background = {
       const deep = World.depthAt(x) > 1700;
       // Les abysses restent nus : quelques bouquets de vers tubicoles autour des
       // sources chaudes, pas une prairie.
-      if (deep && Math.random() > 0.4) continue;
-      const kelp = !deep && Math.random() < 0.3;
+      if (deep && U.alea() > 0.4) continue;
+      const kelp = !deep && U.alea() < 0.3;
       this.flora.push({
         x,
         kind: deep ? 'tube' : (kelp ? 'kelp' : 'weed'),
         h: deep ? U.rand(20, 42) : (kelp ? U.rand(90, 200) : U.rand(26, 65)),
         blades: deep ? U.randInt(2, 4) : U.randInt(3, 6),
         hue: U.rand(-18, 18),
-        ph: Math.random() * 10,
+        ph: U.alea() * 10,
         layer: U.pick([0.94, 1]),
       });
     }
@@ -70,21 +81,21 @@ const Background = {
     // 8000 px pour n'en voir qu'un écran).
     for (let i = 0; i < 220; i++) {
       this.etoiles.push({
-        u: Math.random() * this.CIEL_LARGEUR,
+        u: U.alea() * this.CIEL_LARGEUR,
         h: U.rand(40, 1000),                 // hauteur au-dessus de la ligne d'eau
         r: U.rand(0.7, 2.1),
-        ph: Math.random() * 10,
-        vive: Math.random() < 0.12,          // quelques-unes franchement brillantes
+        ph: U.alea() * 10,
+        vive: U.alea() < 0.12,          // quelques-unes franchement brillantes
       });
     }
     for (let i = 0; i < 11; i++) {
       this.nuages.push({
-        u: Math.random() * this.CIEL_LARGEUR,
+        u: U.alea() * this.CIEL_LARGEUR,
         h: U.rand(330, 820),                 // ils occupent le HAUT du ciel
         w: U.rand(90, 230),
         bulles: U.randInt(3, 5),
         v: U.rand(2, 8),                     // dérive propre, px/s
-        ph: Math.random() * 10,
+        ph: U.alea() * 10,
         opacite: U.rand(0.3, 0.7),
       });
     }
@@ -92,7 +103,7 @@ const Background = {
     for (let i = 0; i < 160; i++) {
       this.plankton.push({
         x: U.rand(0, CONFIG.WORLD_WIDTH), y: U.rand(CONFIG.SURFACE_Y, CONFIG.SURFACE_Y + CONFIG.DEPTH_MAX),
-        r: U.rand(0.8, 2.2), ph: Math.random() * 10,
+        r: U.rand(0.8, 2.2), ph: U.alea() * 10,
       });
     }
   },

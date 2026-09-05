@@ -125,7 +125,10 @@ const Save = {
     Main.time = Number.isFinite(d.t) ? d.t : 0;
     if (Array.isArray(d.cam)) {
       Camera.x = Camera.tx = d.cam[0]; Camera.y = Camera.ty = d.cam[1];
-      if (d.cam[2] > 0) Camera.zoom = d.cam[2];
+      // `setZoom`, JAMAIS `Camera.zoom = …` : la taille de vue en dépend, et une
+      // affectation directe laissait tout l'écran peint aux mauvaises
+      // dimensions jusqu'au premier coup de molette.
+      if (d.cam[2] > 0) Camera.setZoom(d.cam[2]);
     }
     console.info(`Aquarium restauré : ${posees} créatures${ignorees ? `, ${ignorees} ignorées` : ''}.`);
     return true;

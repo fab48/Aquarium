@@ -4,10 +4,21 @@
 // Les trois houles de la surface, du LOIN vers le PRÈS. `dy` les décale
 // verticalement (la plus lointaine est un peu plus haute), `A`/`L` donnent
 // l'amplitude et la longueur d'onde, `v` la vitesse, `a` l'opacité.
+// `p` = parallaxe : la fraction du déplacement de la caméra que la houle suit.
+// Les trois houles défilaient TOUTES exactement avec la caméra, donc à la même
+// vitesse : trois lignes rigoureusement solidaires, ce qui annulait le relief
+// qu'on avait cherché à donner en variant leur hauteur et leur pâleur. Une
+// houle lointaine doit glisser MOINS vite qu'une houle proche — c'est le seul
+// indice de distance qui fonctionne sur une surface plate.
+//
+// Les écarts restent petits (14 % au plus) : plus francs, le décalage se lit
+// comme un défaut d'alignement plutôt que comme de la profondeur. Et la houle
+// du DEVANT garde `p: 1` — c'est sur elle qu'est calée l'écume du rivage, qui
+// a sa propre formule ; la décaler ferait flotter l'écume à côté des vagues.
 const HOULES = [
-  { dy: -5, A1: 5.5, L1: 95, v1: 0.9, A2: 2.2, L2: 38, v2: 1.5, ph: 1.7, a: 0.22, w: 2 },
-  { dy: -2, A1: 4.5, L1: 60, v1: 1.4, A2: 2.0, L2: 27, v2: 2.1, ph: 0.6, a: 0.34, w: 2.2 },
-  { dy: 0,  A1: 4.0, L1: 60, v1: 1.8, A2: 2.0, L2: 23, v2: 2.6, ph: 0,   a: 0.5,  w: 2.5 },
+  { dy: -5, A1: 5.5, L1: 95, v1: 0.9, A2: 2.2, L2: 38, v2: 1.5, ph: 1.7, a: 0.22, w: 2,   p: 0.86 },
+  { dy: -2, A1: 4.5, L1: 60, v1: 1.4, A2: 2.0, L2: 27, v2: 2.1, ph: 0.6, a: 0.34, w: 2.2, p: 0.94 },
+  { dy: 0,  A1: 4.0, L1: 60, v1: 1.8, A2: 2.0, L2: 23, v2: 2.6, ph: 0,   a: 0.5,  w: 2.5, p: 1 },
 ];
 
 const Background = {
@@ -448,7 +459,7 @@ const Background = {
         ctx.lineWidth = h.w;
         ctx.beginPath();
         for (let sx = 0; sx <= W; sx += 8) {
-          const wx = sx + Camera.x;
+          const wx = sx + Camera.x * h.p;
           const y = surfSy + h.dy
                   + Math.sin(wx / h.L1 + t * h.v1 + h.ph) * h.A1
                   + Math.sin(wx / h.L2 - t * h.v2) * h.A2;

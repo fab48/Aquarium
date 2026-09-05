@@ -137,10 +137,26 @@ const Main = {
     if (this._perfAcc < 3000) return;       // on juge sur ~3 s, pas sur une frame
     const avg = this._perfAcc / this._perfN;
     this._perfAcc = 0; this._perfN = 0;
-    if (avg > 40 && this.dpr > 1) {
+    if (avg <= 40) return;
+    // 1. La résolution d'abord : c'est le levier le moins visible. À dpr 1 au
+    //    lieu de 2, c'est quatre fois moins de pixels et l'image reste cadrée
+    //    pareil.
+    if (this.dpr > 1) {
       this.dprCap = Math.max(1, (this.dprCap ?? this.dpr) - 0.25);
       this.resize();
       console.info(`[perf] frame moyenne ${avg.toFixed(0)} ms : résolution abaissée (dpr ${this.dpr})`);
+      return;
+    }
+    // 2. Puis le champ de vision. Une fois la résolution au plancher, ce qui
+    //    reste cher est la SURFACE DE MONDE affichée : à 0,35 la vue couvre
+    //    trois fois plus qu'à 1, donc trois fois plus de créatures à dessiner.
+    //    On remonte le plancher de dézoom par paliers, et on rapproche la vue
+    //    si elle était déjà au-delà. Jamais l'inverse : redescendre tout seul
+    //    ferait pomper le cadrage, ce qui se voit bien plus qu'une frame lente.
+    if (Camera.zoomMinPerf < 0.75) {
+      Camera.zoomMinPerf = Math.min(0.75, Camera.zoomMinPerf + 0.1);
+      if (Camera.zoom < Camera.zoomMin()) Camera.setZoom(Camera.zoomMin());
+      console.info(`[perf] frame moyenne ${avg.toFixed(0)} ms : dézoom limité à ${Camera.zoomMin().toFixed(2)}`);
     }
   },
 

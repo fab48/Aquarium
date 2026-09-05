@@ -611,12 +611,67 @@ const FishBody = {
       const R = Math.max(1, (Math.abs(co) * L + Math.abs(si) * H) / 2);
       g = ctx.createLinearGradient(cx - co * R, cy - si * R, cx + co * R, cy + si * R);
     }
-    const pos = U.clamp(d.pos == null ? 1 : d.pos, 0.03, 1);
-    g.addColorStop(0, de);
-    g.addColorStop(pos, vers);
-    if (pos < 1) g.addColorStop(1, vers);
+    // LA TRANSITION A UN DÉBUT ET UNE FIN, pas seulement une longueur. Avec un
+    // seul réglage, un fondu court était forcément collé au bord : impossible de
+    // poser une ligne de flottaison nette au milieu d'un corps. `debut` et `fin`
+    // confondus donnent une frontière franche, écartés un fondu large — et on
+    // choisit OÙ.
+    // `pos` reste lu : c'est la forme d'avant (fin de transition, début à 0).
+    const fin = U.clamp(d.fin != null ? d.fin : (d.pos != null ? d.pos : 1), 0.02, 1);
+    const debut = U.clamp(d.debut != null ? d.debut : 0, 0, fin - 0.005);
+    if (debut > 0.01) g.addColorStop(0, de);
+    g.addColorStop(debut, de);
+    g.addColorStop(fin, vers);
+    if (fin < 0.99) g.addColorStop(1, vers);
     cache.set(cle, g);
     return g;
+  },
+
+  // Une couleur avec son alpha, quelle que soit son écriture. Les palettes
+  // mélangent `#rrggbb` (le dessin) et `rgb(…)` (une teinte tirée au sort).
+  avecAlpha(c, a) {
+    if (typeof c === 'string' && c[0] === '#' && c.length === 7) {
+      const [r, g, b] = U.hexRGB(c);
+      return `rgba(${r},${g},${b},${a})`;
+    }
+    const m = /^rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(c || '');
+    return m ? `rgba(${m[1]},${m[2]},${m[3]},${a})` : `rgba(255,255,255,${a})`;
+  },
+
+  // --- REFLET ------------------------------------------------------------------
+  // La bande de lumière qui court sur le dos d'un poisson. Elle se dessinait à la
+  // main, forme par forme, dans le calque — donc figée : elle ne suivait pas
+  // l'ondulation du corps, et il fallait la redessiner à chaque retouche du
+  // contour.
+  //
+  // Deux choses la font lire comme une LUMIÈRE et pas comme une rayure peinte :
+  //  1. elle est DÉCOUPÉE dans le contour déformé (`ctx.clip()` sur le tracé
+  //     courant), donc elle ondule avec la nage et ne déborde jamais ;
+  //  2. elle s'éteint à ses pointes. Un aplat aux bouts francs se lit comme un
+  //     trait de peinture ; le dégradé le long de l'axe en fait un éclat.
+  reflet(ctx, forme, sp, i) {
+    const r = forme.reflet;
+    const bo = (sp.boites && sp.boites[i]) || this.boiteForme(forme);
+    const L = Math.max(1, bo.x1 - bo.x0), H = Math.max(1, bo.y1 - bo.y0);
+    const cx = bo.x0 + L * (r.x == null ? 0.45 : r.x);
+    const cy = bo.y0 + H * (r.y == null ? 0.24 : r.y);
+    const rx = Math.max(0.5, L * (r.largeur == null ? 0.5 : r.largeur) / 2);
+    const ry = Math.max(0.5, H * (r.epaisseur == null ? 0.09 : r.epaisseur) / 2);
+    const force = U.clamp(r.force == null ? 0.55 : r.force, 0, 1);
+    const c = r.couleur || '#ffffff';
+    ctx.save();
+    ctx.clip();                       // le contour DÉFORMÉ, pas la boîte
+    ctx.translate(cx, cy);
+    ctx.rotate((r.angle || 0) * Math.PI / 180);
+    const g = ctx.createLinearGradient(-rx, 0, rx, 0);
+    g.addColorStop(0, this.avecAlpha(c, 0));
+    g.addColorStop(0.22, this.avecAlpha(c, force * 0.8));
+    g.addColorStop(0.5, this.avecAlpha(c, force));
+    g.addColorStop(0.78, this.avecAlpha(c, force * 0.8));
+    g.addColorStop(1, this.avecAlpha(c, 0));
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
   },
 
   boiteForme(forme) {
@@ -662,7 +717,12 @@ const FishBody = {
     //     l'allure saturait en permanence.
     const allure = this.allure(e);
     const gabarit = U.clamp(Math.pow(30 / Math.max(8, e.def.size), 0.45), 0.35, 1.15);
-    const f = U.clamp((1.9 + allure * 3.2) * gabarit, 0.8, 8.5);
+    // RÉGLAGE D'AUTEUR (`vitesse`), posé APRÈS le plafond : appliqué avant, il
+    // n'aurait aucun effet sur les petits poissons — ce sont précisément ceux
+    // qui saturent déjà les 8,5 rad/s, donc ceux qu'on veut ralentir. Le
+    // plafond reste ce qu'il est : une mesure du comportement par DÉFAUT, pas
+    // une interdiction faite au dessinateur.
+    const f = U.clamp((1.9 + allure * 3.2) * gabarit, 0.8, 8.5) * (sp.vitesse || 1);
     // L'amplitude suit l'effort, pas seulement la fréquence : un requin lancé
     // doit visiblement FORCER. Mesuré à l'amplitude nue de l'éditeur (`amp`), le
     // bout de la queue ne parcourait que 5,5 px sur une silhouette de 48.
@@ -675,9 +735,37 @@ const FishBody = {
     // Tout ce dont la déformation a besoin, en un objet : chaque appendice a
     // son propre déphasage et sa propre vitesse, le calcul se fait donc au point
     // et non plus une fois pour tout le dessin.
-    const anim = { t, f, phase: e.phase || 0, vigueur };
+    // La queue a sa PROPRE vitesse : une murène ondule lentement d'un corps
+    // entier pendant que ses nageoires frémissent, et un seul curseur ne sait
+    // pas raconter ça.
+    // `ph` est la phase INTÉGRÉE (cf. `phaseNage`) : les rapports de fréquence
+    // qui suivent sont des constantes, elles peuvent donc la multiplier sans
+    // rejouer le bug du `t * f`.
+    // POSE DE REPOS. Le dessin rendu doit alors coïncider EXACTEMENT avec ses
+    // points : c'est ce dont un éditeur a besoin dès qu'il met l'animation en
+    // pause, sinon on retouche un contour à un endroit et il s'affiche à un
+    // autre, décalé de la déformation figée en cours. Le jeu ne s'en sert pas ;
+    // seul l'atelier pose `_repos`.
+    //
+    // Il ne suffit pas de remettre la phase à zéro : une queue à ondes
+    // (`tailOndes`) et un tentacule gardent un `- u · ondes` dans leur sinus, et
+    // restent donc courbés à phase nulle. La déformation est court-circuitée.
+    const repos = !!e._repos;
+    const ph = repos ? 0 : this.phaseNage(e, f, t);
+    // SENS DE L'ONDULATION. Une baleine et un requin ne battent pas dans le même
+    // plan, et vus de côté ça ne se ressemble pas : le cétacé a une nageoire
+    // caudale HORIZONTALE qu'il bat de haut en bas — c'est un vrai mouvement
+    // vertical à l'écran ; le poisson a une caudale VERTICALE qu'il balaie de
+    // gauche à droite, donc vers le spectateur et loin de lui, ce qui se lit
+    // comme un balancement horizontal. Le déplacement suit donc un AXE, réglé
+    // en degrés, et 90° (vertical) reste le défaut : c'est le comportement
+    // d'avant, et la convention du dessin animé, qui va à tout le monde.
+    const axe = (sp.tailAxe == null ? 90 : sp.tailAxe) * Math.PI / 180;
+    const anim = { ph, rQueue: sp.vitesseQueue || 1, phase: e.phase || 0,
+                   vigueur, repos,
+                   qx: Math.cos(axe), qy: Math.sin(axe) };
     // Battement de nageoire : plus lent que celui de la queue, et déphasé.
-    const battement = Math.sin(t * f * 0.7 + e.phase + 1);
+    const battement = repos ? 0 : Math.sin(ph * 0.7 + e.phase + 1);
     sp.shapes.forEach((forme, i) => {
       // Calque éteint dans l'atelier : rien à peindre. Il reste dans la liste,
       // donc les indices que visent les appendices et la queue ne bougent pas —
@@ -729,6 +817,11 @@ const FishBody = {
         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
         ctx.stroke();
       }
+      // EN DERNIER, et ce n'est pas un détail : le reflet a besoin d'un
+      // `beginPath()` pour son ellipse, ce qui détruirait le tracé de la forme —
+      // dont le contour a encore besoin. Le découpage, lui, appartient à l'état
+      // sauvegardé : il survit au save/restore, le tracé non.
+      if (forme.reflet) this.reflet(ctx, forme, sp, i);
       ctx.globalAlpha = ga;
       ctx.restore();
     });
@@ -812,12 +905,15 @@ const FishBody = {
     for (let i = 0; i < n; i++) {
       const p = pts[i];
       let x = p[0], y = p[1];
+      // Au repos, le point est rendu tel qu'il est saisi — rien d'autre.
+      if (anim.repos) { P[i] = [x, y]; continue; }
       if (queue) {
         // u² : le battement part du pédoncule caudal, pas du milieu du corps,
         // sinon le poisson entier se tortille comme une chenille.
         const u = U.clamp((sp.tailBlend - x) / etendue, 0, 1);
-        y += u * u * amp * anim.vigueur
-             * Math.sin(anim.t * anim.f + anim.phase - u * ondes);
+        const d = u * u * amp * anim.vigueur
+                  * Math.sin(anim.ph * anim.rQueue + anim.phase - u * ondes);
+        x += anim.qx * d; y += anim.qy * d;
       }
       if (apps) {
         for (const f of apps) {
@@ -826,7 +922,7 @@ const FishBody = {
           // se lit comme un tressaillement, pas comme une marche.
           const vit = f.vitesse || 1;
           const dph = (f.phase || 0) * Math.PI / 180;
-          const bat = Math.sin(anim.t * anim.f * 0.7 * vit + anim.phase + 1 + dph);
+          const bat = Math.sin(anim.ph * 0.7 * vit + anim.phase + 1 + dph);
           const A = f.amp != null ? f.amp : amp;
           // SYMÉTRIE. Un crabe, une raie, un poulpe ont des appendices des DEUX
           // côtés : un seul ancrage n'animait qu'une moitié. `miroir` en pose un
@@ -852,15 +948,32 @@ const FishBody = {
               // `amp` en POURCENTAGE de la longueur : le même réglage donne le
               // même geste sur une patte de crabe et sur un bras de calamar.
               const d = (A / 100) * L * u * u * sens
-                * Math.sin(anim.t * anim.f * 0.7 * vit + anim.phase + dph
+                * Math.sin(anim.ph * 0.7 * vit + anim.phase + dph
                            - u * (f.ondes != null ? f.ondes : 1) * Math.PI * 2);
               x += -ay * d; y += ax * d;
             } else {
               const r = f.r || 1;
               const poids = lissage(1 - Math.hypot(x - fx, y - f.y) / r);
               if (poids <= 0) continue;
-              // `amp` est lu en degrés — c'est l'unité du curseur de l'outil.
-              const a = sens * bat * poids * A * Math.PI / 360;
+              // `amp` est lu en DEGRÉS — c'est l'unité du curseur de l'outil, et
+              // c'est bien `/180` qu'il faut : le `/360` d'avant divisait en
+              // silence l'amplitude par deux, si bien qu'« amplitude 20° »
+              // valait 10.
+              //
+              // Le battement suit aussi l'EFFORT, comme celui de la queue :
+              // une nageoire doit visiblement forcer quand l'animal sprinte, et
+              // c'est la correction qui avait déjà sauvé la queue (« à
+              // l'amplitude nue, le bout ne parcourait que 5,5 px »).
+              //
+              // Reste une limite de forme, pas de code : la pondération vaut 1
+              // SUR l'ancre — où le bras de levier est nul — et 0 au bord du
+              // rayon. Le déplacement maximal se joue donc vers 0,25·r, et il
+              // plafonne à ~0,15·r·amp(rad). Un appendice de rayon 31 réglé à
+              // 20° ne bougeait que de 1,4 px sur un dessin large de 150, soit
+              // 0,26 px à l'échelle du jeu : l'animation était présente au
+              // calcul et invisible à l'écran. L'atelier affiche désormais ce
+              // déplacement en clair, plutôt que de laisser régler à l'aveugle.
+              const a = sens * bat * poids * anim.vigueur * A * Math.PI / 180;
               const cos = Math.cos(a), sin = Math.sin(a);
               const dx = x - fx, dy = y - f.y;
               x = fx + dx * cos - dy * sin;
@@ -908,7 +1021,7 @@ const FishBody = {
   // Facteur commun à drawFish / drawClown pour éviter la duplication.
   drawFishBody(ctx, e, t) {
     const s = e.size, def = e.def;
-    const wag = Math.sin(t * (3 + this.battement(e, 0.8, 1.6)) + e.phase) * 0.35;
+    const wag = Math.sin(this.phaseNage(e, 3 + this.battement(e, 0.8, 1.6), t) + e.phase) * 0.35;
 
     // Queue
     ctx.fillStyle = e.colorDark;
@@ -1212,13 +1325,16 @@ const FishBody = {
     // Charge : les liserés s'allument à mesure que la décharge approche
     const cd = e._shockCd ?? 99;
     const charge = U.clamp(1 - cd / 1.6, 0, 1);
-    const nage = this.battement(e, 1.1, 2.2) / 2.6;   // bridé comme les sprites
+    // Phase INTÉGRÉE : `sin(t * f)` déplaçait l'onde de plusieurs tours dès que
+    // la vitesse frémissait (cf. `phaseNage`). C'était ça, le tortillement
+    // frénétique — pas la fréquence, qui était déjà bonne.
+    const ph = this.phaseNage(e, this.battement(e, 1.1, 2.2) * 1.23, t);
 
     const pts = [];
     for (let i = 0; i <= SEG; i++) {
       const u = i / SEG;                       // 0 = tête, 1 = bout de queue
       // Onde progressive : chaque segment est en retard sur le précédent.
-      const onde = Math.sin(t * 3.2 * nage - u * 5.4 + e.phase);
+      const onde = Math.sin(ph - u * 5.4 + e.phase);
       pts.push({ x: s * 0.9 - u * L, y: onde * s * 0.5 * (0.25 + u * 0.9) });
     }
     // Corps : un ruban dont l'épaisseur décroît vers la queue
@@ -1327,6 +1443,24 @@ const FishBody = {
   battement(e, base = 1.9, gain = 3.2) {
     const gabarit = U.clamp(Math.pow(30 / Math.max(8, e.def.size), 0.45), 0.35, 1.15);
     return U.clamp((base + this.allure(e) * gain) * gabarit, 0.6, 8.5);
+  },
+
+  // PHASE DE NAGE — il faut INTÉGRER la fréquence, jamais écrire `sin(t * f)`.
+  //
+  // `f` dépend de la vitesse, donc elle change à chaque frame ; or dans `t * f`
+  // une variation Δf déplace la phase de t·Δf. Après trois minutes de jeu
+  // (t = 180), un frémissement de 0,3 rad/s décale l'animation de 54 radians —
+  // huit tours et demi — ENTRE DEUX FRAMES. Ça ne se lit pas comme une
+  // fréquence, ça se lit comme un frétillement à toute vitesse : c'est
+  // exactement ce qui restait sur l'Anguille alors que sa fréquence, elle,
+  // avait bien été ramenée à 2 rad/s.
+  //
+  // Corollaire : plus la partie dure, plus l'artefact est violent. Invisible en
+  // test court, flagrant après dix minutes de jeu.
+  phaseNage(e, f, t) {
+    const dt = U.clamp(t - (e._nageT ?? t), 0, 0.1);
+    e._nageT = t;
+    return (e._nagePh = (e._nagePh ?? (e.phase || 0)) + f * dt);
   },
 
   drawEel(ctx, e, t) {

@@ -35,11 +35,37 @@ première mise en eau.
 python dev_server.py 8642      # puis http://localhost:8642/atelier.html
 ```
 
-**Le serveur sert le jeu à la RACINE** : ouvrir `http://localhost:8642` donne
-l'aquarium, pas l'atelier — tout aperçu automatique tombe donc sur le jeu. Deux
-liens évitent d'avoir à retaper l'URL : un bouton **🎨** en haut à droite de
-l'aquarium (affiché **uniquement en local** — c'est un outil de développement,
-pas une commande de jeu) et un **« 🐠 le jeu »** dans la barre de l'atelier.
+**Le serveur sert le jeu à la RACINE.** `http://localhost:8642` donne donc
+l'aquarium, pas l'atelier. Ce n'est pas qu'une commodité : **un aperçu ne sait
+ouvrir qu'une ORIGINE, jamais un chemin** — un lien vers `/atelier.html` cliqué
+depuis un panneau d'aperçu rouvre l'aquarium, en silence, ce qui se lit comme un
+lien cassé. La seule façon de lui faire afficher l'atelier est de mettre
+l'atelier à la racine de SON serveur :
+
+```bash
+python dev_server.py 8661 --accueil atelier.html
+```
+
+C'est ce que fait la configuration `aquarium-atelier` de `.claude/launch.json`.
+Les deux pages restent servies par leur chemin (`/index.html`, `/atelier.html`)
+quel que soit l'accueil : un serveur, les deux pages, seule la racine change.
+
+Cette configuration est aussi en **`autoPort`** et sans port en dur : à port
+fixe, une seconde session travaillant sur le même dépôt ne démarre pas. Le port
+attribué arrive par la variable `PORT`, que `dev_server.py` lit à défaut
+d'argument.
+
+Deux liens évitent en plus d'avoir à retaper l'URL : un bouton **« 🎨 atelier »**
+en haut à droite de l'aquarium (affiché **uniquement en local** — c'est un outil
+de développement, pas une commande de jeu) et un **« 🐠 le jeu »** dans la barre
+de l'atelier.
+
+Le premier était une pastille d'emoji à 50 % d'opacité, sans étiquette : personne
+ne l'a jamais vu, et le lien a été redemandé alors qu'il existait déjà. Il est
+donc **étiqueté et opaque**, et il répond visuellement au « 🐠 le jeu » d'en face.
+Son script était aussi à l'envers — l'élément partait `hidden` et n'était révélé
+qu'en local, donc la moindre erreur avant cette ligne le laissait invisible
+partout. C'est le masquage qui est conditionnel, pas l'affichage.
 
 **Le rail de gauche** liste les 51 espèces — il lit `SPECIES`, donc toute espèce
 ajoutée au jeu y apparaît d'elle-même. Un 🎨 signale les 30 qui ont leur dessin
@@ -63,6 +89,15 @@ dessin enregistré puis désactivé devenait introuvable — il existait sur le 
 et nulle part dans l'outil. Ouvrir un tel dessin le met à l'échelle de l'espèce
 dont il porte le nom, si elle existe.
 
+**Pour le rattacher**, un sélecteur d'espèce est posé dans la barre du document,
+à côté du bouton — qui dit alors « Rattacher à *Méduse Flottante* ». Il manquait
+le geste entier : on pouvait ouvrir un dessin libre, mais pas choisir à quelle
+espèce le donner, puisque cliquer une espèce dans le rail **refermait** le dessin
+pour ouvrir le sien. Le sélecteur change l'espèce **cible** sans toucher au
+document ouvert ; il sert aussi à re-cibler un dessin qu'on s'est trompé
+d'attribuer, et à juger une échelle (c'est le `size` de l'espèce qui la donne,
+d'où le recadrage automatique au changement).
+
 **Quatre entrées** :
 
 | Bouton | Ce qu'il fait |
@@ -72,8 +107,23 @@ dont il porte le nom, si elle existe.
 | Importer un SVG… | n'importe quel dessin vectoriel (Illustrator, Inkscape, le poseur d'ancrages) |
 | Importer un JSON… | un document d'atelier déjà commencé |
 
-Plus un **calque de repérage** : une image posée sous le dessin, à opacité
-réglable, pour redessiner par-dessus un rendu généré ailleurs. Une image choisie
+Plus un **calque de repérage** : une image posée sous le dessin — ou **par-dessus
+en semi-transparence** pour comparer — à opacité réglable, pour redessiner
+par-dessus un rendu généré ailleurs.
+
+Piège corrigé : **une nouvelle image ne peut pas hériter du cadrage de
+l'ancienne.** L'échelle et la position étaient calculées pour d'autres
+dimensions ; reprises telles quelles, le repère arrivait hors champ ou coupé — il
+avait l'air « tronqué », voire effacé, alors qu'il était simplement posé à
+l'échelle de la vignette précédente. Il est maintenant **calé sur le dessin** à
+l'arrivée, comme la planche du design, et seules l'opacité et la position
+dessus/dessous sont conservées. Deux défauts se cumulaient d'ailleurs : le
+curseur d'échelle était plafonné à 4 et **rabotait** le calage automatique d'une
+petite vignette sur un grand dessin (mesuré : calage à 4,9× ramené à 4 au premier
+mouvement du curseur) — sa borne suit désormais la valeur en cours. Et
+`drawImage` lève sur une dimension NaN : l'exception remontait au milieu du
+tracé, laissant la vue à moitié peinte, ce qui se lit comme un dessin effacé et
+pas comme un repère mal réglé. Elle est bornée. Une image choisie
 au disque est **embarquée** dans le document — le fichier reste autonome, on
 reprend le travail sans avoir à retrouver l'image — mais elle l'alourdit (56 ko
 pour un PNG de 410×200), donc à retirer avant l'enregistrement final. La planche
@@ -128,6 +178,32 @@ Elle **ne s'enregistre pas** dans le document : elle appartient au dépôt, elle
 est reposée toute seule à l'ouverture, et la recopier en base64 dans trente
 fichiers coûterait 1 Mo pour rien.
 
+### Deux barres, et la séparation est celle du geste
+
+La première ne parle que de l'**outil** et de l'**aperçu** — ce qu'on regarde ;
+la seconde du **document entier** — d'où il vient, ce qu'on lui compare, où on
+l'enregistre.
+
+| Barre | Ce qu'on y trouve |
+|---|---|
+| 1 · outil | les sept outils · 💡 aide · **▶ Animer · ⛶ Recadrer · 👻 Silhouette · 🌙 Nuit** |
+| 2 · document | 🐠 le jeu · Nouveau / silhouette du jeu / import SVG / import JSON · **le calque de repérage** (🖼 · dessous‑dessus · opacité) · nom du fichier · **💾 Enregistrer · Activer · Procédural** |
+
+*Animer*, *Recadrer* et *Enregistrer* étaient enterrés dans des sections
+repliables du panneau, entre deux réglages de calque. Ils ne concernent pourtant
+**jamais un calque** : toujours le dessin en entier. Le nom du fichier y avait un
+défaut de plus — le panneau est reconstruit à chaque geste, donc le champ perdait
+le focus et se réinitialisait en pleine saisie. Les barres vivent **hors** du
+panneau : leurs gestionnaires sont câblés une seule fois (`cablerBarres`), et
+`barre()` ne fait que remettre leur état à jour.
+
+Le **calque de repérage par-dessus, en semi-transparence**, est le geste qu'on
+refait vingt fois pour comparer un dessin à son modèle : il est donc à portée de
+main, avec son opacité juste à côté. Passer *dessus* plafonne l'opacité à 0,6 —
+à pleine opacité la référence recouvre exactement ce qu'on venait comparer. Le
+bouton 🖼 **masque** le repère au lieu de le retirer : retirer efface l'image
+embarquée, donc on ne la retrouve plus.
+
 **Sept outils**, dans la barre :
 
 - **Ancres** — `center` (le point que le jeu place à la position de la créature),
@@ -163,6 +239,17 @@ fichiers coûterait 1 Mo pour rien.
     piloté par les émotions, communes à tout l'aquarium ; ce réglage dit à quoi
     elle **ressemble**. Tout le monde avait la même petite bouche de dessin
     animé, becs et gueules comprises.
+  - **nombre d'yeux** et **écartement** du second. Ce bloc vivait dans l'outil
+    Ancres, à côté des coordonnées, alors que la taille des yeux est ici : on
+    réglait un visage depuis deux outils, et le curseur du second œil
+    n'apparaissait qu'après un aller-retour d'onglet.
+  - **taille du second œil**, réglable **à part** (`points.eye.r2` en miroir,
+    `points.eye2.r` s'il est placé librement). Sur une tête vue de trois quarts,
+    l'œil du fond est plus petit que celui de devant : les faire égaux aplatit le
+    visage. Tant qu'on n'y touche pas, il suit le premier — les dessins déjà
+    calés ne bougent pas. Le second œil déduit de l'écartement est d'ailleurs
+    tracé en pointillés sur le dessin, avec sa propre poignée de rayon : il
+    n'apparaissait nulle part, on réglait sa taille sans voir où elle tombait.
   - **couleurs du visage** (`visage`) : trait, sourcil, pupille, blanc de l'œil,
     intérieur de bouche, langue, lèvres, dents, bec. Chacune revient à la valeur
     commune d'un clic sur ↺. Le visage étant dessiné **par-dessus** le dessin,
@@ -207,8 +294,19 @@ fichiers coûterait 1 Mo pour rien.
   la liste des formes. Pas de poignées de Bézier : le lissage passe par les
   milieux de segments, comme dans le jeu — ce qu'on trace est donc exactement ce
   qui sera rendu.
-- **Calque** — la forme entière : on la tire pour la déplacer, et les boutons
-  l'agrandissent, la tournent, la retournent ou la dupliquent autour de son
+- **Calque** — la forme entière : on la tire pour la déplacer. Une **boîte à
+  poignées** l'entoure — quatre coins pour la mise à l'échelle, un bouton
+  détaché au-dessus pour la rotation, et un point au centre, autour duquel tout
+  se fait. Les boutons « −5 % » et « ↺ 3° » restent pour l'ajustement fin, mais
+  ils obligeaient à cliquer huit fois pour un geste qu'on fait d'un coup, sans
+  jamais voir la valeur qu'on visait (elle s'affiche maintenant dans la barre
+  d'état pendant le glissé). La poignée de rotation est **détachée** de la
+  boîte : posée sur un coin, elle se confondrait avec celle de l'échelle.
+  Un glissé ne prend **pas** d'instantané à chaque frame — le `pointerdown` en a
+  déjà pris un ; soixante par seconde rempliraient la pile d'annulation de pas
+  d'un demi-degré, en recopiant tout le document à chaque fois. Les boutons,
+  eux, en prennent un.
+  Ils l'agrandissent, la tournent, la retournent ou la dupliquent autour de son
   centre. Cliquer n'importe quel calque le sélectionne (le calque actif garde la
   priorité, sinon celui du dessus lui volerait le clic). Un miroir horizontal
   sert à faire la nageoire de l'autre côté : dupliquer, retourner, déplacer.
@@ -235,6 +333,241 @@ actif), et la liste indique par un `🖐n` combien d'appendices animent chaque
 forme, plus un pictogramme par réglage d'apparence (`▨` dégradé, `◌` contour,
 `✦` luminescence, `🎲` couleur par individu).
 
+### Nommer un calque
+
+« forme 7 » ne dit rien. Sur un dessin à vingt pièces — c'est le cas du Poisson
+Confetti — on cherchait la bonne en les allumant une par une. Un champ **nom du
+calque** (`shapes[].nom`, facultatif) remplace le numéro **partout** : liste des
+formes, cases « formes entraînées » d'un appendice, liste des vitesses, choix de
+l'appendice. Le champ ne reconstruit pas le panneau à la frappe — il s'arracherait
+sous le curseur.
+
+### L'atelier doit RÉUTILISER son poisson d'une frame à l'autre
+
+Le bug le plus coûteux de toute la série, parce qu'il ne ressemblait pas à un
+bug : animation allumée, un dessin ne faisait qu'un **minuscule tremblement**.
+Ni la queue ni les appendices ne bougeaient — seuls le visage et la bouche, qui
+lisent `t` directement, continuaient de s'animer. D'où l'impression qu'un réglage
+avait disparu.
+
+La cause : `FishBody.phaseNage` **intègre** la fréquence (`phase += f · dt`) au
+lieu d'écrire `sin(t · f)` — il le faut, sinon une fréquence qui frémit décale la
+phase de plusieurs tours entre deux frames après quelques minutes de jeu. Mais
+elle accumule **sur l'entité** :
+
+```js
+const dt = U.clamp(t - (e._nageT ?? t), 0, 0.1);   // 0 sur un poisson NEUF
+```
+
+Or l'atelier construisait un `Entity` **à chaque frame** pour son aperçu. `dt`
+valait donc toujours 0, et la phase restait clouée à sa valeur de départ.
+
+Mesuré sur le Poisson Confetti, course du bout de la nageoire caudale sur un
+cycle complet :
+
+| aperçu | course du bout |
+|---|---|
+| acteur neuf à chaque frame (l'ancien) | **0,00 px** |
+| acteur réutilisé (le correctif) | **36,6 px**, soit 24 % de la longueur |
+
+Les acteurs sont donc gardés dans une table, un par individu du bandeau, et
+renouvelés seulement au changement d'espèce. Deux corollaires :
+
+- la table est vidée dans `apres()`, sinon un acteur d'une autre espèce survit ;
+- les couleurs tirées au sort (`_couleursForme`) sont mises en cache sur
+  l'entité : à acteur réutilisé, changer la palette dans le panneau n'aurait plus
+  aucun effet. Elles sont donc réinitialisées à chaque pose.
+
+**Et l'aperçu nage à l'allure de croisière.** `FishBody.allure` lit `vx/vy`, pas
+`speedNow` : un acteur immobile ressortait à **0,14** d'allure, donc une
+fréquence et une vigueur d'un tiers inférieures à ce que le jeu montre — on
+jugeait toutes les amplitudes sur un poisson qui fait la planche. `poser()` lui
+donne maintenant sa vitesse nominale. Vérifié : la période mesurée du battement
+tombe à 1,07 s, exactement ce que donne `f = (1,9 + 1 × 3,2) × 1,15`.
+
+### Le sens de l'ondulation : une baleine ne bat pas comme un requin
+
+Elles battaient toutes de la même façon, et c'est faux dans les deux cas à la
+fois. Le mouvement suit maintenant un **axe**, réglé en degrés :
+
+- **90° — vertical** (le défaut). Une **baleine** porte une caudale
+  **horizontale** qu'elle bat de haut en bas : vu de côté, c'est un vrai
+  mouvement vertical. C'est aussi la convention du dessin animé, qui va à tout
+  le monde — d'où le défaut, et d'où le fait que rien ne bouge sur les dessins
+  existants.
+- **0° — horizontal.** Un **requin** balaie une caudale **verticale** de gauche
+  à droite, donc vers le spectateur et loin de lui. À l'écran ça se lit comme un
+  balancement horizontal : la queue coulisse d'avant en arrière au lieu de
+  monter et descendre.
+- toute valeur intermédiaire pour un dessin oblique.
+
+Contrôle non visuel — déplacement du bout de la queue entre deux phases opposées,
+sur le requin :
+
+| axe | Δx | Δy |
+|---|---|---|
+| 90° (défaut) | 0,00 | −34,54 |
+| 0° | −34,54 | 0,00 |
+| 45° | −24,42 | −24,42 |
+
+Même norme dans les trois cas (24,42 × √2 = 34,54) : l'axe **tourne** le
+déplacement, il n'en change pas la force. Et 90° reproduit exactement le
+comportement d'avant, au pixel près.
+
+### À l'arrêt, le dessin coïncide avec ses points
+
+Mettre l'animation en pause **figeait le dessin sur la phase courante** : il
+restait donc déformé. On retouchait alors un contour à un endroit et il
+s'affichait à un autre, décalé de la déformation gelée — poignées, gizmo et
+ancres comprises. Un éditeur ne peut pas travailler comme ça.
+
+L'atelier pose maintenant `_repos` sur son acteur dès que l'animation est
+arrêtée, et `drawSprite` court-circuite toute déformation : ce qui est rendu est
+exactement ce qui est saisi.
+
+Il ne suffisait **pas** de remettre la phase à zéro : une queue à ondes
+(`tailOndes`) et un tentacule gardent un `− u · ondes` dans leur sinus, et
+restent donc courbés à phase nulle. C'est le point qui rendait la correction
+naïve fausse.
+
+Contrôle non visuel, sur les 20 formes du Poisson Confetti — écart maximal entre
+le tracé et les points saisis :
+
+| | écart |
+|---|---|
+| au repos | **0,000000 px** |
+| au repos, entre deux phases différentes | **0,000000 px** |
+| en animation | 10,06 px |
+
+Le jeu ne pose jamais `_repos` : c'est un drapeau d'éditeur.
+
+### L'amplitude d'un appendice, en clair
+
+Un appendice se réglait **à l'aveugle**, et le réglage était trompeur. Deux
+défauts se cumulaient :
+
+- l'amplitude, annoncée en degrés, passait par `A * π / 360` — c'est-à-dire la
+  **moitié** de ce qui était affiché. « 20° » valait 10 ;
+- surtout, la pondération vaut 1 **sur l'ancre**, où le bras de levier est nul,
+  et 0 au bord du rayon. Le déplacement maximal se joue donc vers 0,25·r et
+  plafonne à ~0,15·r·amp(rad).
+
+Relevé sur le Poisson Confetti : une nageoire de rayon 31 réglée à 20° déplaçait
+au mieux **1,4 px** sur un dessin large de 150 — soit **0,26 px** à l'échelle du
+jeu. L'animation était présente au calcul et invisible à l'écran, et rien ne le
+disait.
+
+Trois corrections : la conversion honnête (`/180`), le battement qui suit
+l'**effort** comme celui de la queue (`vigueur` — exactement la correction qui
+avait déjà sauvé le battement caudal), et surtout le **débattement obtenu affiché
+en clair** sous le curseur, en pixels du dessin et en pourcentage de sa largeur,
+en rouge sous 1 %. Le requin est passé de ~11 à **21,8 px (5,3 %)**. Les bornes
+des curseurs suivent : 180° pour une nageoire, 100 % pour un tentacule.
+
+Un rappel **▶ Lancer l'animation** apparaît dans l'outil quand elle est à
+l'arrêt : le dessin est alors figé sur un instant fixe, et aucun de ces réglages
+ne se voit.
+
+**La queue a le même affichage.** Son amplitude est en pixels, mais pondérée par
+`u²`, et `u` ne vaut 1 qu'au tout bout de la bande de queue : un calque situé
+**devant** la ligne ne bouge pas, quelle que soit son amplitude. Le panneau
+affiche donc la course du bout et le dit en clair — sur le corps du Confetti :
+« 1,6 px (1,0 %) — ce calque est devant la ligne de queue ».
+
+### Le reflet
+
+La bande de lumière qui court sur le dos d'un poisson — celle qu'on voit sur la
+sardine de la planche. Elle se dessinait à la main, en calque par-dessus le
+corps : donc **figée**, elle ne suivait pas l'ondulation, et il fallait la
+reprendre à chaque retouche du contour.
+
+Deux choses la font lire comme une **lumière** et pas comme une rayure peinte :
+
+1. elle est **découpée dans le contour déformé** (`ctx.clip()` sur le tracé
+   courant, pas sur la boîte de la forme) : elle ondule donc avec la nage et ne
+   déborde jamais. Mesuré : **0 pixel** peint hors du corps ;
+2. elle **s'éteint à ses pointes**. Un aplat aux bouts francs se lit comme un
+   trait de peinture ; le dégradé le long de son axe en fait un éclat.
+
+Un piège de mise en œuvre : le reflet est dessiné **en dernier**, après le
+contour. Il lui faut un `beginPath()` pour son ellipse, ce qui détruirait le
+tracé de la forme — dont le contour a encore besoin. Le **découpage**, lui,
+appartient à l'état sauvegardé : il survit au `save`/`restore`, le tracé non.
+
+### Supprimer des calques
+
+Il n'y avait qu'une **croix sans étiquette**, coincée entre deux flèches d'ordre,
+et elle n'en supprimait qu'**un à la fois** — alors que les cases à cocher
+servaient déjà à « Aplatir ». Sur un dessin à vingt pièces, nettoyer demandait
+vingt allers-retours, et personne ne trouvait le bouton.
+
+Le bouton est maintenant **étiqueté et compte** ce qu'il va enlever
+(« ✕ Supprimer (2) ») : les calques **cochés** s'il y en a, sinon celui qui est
+sélectionné. La touche <kbd>Suppr</kbd> fait de même, et <kbd>Ctrl</kbd>+<kbd>Z</kbd>
+rattrape.
+
+Trois nettoyages sont obligatoires derrière, sans quoi le document se corrompt en
+silence : les indices que visent les **appendices**, ceux de la **queue** et ceux
+des **calques éteints** (`decalerCalques`), puis les appendices qui n'entraînent
+plus rien. Et la correspondance ancien → nouvel indice se construit **avant** le
+filtrage : supprimer plusieurs indices d'un coup n'est pas la même chose que
+répéter une suppression simple, où chaque passe décale les suivantes.
+
+Vérifié sur le Poisson Confetti (20 formes, appendices visant `[3,5]` et `[0,5]`),
+en supprimant les calques 1 et 4 :
+
+| | formes | appendices |
+|---|---|---|
+| avant | 20 | `[3,5]` · `[0,5]` |
+| après | 18 | `[2,3]` · `[0,3]` |
+| après <kbd>Ctrl</kbd>+<kbd>Z</kbd> | 20 | `[3,5]` · `[0,5]` |
+
+### Éteindre un calque
+
+Un dessin fait main empile dix pièces : sans pouvoir en éteindre une, on ne voit
+jamais ce qu'il y a dessous, et retoucher le contour d'une forme recouverte par
+une autre revient à travailler à l'aveugle. Chaque ligne de la liste des formes
+a donc un **👁**, plus deux raccourcis : **Isoler** (n'éteindre que tout le
+reste — le geste le plus utile, qui demandait autrement dix clics) et **Tout
+rallumer**.
+
+Trois points, tous appris en le branchant :
+
+- **Le calque reste dans la liste**, à son rang. Le retirer décalerait tous les
+  indices que visent les appendices et la queue. Le rendu se contente de sauter
+  ce que `sp.masques` désigne.
+- **C'est un réglage de TRAVAIL.** `aEnvoyer()` le retire : rouvrir un dessin
+  avec des pièces manquantes, sans savoir pourquoi, serait le pire des pièges.
+  Il passe en revanche par `decalerCalques()` comme les autres listes d'indices —
+  sans quoi supprimer une forme rallumait une voisine et en éteignait une autre.
+- **Un calque éteint n'attrape pas le clic** dans l'outil Calque : on l'a
+  justement éteint pour atteindre ce qu'il recouvrait. Il reste saisissable une
+  fois sélectionné dans la liste, pour pouvoir le déplacer à l'aveugle.
+
+### Les cadences, toutes au même endroit
+
+La vitesse d'un appendice se réglait dans l'outil Appendices, **un appendice à la
+fois**, et celle de la queue n'était pas réglable du tout. Impossible de comparer
+les rythmes entre eux — alors que c'est justement leur **rapport** qui fait une
+nage : une murène ondule lentement d'un corps entier pendant que ses nageoires
+frémissent.
+
+La section **Vitesse d'animation** les réunit : `vitesse` (tout le dessin),
+`vitesseQueue` (l'ondulation du corps seule), et un curseur par appendice
+(`fins[].vitesse`, qui existait déjà).
+
+Un point qui ne va pas de soi : **le réglage d'auteur est appliqué APRÈS le
+plafond** de 8,5 rad/s. Posé avant, il n'aurait aucun effet sur les petits
+poissons — ce sont précisément ceux qui saturent déjà ce plafond, donc ceux qu'on
+veut ralentir. Le plafond reste ce qu'il est : une mesure du comportement **par
+défaut**, pas une interdiction faite au dessinateur.
+
+Contrôle non visuel : rendre hors écran à trois instants et relever la position
+verticale du bout de la queue. À `vitesse: 1` elle vaut 169,5 / 171,3 / 170,7 ;
+à 2, 170,9 / 169,5 / **160,5** — la queue n'est plus à la même phase. Même écart
+avec `vitesseQueue` seule (170,9 / 166,4 / 160,8), ce qui prouve que les deux
+curseurs sont bien indépendants.
+
 ### L'apparence d'un calque
 
 Un calque n'était qu'un contour et **une couleur unie**. Les silhouettes
@@ -250,13 +583,21 @@ La section **Apparence de la forme** rend au dessin ce que la silhouette avait :
 | Remplissage · trait seul | `fill` (`null` = trait seul) | un tentacule, une antenne, une moustache |
 | Contour ouvert | `ferme: false` | ne pas refermer un trait, ce qui dessinerait une corde en travers |
 | Dégradé | `degrade` | le ventre plus clair que le dos, en un réglage plutôt qu'en deux calques |
+| Reflet | `reflet` | la bande de lumière sur le dos |
 | Contour | `stroke` + `lineWidth` | le liseré d'une forme pleine, ou le trait seul |
 | Opacité | `alpha` | une méduse, une nageoire voile |
 | Luminescence | `lueur` | la lampe du poisson-lanterne, une tache bioluminescente |
 | Couleur par individu | `couleur` | **le banc qui chatoie** |
 
-Deux points qui ne vont pas de soi :
+Trois points qui ne vont pas de soi :
 
+- **La transition d'un dégradé a un DÉBUT et une FIN**, pas seulement une
+  longueur. Avec un seul réglage, un fondu court était forcément collé à un
+  bout : impossible de poser une ligne de flottaison nette au *milieu* d'un
+  corps. Rapprochés (`debut: 0,50` / `fin: 0,54`), les deux curseurs donnent une
+  frontière franche où l'on veut ; écartés (`0,15` / `0,90`), un fondu large.
+  Trois boutons — *frontière franche*, *fondu court*, *fondu large* — écartent
+  les deux arrêts autour de leur milieu sans le déplacer.
 - **Le dégradé part de la couleur de la forme**, pas d'une couleur fixe. Un
   dégradé à deux couleurs déclarées annulerait la variation individuelle — c'est
   précisément ce qu'on vient de gagner. Le second arrêt vaut par défaut la même
@@ -328,6 +669,21 @@ son rayon, le réglage le plus délicat de tout l'atelier.
   C'est le seul endroit où se juge une **couleur tirée au sort** : sur un seul
   poisson, elle est invisible par construction.
 
+**Le bandeau montre des POSES, la vue principale JOUE.** Les vignettes tiennent
+chaque émotion à son pic — c'est ce qu'on veut d'une planche de calibrage, dix-huit
+états comparables d'un coup d'œil. Mais tenue à 1, l'enveloppe d'`emoteK()` — le
+cœur du système d'émotions, montée en 14 % du temps, petit dépassement au pic,
+retombée sur les 30 % de fin — était tout simplement **invisible dans l'atelier**.
+Animation allumée, la vue principale la rejoue donc en boucle : 2,4 s d'émotion,
+puis 1 s de visage neutre. Sans ce temps mort on ne voit jamais d'où part
+l'expression.
+
+**Une vignette se clique**, et monte dans le grand aperçu. Les cases font une
+soixantaine de pixels : on y voit qu'une expression a changé, pas si l'ancre de
+bouche tient — or c'est le réglage le plus délicat de l'atelier, et `eating`
+ouvre la bouche en grand. La vignette montrée est cerclée (sans repère, on ne
+sait plus laquelle des dix-huit on règle) et la recliquer revient au repos.
+
 **L'enregistrement préserve les champs qu'il ne comprend pas.** L'atelier repart
 du document d'origine et ne surcharge que ce qu'il connaît. Reconstruire un objet
 neuf champ par champ jetait silencieusement le reste : `SharkSVG.json` a perdu
@@ -390,6 +746,7 @@ d'espèce reste lu : le manifeste ne fait que le compléter ou l'annuler.
 | `points.center` | **origine de la créature** : le point posé à `(entity.x, entity.y)` | centre de la boîte |
 | `points.eye` | ancre de l'œil (et du sourcil, de la joue) | pas de visage |
 | `points.eye.ecart` | **deuxième œil**, symétrique du premier et décalé vers la queue | un seul œil |
+| `points.eye.r2` | **taille du deuxième œil** quand il est en miroir — sur une tête vue de trois quarts, l'œil du fond est plus petit | il suit le premier |
 | `points.eye2` | deuxième œil **placé librement** (tête tournée, dessin asymétrique) | dérivé de `ecart` |
 | `points.eye.r` | **taille de l'œil, en unités du dessin** — la calibration à préférer | on passe à `faceK` |
 | `points.mouth` | ancre de la bouche, **honorée séparément** | bouche à sa place par défaut |
@@ -404,7 +761,9 @@ d'espèce reste lu : le manifeste ne fait que le compléter ou l'annuler.
 | `shapes[].smooth` | contour lissé plutôt qu'en ligne brisée | lignes droites |
 | `shapes[].alpha` | opacité de la forme, multipliée à l'alpha courant | 1 |
 | `shapes[].lueur` | **bioluminescence** (halo) 0→1, bridée à la nuit si l'espèce déclare `glowAtNight` | éteinte |
-| `shapes[].degrade` | `{ type: 'lineaire'\|'radial', ang, de, vers, pos }` — le premier arrêt vaut la couleur **résolue** de la forme | aplat |
+| `shapes[].degrade` | `{ type: 'lineaire'\|'radial', ang, de, vers, debut, fin }` — le premier arrêt vaut la couleur **résolue** de la forme ; la transition a un **début** et une **fin** (`pos` reste lu : fin, début à 0) | aplat |
+| `shapes[].nom` | nom libre du calque, affiché à la place de « forme n » | le numéro |
+| `shapes[].reflet` | `{ x, y, largeur, epaisseur, angle, force, couleur }` — la **bande de lumière** sur le dos, découpée dans le contour déformé | aucun |
 | `shapes[].couleur` | **couleur propre à l'individu** : `{ mode: 'espece'\|'especeSombre'\|'palette'\|'teinte', couleurs[], amplitude }` | la couleur du dessin |
 | `shapes[].pivot` | rotation en bloc — **repli** quand aucun `fins[]` ne vise la forme | elle ondule |
 | `shapes[].amp` | amplitude d'animation, en degrés pour une nageoire | 15 |
@@ -412,6 +771,9 @@ d'espèce reste lu : le manifeste ne fait que le compléter ou l'annuler.
 | `fins[]` | **appendices**, voir le tableau ci-dessous | rien n'est animé |
 | `tailBlend` | x en deçà duquel les points appartiennent à la queue | rien n'ondule |
 | `sansQueue` | la créature n'a **pas** de queue (crabe, étoile, coquillage) | elle en a une |
+| `vitesse` | multiplicateur de cadence du dessin entier, appliqué **après** le plafond de 8,5 rad/s | 1 |
+| `vitesseQueue` | multiplicateur propre à l'ondulation du corps | 1 |
+| `tailAxe` | **sens de l'ondulation**, en degrés : 90 = vertical (défaut, une baleine), 0 = horizontal (un requin) | 90 |
 | `tailOndes` | nombre d'ondes le long de la queue — 0 = battement d'un bloc, 1-2 = onde qui **court** (murène) | 0 |
 | `queueCalques` | restreint l'ondulation à certains calques | tous |
 | `faceK`, `faceTx`, `faceTy` | calibration en multiples de `size` (repli) | `def.spriteFace`, puis 0,75 |

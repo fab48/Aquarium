@@ -10,7 +10,13 @@
 //                 par les émotions, identiques pour tout l'aquarium.
 //   shapes[]    — { points: [[x,y]…], fill, smooth, pivot, amp, groupe,
 //                   stroke/lineWidth (contour), alpha, lueur, degrade, couleur }
-//                 `degrade` : { type: 'lineaire'|'radial', ang, de, vers, pos }
+//                 `degrade` : { type: 'lineaire'|'radial', ang, de, vers,
+//                               debut, fin } — la transition a un DÉBUT et une
+//                             FIN : confondus, frontière franche ; écartés,
+//                             fondu large, et on choisit où.
+//                 `reflet`  : { x, y, largeur, epaisseur, angle, force, couleur }
+//                             — la bande de lumière sur le dos, DÉCOUPÉE dans le
+//                             contour déformé, donc elle ondule avec la nage.
 //                 `couleur` : { mode: 'espece'|'especeSombre'|'palette'|'teinte',
 //                               couleurs[], amplitude } — la teinte devient
 //                             PROPRE À L'INDIVIDU, comme `Entity.color` le fait
@@ -28,10 +34,17 @@
 //                 coquillage n'ont rien à faire onduler. Sans ce drapeau, la
 //                 valeur par défaut de `tailBlend` faisait tortiller un tiers
 //                 du crabe.
+//   tailAxe     — SENS de l'ondulation, en degrés : 90 = vertical (défaut,
+//                 baleine), 0 = horizontal (requin). Une baleine bat une caudale
+//                 horizontale de haut en bas ; un poisson balaie une caudale
+//                 verticale de gauche à droite. Vu de côté, ce n'est pas le
+//                 même geste.
 //   tailOndes   — nombre d'ondes le long de la queue. 0 = battement d'un seul
 //                 tenant (un poisson) ; 1 ou 2 = onde qui COURT vers le bout
 //                 (une murène, une anguille — le corps entier est un tentacule).
 //   queueCalques— restreint l'ondulation à certains calques (défaut : tous)
+//   vitesse     — multiplicateur de cadence du dessin entier (défaut 1)
+//   vitesseQueue— multiplicateur propre à l'ondulation du corps (défaut 1)
 //   masques     — calques éteints. Réglage de TRAVAIL de l'atelier (voir sous
 //                 une pièce sans la supprimer), retiré à l'enregistrement.
 //   fins[]      — APPENDICES posés par l'éditeur. Deux types :
@@ -129,6 +142,17 @@ const Sprites = {
       // explicitement — un crabe n'a pas de nageoire caudale à faire battre.
       tailBlend: d.sansQueue ? null : (d.tailBlend != null ? d.tailBlend : minX),
       tailOndes: d.tailOndes || 0,
+      // Sens de l'ondulation, en degrés. 90 = vertical (défaut, et le cas d'une
+      // baleine, qui bat une caudale horizontale) ; 0 = horizontal (un requin,
+      // qui balaie une caudale verticale vers le spectateur et loin de lui).
+      tailAxe: d.tailAxe,
+      // VITESSES D'ANIMATION, réglées dans l'atelier. `vitesse` multiplie la
+      // cadence de tout le dessin (elle est déduite de l'allure et du gabarit,
+      // ce qui est juste en moyenne et faux sur une créature en particulier) ;
+      // `vitesseQueue` ne touche que l'ondulation du corps, chaque appendice
+      // gardant en plus la sienne (`fins[].vitesse`).
+      vitesse: d.vitesse || 1,
+      vitesseQueue: d.vitesseQueue || 1,
       queueCalques: vises(d.queueCalques),
       // CALQUES MASQUÉS. Réglage de travail de l'atelier — on éteint une pièce
       // le temps de voir ce qu'il y a dessous — jamais enregistré dans le
@@ -149,7 +173,12 @@ const Sprites = {
       oeil2: (d.points && d.points.eye2)
         || (d.points && d.points.eye && d.points.eye.ecart
             ? { x: d.points.eye.x - d.points.eye.ecart,
-                y: d.points.eye.y, r: d.points.eye.r }
+                y: d.points.eye.y,
+                // TAILLE PROPRE AU SECOND ŒIL (`eye.r2`). Sur une tête vue de
+                // trois quarts, l'œil du fond est plus petit que celui de
+                // devant : les faire égaux aplatit le visage. Absente, elle
+                // suit le premier — les dessins déjà calés ne bougent pas.
+                r: d.points.eye.r2 != null ? d.points.eye.r2 : d.points.eye.r }
             : null),
       bouche: d.points && d.points.mouth,
       // CALIBRATION DU VISAGE, par ordre de préséance.

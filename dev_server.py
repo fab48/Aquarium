@@ -16,7 +16,13 @@ noms de fichiers restreints à [A-Za-z0-9_-], corps refusé s'il n'est pas du JS
 valide ou s'il dépasse 4 Mo. C'est un outil de développement local, pas un
 service : ne l'exposez pas sur le réseau.
 
-    python dev_server.py [port]
+    python dev_server.py [port] [--accueil atelier.html]
+
+`--accueil` change la page servie à la RACINE. Le serveur sert le jeu par
+défaut ; tout aperçu automatique ouvre donc `/`, c'est-à-dire l'aquarium, et
+l'atelier reste inatteignable autrement qu'en tapant son chemin. Or un aperçu ne
+sait ouvrir qu'une ORIGINE, jamais un chemin : la seule façon de lui faire
+afficher l'atelier est de le mettre à la racine de SON serveur.
 """
 import json
 import os
@@ -28,6 +34,10 @@ RACINE = os.path.dirname(os.path.abspath(__file__))
 ASSETS = os.path.join(RACINE, "Assets")
 NOM_VALIDE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 TAILLE_MAX = 4 * 1024 * 1024
+# Page servie à la racine. Modifiee par --accueil ; restreinte aux pages du
+# depot, un serveur de dev n'ayant aucune raison de servir autre chose.
+ACCUEIL = "index.html"
+ACCUEILS = ("index.html", "atelier.html")
 
 
 class NoCacheHandler(SimpleHTTPRequestHandler):
@@ -45,6 +55,10 @@ class NoCacheHandler(SimpleHTTPRequestHandler):
     # seulement ce qui est rattaché à une espèce : un dessin enregistré puis
     # désactivé devenait invisible, donc introuvable.
     def do_GET(self):
+        # La racine peut pointer sur l'atelier plutot que sur le jeu : c'est le
+        # seul moyen qu'un apercu, qui n'ouvre qu'une origine, l'affiche.
+        if self.path in ("/", ""):
+            self.path = "/" + ACCUEIL
         if self.path == "/api/sprites":
             noms = []
             if os.path.isdir(ASSETS):
@@ -105,14 +119,24 @@ class NoCacheHandler(SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    args = sys.argv[1:]
+    if "--accueil" in args:
+        i = args.index("--accueil")
+        page = args[i + 1] if len(args) > i + 1 else ""
+        if page not in ACCUEILS:
+            sys.exit(f"--accueil doit valoir l'une de {ACCUEILS}")
+        ACCUEIL = page
+        del args[i:i + 2]
+    sys.argv = [sys.argv[0]] + args
     # Le port, dans l'ordre : l'argument de la ligne de commande, puis la
     # variable PORT, puis le defaut historique. PORT est ce que fournit un
     # lanceur qui attribue un port LIBRE — indispensable des que plusieurs
     # sessions travaillent sur le meme depot : a port fixe, la deuxieme ne
     # demarre pas parce que la premiere le tient deja.
     port = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get("PORT") or 8642)
-    print(f"Aquarium sur http://localhost:{port} (cache desactive)")
-    print(f"Atelier des sprites : http://localhost:{port}/atelier.html")
+    print(f"Racine -> {ACCUEIL}  (cache desactive)")
+    print(f"Jeu     : http://localhost:{port}/index.html")
+    print(f"Atelier : http://localhost:{port}/atelier.html")
     # MULTI-THREAD, et pas le HTTPServer mono-thread d'origine : le
     # navigateur garde plusieurs connexions ouvertes sur la page, et un
     # serveur mono-thread met alors tout le reste en file — un simple curl

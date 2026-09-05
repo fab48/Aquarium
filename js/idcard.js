@@ -23,6 +23,18 @@ const IdCard = {
       .map(d => d.name);
   },
 
+  // OÙ VIT L'ESPÈCE, dans les deux sens. La seule profondeur ne suffit pas à
+  // situer une créature : la Dorade Dorée et le Poisson Confetti partagent
+  // l'eau claire et ne se croisent pourtant jamais, l'une au grand large,
+  // l'autre au récif. C'est cette ligne qui les sépare à la lecture.
+  habitatOf(e) {
+    const def = e.def;
+    if (def.aerial) return 'Le ciel · au-dessus de l’eau';
+    const [x0, x1] = e.bandeX();
+    const m = d => Math.round(d / CONFIG.PX_PER_METER);
+    return `${World.labelBande(x0, x1)} · ${m(def.depthBand[0])}–${m(def.depthBand[1])} m`;
+  },
+
   dietOf(def) {
     const parts = [];
     if (def.prey) parts.push(def.prey.map(p => SPECIES[p].name).join(', '));
@@ -53,14 +65,19 @@ const IdCard = {
 
   _draw(ctx, e, eviter, epinglee, K) {
     const def = e.def;
-    const pad = 12, W = 264, LH = 17;
+    // Largeur portée de 264 à 292 et colonne des libellés de 84 à 76 : la ligne
+    // « Vit » (zone horizontale + profondeur) était tronquée à « Rivage → Grand
+    // large · 3 2… », ce qui lui retirait justement l'information ajoutée.
+    const pad = 12, W = 292, LH = 17, COL = 76;
     // La phrase est repliée à la largeur de la fiche AVANT de calculer sa
     // hauteur : sinon elle déborde du cadre sur les espèces bavardes.
     const phrase = def.phrase ? this.replier(ctx, def.phrase, W - pad * 2, '12.5px') : [];
     const VW = Camera.vw / K, VH = Camera.vh / K;   // l'écran vu du repère réduit
 
     const rows = [
-      ['Zone', World.zoneAt(e.y).label + ` · ${Math.round((e.y - CONFIG.SURFACE_Y) / CONFIG.PX_PER_METER)} m`],
+      ['Ici', World.labelZoneX(e.x) + ' · ' + World.zoneAt(e.y).label
+            + ` · ${Math.round((e.y - CONFIG.SURFACE_Y) / CONFIG.PX_PER_METER)} m`],
+      ['Vit', this.habitatOf(e)],
       ['Déplacement', this.MOVEMENT_LABEL[def.movement] ?? def.movement],
       ['Niveau', this.trophicLabel(def)],
       ['Mange', this.dietOf(def)],
@@ -148,7 +165,7 @@ const IdCard = {
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
       ctx.fillText(k, bx + pad, y);
       ctx.fillStyle = 'rgba(255,255,255,0.92)';
-      this.fitText(ctx, v, bx + pad + 84, y, W - pad * 2 - 84);
+      this.fitText(ctx, v, bx + pad + COL, y, W - pad * 2 - COL);
       y += LH;
     }
 

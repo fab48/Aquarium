@@ -61,10 +61,13 @@ const SPECIES = {
     name: 'Sardine Bulle-fofolle', realName: 'Petite sardine de surface', trophic: 2, movement: 'wideband',
     nursery: 'shallow',
     depthBand: [10, 110], size: 13, speed: 90,
-    // AU LARGE. Sa barrière de rivage, calculée sur sa taille, tombait à 40 px
-    // de colonne d'eau : poursuivie par le Fou Moustachu, elle finissait
-    // plaquée dans le ressac, et ses sauts la déposaient carrément sur le sable.
-    offshore: 950,
+    // Plus d'`offshore` : il datait d'avant le plancher générique de 150 px
+    // d'eau, et à 950 il repoussait le banc si loin qu'il passait sa vie collé
+    // à sa propre barrière, en pleine mer. Le plancher générique et les deux
+    // garde-fous du saut (jamais orienté vers la côte, barrière réappliquée en
+    // vol) suffisent à le tenir hors du ressac — il a droit au rivage comme le
+    // Confetti.
+    offshore: 260,
     schooling: true, groupSize: [5, 8], popCap: 36,
     favoriteFood: 'plancton_dore', eatsFood: true,
     colors: ['#7fd8ff', '#a8e6ff'],
@@ -202,7 +205,7 @@ const SPECIES = {
     name: 'Poisson Volant Cascadeur', realName: 'Exocet', trophic: 2, movement: 'wideband',
     nursery: 'shallow',
     depthBand: [10, 100], size: 14, speed: 95,
-    offshore: 950,   // même raison que la Sardine Bulle-fofolle : le haut-fond la piégeait
+    offshore: 260,   // même raison que la Sardine Bulle-fofolle : à 950 il vivait collé à sa barrière
     schooling: true, groupSize: [4, 6], popCap: 34,
     favoriteFood: 'plancton_dore', eatsFood: true,
     colors: ['#5ecfff', '#9be8ff'],
@@ -304,15 +307,25 @@ const SPECIES = {
   murene: {
     name: 'Murène du Récif', realName: 'Murène', trophic: 4, movement: 'fixed',
     nursery: 'reef',
-    // Haut de la zone trouble : c'est là que ses proies descendent réellement.
-    // (Avec [800,1600] elle ne croisait AUCUNE de ses proies et mourait de faim.)
-    depthBand: [350, 1700], size: 30, speed: 0,
+    // LA ZONE TROUBLE ET LE HAUT DES GRANDS FONDS, pas le rivage. À 350 px de
+    // profondeur son rocher tombait vers x=1600, c'est-à-dire à la frontière du
+    // haut-fond, là où il y a déjà foule ; elle commence maintenant à 650, soit
+    // x≈1980, en pleine mer. La borne basse, elle, ne peut pas descendre bien
+    // plus : `nearestPreyFor` filtre par bande de profondeur, et une murène
+    // posée à 2000 px n'aurait plus AUCUNE proie à portée (avec [800,1600] elle
+    // mourait déjà de faim pour cette raison).
+    depthBand: [650, 1800], size: 30, speed: 0,
     schooling: false, groupSize: [1, 1], popCap: 6, territory: 340,   // un rocher = une murene (GDD 12)
     // `missChance` abaissé depuis que la proie RÉAGIT au jaillissement (elle ne
     // se faisait pas cueillir sans broncher) : sans ça deux modes d'échec se
     // cumulaient et la murène mourait de faim. Le raté se raconte mieux ainsi —
     // c'est la victime qui l'esquive, pas la murène qui vise mal.
-    prey: ['confetti', 'perroquet', 'meduse', 'hippocampe'], ambush: { range: 140, missChance: 0.22 },
+    // Le Confetti sort du menu : depuis que la murène commence à 650 px de
+    // profondeur, les deux bandes ne se recouvrent plus que sur 100 px — le
+    // lien était déclaré mais ne pouvait presque jamais servir. Le Poisson
+    // Coffre le remplace : il vit à sa portée (350 px de recouvrement), il nage
+    // atrocement mal, et il n'avait AUCUN prédateur — un trou dans la chaîne.
+    prey: ['coffre', 'perroquet', 'meduse', 'hippocampe'], ambush: { range: 140, missChance: 0.22 },
     colors: ['#7a8a6a'],
     render: 'eel',
     lifespan: [700, 1000],
@@ -403,7 +416,13 @@ const SPECIES = {
     // Le Calamar Géant est réservé au Cachalot (c'est lui qui plonge pour lui) et
     // le Dauphin est sorti du menu : il n'a plus aucun prédateur, voulu — c'est
     // le sommet de sa propre chaîne, au même titre que le Requin.
-    prey: ['thon', 'calamar'], trickster: true,
+    // ELLE BROUTE, comme le Requin. Deux proies, mais deux proies RARES et
+    // protégées la plupart du temps (Thon à 12 de plafond, Calmar au fond) : la
+    // disette est censée couvrir ce cas, mais elle est tout-ou-rien — il suffit
+    // qu'une seule proie repasse au-dessus de son plancher une minute pour que
+    // l'Orque cesse de brouter alors qu'elle n'attrapera rien pour autant.
+    // Mesuré sans : 5 mortes de faim et l'espèce éteinte en 10 min.
+    prey: ['thon', 'calamar'], grazes: true, trickster: true,
     colors: ['#1c2733'],
     bodyRatio: 0.42, tail: 'whale',
     lifespan: [850, 1150],
@@ -420,7 +439,8 @@ const SPECIES = {
     schooling: false, groupSize: [1, 2], popCap: 4, metabolism: 0.5, senseRange: 2200,
     // Toute la faune céphalopode des grands fonds : c'est SA raison de plonger,
     // et ça donne enfin une scène aux abysses (le duel avec le Calamar Géant).
-    prey: ['calamar', 'calamar_geant'],   // le Poulpe sort du menu : le Calamar Géant s'en charge
+    // Broute aussi : mêmes raisons que l'Orque, deux proies rares et lointaines.
+    prey: ['calamar', 'calamar_geant'], grazes: true,   // le Poulpe sort du menu : le Calamar Géant s'en charge
     colors: ['#4a5866'],
     bodyRatio: 0.38, tail: 'whale',
     lifespan: [1500, 2500],
@@ -722,7 +742,11 @@ const SPECIES = {
     name: 'Crevette Sauteuse', realName: 'Crevette de récif', trophic: 2, movement: 'wideband',
     nursery: 'reef',
     depthBand: [120, 900], size: 6, speed: 40,
-    schooling: true, groupSize: [7, 10], popCap: 24,
+    // TROIS prédateurs (Thon, Cormoran, Rascasse), dont le poisson le plus
+    // rapide du jeu : c'est déjà le maximum que supporte une proie (33 prises
+    // par le seul Thon en 10 min, l'espèce tombait de 17 adultes à 3). Une base
+    // de chaîne qui nourrit trois bouches doit être abondante.
+    schooling: true, groupSize: [7, 10], popCap: 34,
     favoriteFood: 'micro_crevettes', eatsFood: true,
     colors: ['#ffb3a0', '#ffe3d8'],
     render: 'shrimp', sizeVar: 0.2,

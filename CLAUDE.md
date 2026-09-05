@@ -55,6 +55,17 @@ hébergeur statique. Trois choses qu'il règle, et qu'il ne faut pas défaire :
   aucun identifiant top-level n'est en double. Les envelopper cacherait `Main`,
   `Camera` & Cie, dont la console de debug et `atelier.html` se servent.
 
+Le mode normal produit aussi la **PWA** : `manifest.json`, trois icônes
+générées par `build.py` lui-même (PNG écrit en pur stdlib — zéro dépendance,
+même pour ça) et un service worker de pré-cache. Le jeu s'installe sur l'écran
+d'accueil, tourne en plein écran et hors ligne. La motivation première est
+**iOS, qui efface le localStorage des sites non visités depuis 7 jours** : une
+PWA installée en est exemptée, et c'est toute la sauvegarde du joueur qui en
+dépend. Le service worker n'existe **qu'au déploiement** — en dev il serait un
+anti-cache inversé, servant du vieux code avec entêtement. À savoir : le
+panneau d'aperçu intégré ne sait pas enregistrer un service worker (« unknown
+error fetching the script ») — le vérifier dans un vrai navigateur, pas là.
+
 `python build.py --inline` produit à la place **un seul fichier**
 `dist/index.html` (623 ko, 215 ko gzippés) qui s'ouvre d'un double-clic. Les
 dessins y sont **embarqués** (`Sprites.PRECHARGE`, lu par `Sprites.init` avant
@@ -497,6 +508,50 @@ et le battement des nageoires.
 Corollaire à retenir : **plus la partie dure, plus l'artefact est violent**. Il
 est invisible en test court et flagrant après dix minutes, donc il faut le
 chercher en avançant l'horloge, pas en regardant une seconde de jeu.
+
+### Une figure de banc doit être ATTEINTE, pas approchée
+
+La figure des Confettis — cœur, rond, carré — existait depuis longtemps et
+**ne s'était jamais formée une seule fois**. Mesuré : les trois formes étaient
+bien tirées à parts égales, mais la forme n'était lisible que **0,39 s par
+figure**, et à cet instant chaque poisson se trouvait encore à **337 px en
+moyenne de sa place** — pour une figure de 150 px de rayon. Ils étaient deux
+fois plus loin de leur place que la figure n'était grande. On ne voyait pas un
+cœur : on voyait un nuage se resserrer vaguement et se rouvrir.
+
+Quatre causes, et c'est le genre de cumul qui rend un gag invisible sans que
+rien n'ait l'air cassé :
+
+1. **L'amplitude suivait un triangle** (0 → 1 → 0 en 2,6 s) : la forme pleine
+   n'existait qu'à un instant, jamais tenue.
+2. **La place assignée était multipliée par cette amplitude**, donc elle
+   *fuyait* le poisson qui courait après — et elle était accrochée au chef, qui
+   se déplaçait lui aussi.
+3. **Le steering de figure plafonne à 1,6× la vitesse** (112 px/s pour un
+   Confetti) : 3 s pour parcourir 337 px, quand la scène en durait 2,6.
+4. **Cohésion et alignement des boids tiraient vers le centre du banc**, contre
+   la place assignée.
+
+Elle se joue donc en trois temps, comme toute mise en scène du projet : ils
+**courent** à leur place (ancre figée, vitesse ×3,2), ils **tiennent** la pose
+(2,8 s), puis ils se dispersent. Pendant la figure, `_enFigure` coupe cohésion
+et alignement — la séparation reste, elle empêche deux poissons de se
+superposer sur le tracé. Mesuré après : **écart médian 26 px, pose tenue 2,8 s,
+1,35 figure/min** au lieu de 0,9.
+
+Deux pièges rencontrés en le corrigeant, tous deux génériques :
+
+- **`Ecosystem.cadence` compte les INDIVIDUS.** Appliquée à une scène de banc,
+  où un seul chef joue pour tout le groupe, elle donnait 500 s de cooldown à
+  l'unique chef — soit une figure toutes les huit minutes. D'où
+  **`Ecosystem.cadenceBanc`**, qui compte les bancs.
+- **Le chef peut mourir ou changer de banc en pleine scène.** Sans ménage, il
+  garde sa phase pour toujours et ses membres restent cloués à une place que
+  plus personne ne pilote.
+
+Et depuis que le sommeil est collectif : **on ne prend pas la pose en dormant.**
+La figure pouvait se déclencher sur un banc entièrement endormi — personne ne
+rejoignait sa place et on voyait un tas de dormeurs avec des ZzZ.
 
 ### L'humeur du banc : le banc décide, l'individu interprète
 
@@ -1373,6 +1428,27 @@ ou une restauration partielle, **jamais une exception ni une page blanche**. Une
 espèce inconnue est sautée, l'immigration la ramènera si elle existe encore ; un
 quota dépassé désactive la sauvegarde au lieu de relancer une exception toutes
 les vingt secondes.
+
+Cas vécu (2026-09-06) : un `NaN` de position devient **`null` dans le JSON**
+(`JSON.stringify` ne connaît pas NaN) — une session de debug qui appelait
+`Ecosystem.update()` **sans dt** avait mis tous les nageurs libres en NaN, la
+sauvegarde suivante a écrit des null, la restauration jetait les 7 espèces d'un
+coup et l'autosave gravait la perte à chaque rechargement : une extinction
+silencieuse en cascade, alors que seules les espèces fixes/rampantes
+survivaient. Depuis, une espèce dont **toutes** les entrées sont illisibles est
+**repeuplée immédiatement** (`spawnGroups`, comme l'immigration mais sans
+attendre) ; s'il reste des congénères valides, on ne fait rien. Le moteur
+lui-même ne produit pas de NaN en marche normale (vérifié sur 5 min de
+simulation au dt réel) — c'est bien la donnée sauvée qu'il faut savoir réparer.
+
+Deux boutons discrets sous ↻ : **💾 emporter** (télécharge la sauvegarde en
+fichier) et **📂 rapporter** (la recharge, avec confirmation — un fichier
+illisible est refusé AVANT de toucher au stockage, l'aquarium courant ne
+risque rien). La raison d'être est iOS, qui efface le localStorage des sites
+non visités depuis 7 jours : le fichier est la seule persistance sûre, et il
+sert aussi à déménager un aquarium d'un appareil à l'autre. `FileReader` et
+pas `Blob.text()` : ce dernier n'existe qu'à partir de Safari 14, or le socle
+du jeu est Safari 13.1.
 
 Le bouton **↻** (en haut à gauche, avec confirmation) efface et recharge. Il est
 volontairement **hors de la barre d'action** : c'est la seule commande qui

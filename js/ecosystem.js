@@ -565,6 +565,16 @@ const Ecosystem = {
     return Math.max(mini, (n / parMinute) * 60) * U.rand(0.7, 1.35);
   },
 
+  // La même chose pour une scène de BANC, où un seul individu joue pour tout le
+  // groupe. `cadence` compte les individus : appliquée telle quelle à la figure
+  // des Confettis, elle donnait 500 s de cooldown à l'unique chef, soit une
+  // figure toutes les huit minutes pour tout l'aquarium. Ici on compte les
+  // BANCS, c'est-à-dire le nombre de scènes réellement en concurrence.
+  cadenceBanc(e, membres, parMinute, mini = 12) {
+    const bancs = Math.max(1, Math.round((this.counts[e.speciesId] || 1) / Math.max(1, membres.length)));
+    return Math.max(mini, (bancs / parMinute) * 60) * U.rand(0.75, 1.3);
+  },
+
   // Proie la plus proche pour un prédateur (à portée de détection).
   // Le monde fait 8000 px de large : avec une portée trop courte, les chasseurs
   // errent sans jamais croiser de proie et meurent de faim.

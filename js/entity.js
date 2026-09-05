@@ -1528,12 +1528,18 @@ class Entity {
         if (d2 < rSep2) { sx += (this.x - m.x); sy += (this.y - m.y); }
       }
       if (n > 0) {
-        if (!panique) {
+        // EN FIGURE, chacun a une place à tenir. Cohésion et alignement tirent
+        // vers le CENTRE et la direction du banc : ils luttaient contre la place
+        // assignée, et le contour ne se fermait jamais. On garde la séparation,
+        // qui empêche deux poissons de se superposer sur le tracé.
+        if (!panique && !this._enFigure) {
           ax += ((cx / n) - this.x) * 1.5;     // cohésion : seulement au calme
           ay += ((cy / n) - this.y) * 1.5;
         }
-        ax += (avx / n - this.vx) * 2.2;       // alignement
-        ay += (avy / n - this.vy) * 2.2;
+        if (!this._enFigure) {
+          ax += (avx / n - this.vx) * 2.2;     // alignement
+          ay += (avy / n - this.vy) * 2.2;
+        }
         const kSep = panique ? 9 : 4.5;
         ax += sx * kSep; ay += sy * kSep;      // séparation
         // La contagion de panique vivait ICI : « assez de voisins affolés, on

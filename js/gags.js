@@ -554,29 +554,69 @@ const GAGS = {
     // Un seul individu du banc pilote la scène : celui d'identifiant le plus
     // petit. Sans ce chef, chacun démarrait sa propre figure.
     const chef = membres[0];
-    if (e !== chef) return;
+    if (e !== chef) {
+      // Le chef a pu mourir ou changer de banc en pleine figure. Sans ce
+      // ménage, l'ancien chef garde sa phase pour toujours et ses membres
+      // restent cloués à une place qui n'est plus pilotée par personne.
+      if (e._figPh) { e._figPh = null; e._figX = null; e._figSpeed = null; e._enFigure = false; }
+      return;
+    }
 
-    if (e._figT > 0) {
+    // LA FIGURE NE SE FORMAIT JAMAIS. Mesuré : les trois formes sont bien
+    // tirées (cœur, rond, carré à parts égales), mais la forme n'était lisible
+    // que **0,39 s par figure**, et à cet instant chaque poisson se trouvait
+    // encore à **337 px en moyenne de sa place** — pour une figure de 150 px de
+    // rayon. Ils étaient deux fois plus loin de leur place que la figure
+    // n'était grande. On ne voyait donc pas un cœur : on voyait un nuage se
+    // resserrer vaguement et se rouvrir.
+    //
+    // Trois causes, toutes corrigées ici :
+    //   1. l'amplitude suivait un TRIANGLE (0 → 1 → 0 en 2,6 s) : la forme
+    //      pleine n'existait qu'à un instant, jamais tenue ;
+    //   2. la place assignée était multipliée par cette amplitude, donc elle
+    //      FUYAIT le poisson qui courait après, et elle était accrochée au chef,
+    //      qui bougeait lui aussi ;
+    //   3. le steering de figure plafonne à 1,6× la vitesse — 112 px/s pour un
+    //      Confetti, soit 3 s pour parcourir 337 px, quand la scène en durait 2,6.
+    //
+    // Elle se joue donc en trois temps, comme toute mise en scène du projet :
+    // ils COURENT à leur place, ils TIENNENT la pose, puis ils se dispersent.
+    if (e._figPh) {
       e._figT -= dt;
-      const k = 1 - Math.abs(e._figT / 2.6 - 0.5) * 2;   // 0 → 1 → 0
-      const R = 120 + membres.length * 2;
+      const R = 90 + membres.length * 1.6;
+      const pose = e._figPh === 'pose';
+      // L'ancre est FIGÉE au démarrage. Accrochée au chef, la cible se déplaçait
+      // pendant que le banc courait après elle.
       membres.forEach((m, i) => {
-        const u = i / membres.length;
-        const p = GAGS._figure(e._figure, u, R);
-        m._figX = e.x + p.x * k; m._figY = e.y + p.y * k;
+        const p = GAGS._figure(e._figure, i / membres.length, R);
+        m._figX = e._figCX + p.x; m._figY = e._figCY + p.y;
+        // Il faut pouvoir Y ALLER : plein régime pour rejoindre sa place, puis
+        // de quoi la tenir sans repartir en vadrouille.
+        m._figSpeed = m.def.speed * (pose ? 3.2 : 1.4);
+        m._enFigure = true;                 // ses boids le tiraient vers le banc
       });
-      if (e._figT <= 0) {
-        // La gêne se lit sur le visage de TOUS, mais la goutte de sueur ne
-        // sort que sur quelques-uns : un banc de 40 confettis en faisait 40
-        // d'un coup (125 gouttes/min à lui seul).
-        for (const m of membres) { m._figX = null; m._figY = null; m.emote('blush', 1.6, Math.random() < 0.12); }
+      if (e._figT > 0) return;
+      if (pose) { e._figPh = 'tenue'; e._figT = 2.8; return; }
+      // Dispersion : la gêne se lit sur le visage de TOUS, mais la goutte ne
+      // sort que sur quelques-uns — un banc de 40 en faisait 40 d'un coup.
+      e._figPh = null;
+      e._figCd = Ecosystem.cadenceBanc(e, membres, 4);
+      for (const m of membres) {
+        m._figX = null; m._figY = null; m._figSpeed = null; m._enFigure = false;
+        m.emote('blush', 1.6, Math.random() < 0.12);
       }
       return;
     }
-    e._figCd = (e._figCd ?? U.rand(20, 50)) - dt;
+    e._figCd = (e._figCd ?? Ecosystem.cadenceBanc(e, membres, 4)) - dt;
     if (e._figCd > 0) return;
-    e._figCd = U.rand(45, 100);
-    e._figT = 2.6;
+    // ON NE PREND PAS LA POSE EN DORMANT. Depuis que le sommeil est une
+    // décision de banc, la figure pouvait se déclencher sur un banc entièrement
+    // endormi : personne ne rejoignait sa place et on voyait un tas de dormeurs
+    // avec des ZzZ. C'est une scène de jour.
+    const h = Ecosystem.humeurDe(e);
+    if ((h && h.dort) || e.state === 'sleep') { e._figCd = U.rand(8, 16); return; }
+    e._figPh = 'pose'; e._figT = 2.2;
+    e._figCX = e.x; e._figCY = e.y;
     e._figure = U.pick(['coeur', 'rond', 'carre']);
   },
 

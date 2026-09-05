@@ -444,6 +444,104 @@ const Ecosystem = {
     return this.byGroup[e.groupId] || [];
   },
 
+  // ===========================================================================
+  // L'HUMEUR DU BANC — le banc décide, l'individu interprète.
+  // ===========================================================================
+  // Chaque poisson décidait seul de dormir (`Math.random() < dt * 0.06` par
+  // frame) et se réveillait sur son propre minuteur de 12 à 30 s. Un banc de
+  // trente ne converge donc JAMAIS : mesuré, **la nuit un banc est coupé en
+  // deux 81 % du temps, et il n'est jamais entièrement endormi — 0 %**. On voit
+  // en permanence une moitié qui erre entre les dormeurs.
+  //
+  // Ce n'est PAS une optimisation. La détection de menace ne coûte que 0,09 ms,
+  // soit 2 % de la simulation (`chasseurs` est une liste plate d'une poignée
+  // d'individus) : mutualiser ne fait rien gagner. Le gain est entièrement
+  // visuel, et il est dans la cohérence.
+  //
+  // LE PIÈGE À NE PAS Y TOMBER : partager UNE émotion ferait afficher le même
+  // visage à quarante poissons au même instant, et on perdrait exactement ce
+  // que le projet construit avec soin — cinq couleurs, ±26 % de dispersion, et
+  // une phrase qui dit « On est nombreux, mais on est PAS pareils ! ». D'où les
+  // deux étages : le banc prend la décision, elle se propage en **vague** depuis
+  // un initiateur, et **un poisson sur six est à contretemps** (même règle que
+  // la Crevette Guirlande, dont il y en a toujours une qui clignote de travers).
+  //
+  // La parade et la ponte restent individuelles : c'est un couple, pas un banc.
+  humeurs: {},
+
+  humeurDe(e) {
+    return e.groupId == null ? null : this.humeurs[e.groupId];
+  },
+
+  // Propage une bascule en vague depuis `src`. Le délai suit la DISTANCE : un
+  // banc qui s'endort ou qui détale de proche en proche se lit comme une onde,
+  // là où un basculement simultané se lit comme un interrupteur.
+  vague(membres, src, t, etendue, cle) {
+    for (const o of membres) {
+      const d = Math.hypot(o.x - src.x, o.y - src.y);
+      o[cle] = t + Math.min(etendue, d / 300 * etendue)
+             + ((o.id % 6) === 0 ? U.rand(0.25, 1) * etendue : 0);
+    }
+  },
+
+  humeurBancs(dt, t) {
+    const nuit = Main.nightAmount() > 0.55;
+    for (const g in this.byGroup) {
+      const m = this.byGroup[g];
+      if (!m.length) continue;
+      const def = m[0].def;
+      if (!def.schooling) continue;
+      const h = this.humeurs[g] || (this.humeurs[g] = { dort: false, prochain: 0, menace: null, alerte: -1e9 });
+      h.vu = t;
+
+      // --- Sommeil collectif. Le banc se couche ensemble et se lève ensemble,
+      // par cycles : rester endormi toute la nuit d'un bloc figerait un tiers
+      // de l'aquarium pendant des minutes.
+      const peutDormir = !def.sleeps && !def.nocturnal && !def.ambush && !def.aerial;
+      if (!peutDormir) { h.dort = false; continue; }
+      if (!nuit) {
+        if (h.dort) { h.dort = false; this.vague(m, m[0], t, 1.6, '_vagueDodo'); }
+        h.prochain = 0;
+        continue;
+      }
+      if (t < h.prochain) continue;
+      h.dort = !h.dort;
+      // Un banc dort par tranches franches et ne se réveille que brièvement :
+      // c'est ce qui fait qu'on voit enfin un banc ENTIÈREMENT endormi.
+      h.prochain = t + (h.dort ? U.rand(30, 70) : U.rand(8, 20));
+      this.vague(m, m[0], t, 1.6, '_vagueDodo');
+    }
+    // Purge des groupes disparus : `humeurs` survit aux frames, `byGroup` non.
+    if ((this._purgeHumeur = (this._purgeHumeur || 0) + dt) > 20) {
+      this._purgeHumeur = 0;
+      for (const g in this.humeurs) if (this.humeurs[g].vu !== t) delete this.humeurs[g];
+    }
+  },
+
+  // Un membre a vu une menace : TOUT LE BANC est prévenu, en vague depuis lui.
+  // C'est ce qui remplace la contagion bricolée des boids (« assez de voisins
+  // affolés »), qui appelait `emote('scared')` à chaque frame — mesuré sur le
+  // Confetti : 1 085 appels par minute pour 63 vraies frayeurs, soit dix-sept
+  // appels par frayeur. Et comme `emote` repousse `exprTimer` à chaque appel,
+  // l'enveloppe qui doit monter PUIS RETOMBER restait bloquée au sommet : le
+  // banc ne jouait jamais sa peur, il la maintenait.
+  alerterBanc(e, menace, t) {
+    const h = this.humeurDe(e);
+    if (!h) return false;
+    if (t - h.alerte < 0.7 && h.menace && !h.menace.dead) return true;   // alerte déjà en cours
+    h.alerte = t; h.menace = menace;
+    this.vague(this.byGroup[e.groupId] || [e], e, t, 0.9, '_vaguePeur');
+    return true;
+  },
+
+  // La menace que le banc a signalée, si la vague m'a atteint.
+  menaceDuBanc(e, t) {
+    const h = this.humeurDe(e);
+    if (!h || !h.menace || h.menace.dead) return null;
+    if (t - h.alerte > 2.2) return null;                 // l'alerte se périme
+    return t >= (e._vaguePeur ?? 0) ? h.menace : null;
+  },
+
   // Servi par l'index reconstruit à chaque buildGrid — balayer les ~490
   // entités à chaque ponte était du gâchis. Les pushes en cours de frame
   // (spawnGroups, layEgg) incrémentent counts eux-mêmes pour que les plafonds
@@ -1006,6 +1104,7 @@ const Ecosystem = {
   _tick: 0,
   update(dt, t) {
     this.buildGrid();
+    this.humeurBancs(dt, t);      // le banc décide AVANT que ses membres pensent
     this._tick = (this._tick + 1) % 3;
     const tick = this._tick;
     for (const e of this.entities) {

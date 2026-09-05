@@ -475,11 +475,34 @@ class Entity {
         }
       }
       if (def.snores && Math.random() < dt * 0.7) Particles.bubble(this.x + this.size * 0.8, this.y, U.rand(4, 9));
+      // UN BANC SE LÈVE ENSEMBLE. Pour un poisson de banc, c'est l'humeur du
+      // groupe qui commande le réveil, pas son minuteur personnel — et elle
+      // l'atteint quand la vague arrive jusqu'à lui.
+      const hb = Ecosystem.humeurDe(this);
+      if (hb && def.schooling) {
+        if (!hb.dort && t >= (this._vagueDodo ?? 0)) { this.state = 'wander'; this.release(); }
+        else if (this.stateTimer <= 0) { this.state = 'wander'; this.release(); }   // secours
+        return;
+      }
       if (this.stateTimer <= 0) { this.state = 'wander'; this.release(); }
       return;
     }
     if (def.sleeps && this.state === 'wander' && Math.random() < dt * 0.01) {
       this.state = 'sleep'; this.stateTimer = U.rand(12, 25); return;
+    }
+    // --- SOMMEIL DE BANC : la décision est prise une fois pour le groupe
+    // (`Ecosystem.humeurBancs`), et elle se propage en vague. Le tirage
+    // individuel qui suit ne concerne donc plus que les solitaires.
+    if (def.schooling) {
+      const h = Ecosystem.humeurDe(this);
+      if (h && h.dort && this.state === 'wander' && t >= (this._vagueDodo ?? 0)) {
+        // Le banc commande le réveil, mais on garde un minuteur de SECOURS :
+        // un poisson peut perdre son groupe en dormant (`regroupeBancs` remanie
+        // les bancs toutes les 6 s, et un banc décimé disparaît). Sans lui, il
+        // n'aurait plus personne pour le réveiller et dormirait indéfiniment.
+        this.state = 'sleep'; this.stateTimer = U.rand(90, 150);
+        return;
+      }
     }
     // La nuit, l'aquarium s'endort (GDD §10). Seuls les nocturnes et les
     // embusqués veillent. Avant, seul le niveau 2 dormait : on ne voyait
@@ -489,7 +512,7 @@ class Entity {
     // se joue QUE sur une chasse. Elle ne s'est pas affichée une seule fois en
     // 18 minutes, et le Fou Moustachu (45 % endormi) remontait son algue une
     // fois toutes les dix minutes. Un oiseau qui dort n'a plus de rôle.
-    if (!def.sleeps && !def.nocturnal && !def.ambush && !def.aerial
+    if (!def.schooling && !def.sleeps && !def.nocturnal && !def.ambush && !def.aerial
         && Main.nightAmount() > 0.55 && Math.random() < dt * 0.06) {
       this.state = 'sleep'; this.stateTimer = U.rand(12, 30); return;
     }
@@ -500,10 +523,21 @@ class Entity {
     // personne ne mange) n'a jamais rien à craindre — alors que le Poulpe
     // Ninja, charognard mais proie du Cachalot ET du Calamar Géant, ne prenait
     // jamais peur. Il n'y échappait que par son encre.
-    const threat = Ecosystem.nearestPredatorOf(this);
+    // UNE PEUR SE JOUE, ELLE NE SE MAINTIENT PAS. `emote` repousse `exprTimer`
+    // à chaque appel : appelé à chaque frame de la fuite, il bloquait
+    // l'enveloppe de `emoteK()` près de son sommet et le visage ne retombait
+    // jamais (mesuré sur le Confetti : 1 085 appels/min pour 63 frayeurs).
+    // L'émotion ne part donc plus qu'à l'ENTRÉE dans la fuite.
+    let threat = def.schooling ? Ecosystem.menaceDuBanc(this, t) : null;
+    if (!threat) {
+      threat = Ecosystem.nearestPredatorOf(this);
+      // Un poisson de banc qui voit une menace prévient TOUT LE MONDE, et la
+      // consigne se propage en vague depuis lui.
+      if (threat && def.schooling) Ecosystem.alerterBanc(this, threat, t);
+    }
     if (threat) {
+      if (this.state !== 'flee') this.emote('scared', 1.6, Math.random() < 0.25);
       this.state = 'flee'; this.target = threat; this.stateTimer = 1.5;
-      this.emote('scared', 1.6, Math.random() < 0.25);
     } else if (this.state === 'flee') {
       if (this.stateTimer <= 0) { this.state = 'wander'; this.target = null; } // laisse le temps à une fausse alerte (gag) de se voir
     }
@@ -1485,14 +1519,13 @@ class Entity {
       const panique = this.state === 'flee';
       const rSep2 = panique ? 6400 : 1600;     // 80 px contre 40
       const mates = Ecosystem.groupMates(this);
-      let cx = 0, cy = 0, avx = 0, avy = 0, sx = 0, sy = 0, n = 0, alarme = 0;
+      let cx = 0, cy = 0, avx = 0, avy = 0, sx = 0, sy = 0, n = 0;
       for (const m of mates) {
         if (m === this) continue;
         const d2 = U.dist2(this.x, this.y, m.x, m.y);
         if (d2 > 340 * 340) continue;
         cx += m.x; cy += m.y; avx += m.vx; avy += m.vy; n++;
         if (d2 < rSep2) { sx += (this.x - m.x); sy += (this.y - m.y); }
-        if (m.state === 'flee') alarme++;      // la panique se propage de proche en proche
       }
       if (n > 0) {
         if (!panique) {
@@ -1503,11 +1536,14 @@ class Entity {
         ay += (avy / n - this.vy) * 2.2;
         const kSep = panique ? 9 : 4.5;
         ax += sx * kSep; ay += sy * kSep;      // séparation
-        // Assez de voisins affolés : on file avec eux sans avoir vu la menace
-        if (alarme > n * 0.25 && this.state === 'wander') {
-          maxSpeed = def.speed * 1.8;
-          this.emote('scared', 1.2);
-        }
+        // La contagion de panique vivait ICI : « assez de voisins affolés, on
+        // file avec eux ». Elle comptait les fuyards à chaque frame et appelait
+        // `emote('scared')` à chaque frame — 622 appels/min pour le seul
+        // Confetti, l'essentiel de ses 1 085. Elle est remplacée par l'alerte de
+        // banc (`Ecosystem.alerterBanc`), qui prévient tout le monde EN UNE FOIS
+        // et propage la consigne en vague depuis celui qui a vu la menace.
+        // C'est plus juste (un banc réagit comme un corps, pas par grappes) et
+        // ça n'émet qu'une émotion par poisson et par frayeur.
       }
     }
 

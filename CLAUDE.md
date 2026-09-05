@@ -9,9 +9,61 @@ Final.png`, découpée en repères par `decoupe_planche.py`).
 ## Stack
 
 HTML5 pur : Canvas 2D, zéro dépendance, zéro build. Scripts classiques (pas de
-modules ES). `js/boot.js` charge tous les fichiers avec `?v=<timestamp>` :
-**c'est l'anti-cache** — ajouter un nouveau fichier js implique de l'ajouter à
-la liste de `boot.js`, pas à `index.html`.
+modules ES). `js/boot.js` charge tous les fichiers **dans l'ordre de sa liste**
+— ajouter un fichier js implique de l'ajouter là, pas à `index.html`. C'est la
+seule source de vérité de cette liste : `build.py` la lit plutôt que de la
+recopier.
+
+`?v=<timestamp>` est **l'anti-cache, et seulement en local** : il garantit qu'un
+F5 après modification recharge vraiment le code. En ligne, ce même timestamp
+change à chaque visite — 546 ko de JS retéléchargés à chaque fois, jamais rien
+en cache. Hors localhost, `boot.js` charge donc l'URL nue et laisse l'ETag du
+serveur faire son travail.
+
+Piège de lecture au passage : `s.async = false` ne sérialise que
+l'**exécution**. Les 20 fichiers se téléchargent en parallèle — le coût en ligne
+n'est pas 20 allers-retours, mais un seul de plus (le navigateur ne découvre la
+liste qu'après avoir exécuté `boot.js`). Ce n'est pas ce qui justifierait un
+bundler dans le flux de dev.
+
+## Déploiement
+
+Le jeu est une **page statique** : aucun backend, aucun appel réseau sortant,
+aucune dépendance. Le socle exigé par le code est ES2020 (`??`), Pointer Events,
+`fetch`, `localStorage` et Canvas 2D — soit **Chrome/Edge 80+, Firefox 74+,
+Safari 13.1+**. Deux choses dégradent proprement : `willReadFrequently` (ignoré
+s'il est inconnu) et le `ctx.filter` du Crabe Disco. `roundRect` est
+réimplémenté en `arcTo`, donc il n'impose rien.
+
+`python build.py` prépare `dist/`, à téléverser tel quel sur n'importe quel
+hébergeur statique. Trois choses qu'il règle, et qu'il ne faut pas défaire :
+
+- **Le cache.** Les 20 scripts deviennent un `aquarium.<empreinte>.js`
+  (546 ko, 175 ko gzippés) que l'hébergeur peut servir en `immutable`. L'empreinte
+  est un hash du contenu : une nouvelle version change de nom et s'impose d'elle-
+  même, il n'y a **aucun numéro de version à penser à incrémenter**. C'est
+  précisément le piège qu'on évite en ne mettant pas une constante `VERSION`
+  dans `boot.js`.
+- **Ce qu'on publie.** Le dépôt pèse 23 Mo, le jeu 623 ko. Planches de concept,
+  repères de découpe, atelier, serveur de dev et documentation sont de
+  l'**outillage** et restent à terre. Les dessins expédiés sont ceux que
+  `Sprites.init` lit vraiment — le manifeste **plus** les `sprite:` déclarés dans
+  les fiches d'espèce, jamais tout `Assets/*.json` (les autres sont des dessins
+  en cours).
+- **La concaténation est sûre**, et il faut qu'elle le reste : aucun fichier
+  n'est emballé dans une IIFE, tous partagent déjà la même portée globale et
+  aucun identifiant top-level n'est en double. Les envelopper cacherait `Main`,
+  `Camera` & Cie, dont la console de debug et `atelier.html` se servent.
+
+`python build.py --inline` produit à la place **un seul fichier**
+`dist/index.html` (623 ko, 215 ko gzippés) qui s'ouvre d'un double-clic. Les
+dessins y sont **embarqués** (`Sprites.PRECHARGE`, lu par `Sprites.init` avant
+tout `fetch`) : sans ça, `file://` bloque `fetch` par CORS et le fichier perdrait
+tous ses sprites **en silence**, en rendant des silhouettes procédurales.
+Vérifié : un seul GET, zéro requête vers `Assets/`.
+
+Rien de tout cela n'entre dans le flux de dev — `build.py` ne sert qu'au
+déploiement, et `index.html`, `boot.js` et l'atelier fonctionnent comme avant.
 
 Lancer avec `python dev_server.py 8642` (config `.claude/launch.json`) — un
 `http.server` multi-thread qui envoie `Cache-Control: no-store`, et qui expose en
@@ -445,6 +497,68 @@ et le battement des nageoires.
 Corollaire à retenir : **plus la partie dure, plus l'artefact est violent**. Il
 est invisible en test court et flagrant après dix minutes, donc il faut le
 chercher en avançant l'horloge, pas en regardant une seconde de jeu.
+
+### L'humeur du banc : le banc décide, l'individu interprète
+
+Chaque poisson décidait seul de dormir (`Math.random() < dt * 0.06` par frame)
+et se réveillait sur son propre minuteur de 12 à 30 s. Un banc de trente ne
+converge donc **jamais**. Mesuré : la nuit, **un banc était coupé en deux 81 %
+du temps**, et il n'était **jamais** entièrement endormi — 0 %. On voyait en
+permanence une moitié qui erre entre les dormeurs.
+
+**Ce n'est PAS une optimisation, et il faut le savoir avant de s'y mettre.** La
+détection de menace coûte 0,09 ms, soit 2 % de la simulation (`chasseurs` est
+une liste plate d'une poignée d'individus) : mutualiser ne fait rien gagner. Le
+gain est entièrement visuel.
+
+`Ecosystem.humeurBancs` calcule une humeur par groupe, une fois par frame, avant
+que les membres pensent. Deux décisions y passent, et deux seulement :
+
+- **le sommeil** — le banc se couche et se lève ensemble, par cycles (30–70 s
+  endormi, 8–20 s éveillé) ; rester endormi toute la nuit d'un bloc figerait un
+  tiers de l'aquarium pendant des minutes ;
+- **la peur** — le premier membre qui voit une menace prévient tout le monde
+  (`alerterBanc`), ce qui remplace la contagion bricolée des boids
+  (« assez de voisins affolés »).
+
+La parade et la ponte **restent individuelles** : c'est un couple, pas un banc.
+
+**Le piège à ne pas y tomber : ne jamais partager l'ÉMOTION elle-même.**
+Quarante poissons au même visage au même instant, c'est perdre exactement ce que
+le projet construit avec soin — cinq couleurs, ±26 % de dispersion, et une
+phrase qui dit « On est nombreux, mais on est PAS pareils ! ». D'où
+`Ecosystem.vague()` : la consigne se propage **depuis un initiateur**, avec un
+délai proportionnel à la distance, et **un poisson sur six est à contretemps**
+(même règle que la Crevette Guirlande, dont il y en a toujours une qui clignote
+de travers).
+
+Mesuré après : accord dans le banc **77 % → 91 %**, banc entièrement endormi la
+nuit **0 % → 36 %**, coupé en deux la nuit **81 % → 43 %** — et sur ce reste,
+**95 % des éveillés ont une raison de l'être** (en parade, en migration, en
+fuite, en train de manger, ou la vague ne les a pas encore atteints). Ce n'est
+plus du désordre, c'est de la vie.
+
+Deux garde-fous à ne pas retirer :
+
+- **Un minuteur de secours** sur le dormeur de banc (90–150 s). `regroupeBancs`
+  remanie les bancs toutes les 6 s et un banc décimé disparaît : sans lui, un
+  poisson qui perd son groupe en dormant n'a plus personne pour le réveiller.
+- **`humeurs` est purgé** des groupes disparus toutes les 20 s : il survit aux
+  frames, `byGroup` non.
+
+### Une peur se JOUE, elle ne se maintient pas
+
+`emote()` repousse `exprTimer` à chaque appel. Appelé à chaque frame de la
+fuite, il bloquait l'enveloppe de `emoteK()` près de son sommet : le visage ne
+retombait jamais, et le banc *maintenait* sa peur au lieu de la jouer. Mesuré
+sur le Confetti : **1 085 appels par minute pour 63 vraies frayeurs**, soit
+dix-sept appels par frayeur, dont 622 venaient de la contagion des boids et 355
+de la fuite elle-même.
+
+L'émotion ne part plus qu'à **l'entrée** dans l'état (`if (this.state !==
+'flee')`). Mesuré après : **1,2 appel par frayeur**. La règle vaut pour tout
+état durable — vérifier `state` avant d'émettre, jamais émettre dans la branche
+qui s'exécute chaque frame.
 
 ### Un banc poursuivi s'ÉPARPILLE, il ne se resserre pas
 

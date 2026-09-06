@@ -1596,7 +1596,13 @@ const FishBody = {
   // par-dessus, comme pour tout le monde.
   drawUrchin(ctx, e, t) {
     const s = e.size;
-    const respire = 1 + Math.sin(t * 0.7 + e.phase) * 0.04;
+    // IL HÉRISSE SES PIQUANTS quand quelque chose approche. `_piquantGonfle`
+    // est déjà calculé par `Entity.piquer` pour tous les piquants (c'est lui
+    // qui gonfle le Fugu) : ici il allonge les épines et les fait frémir. Sans
+    // ça, l'Oursin était le seul piquant du jeu qui ne prévenait pas — on se
+    // piquait dessus sans avoir rien vu venir.
+    const herisse = e._piquantGonfle ?? 0;
+    const respire = 1 + Math.sin(t * 0.7 + e.phase) * 0.04 + herisse * 0.3;
     // Piquants : deux couronnes décalées, pour que la boule paraisse pleine
     ctx.strokeStyle = e.colorDark;
     ctx.lineCap = 'round';
@@ -1604,7 +1610,8 @@ const FishBody = {
       const n = c ? 11 : 13;
       ctx.lineWidth = Math.max(1.4, s * (c ? 0.1 : 0.14));
       for (let i = 0; i < n; i++) {
-        const a = (i / n) * Math.PI * 2 + c * 0.28 + Math.sin(t * 0.5 + i) * 0.03;
+        const a = (i / n) * Math.PI * 2 + c * 0.28
+                + Math.sin(t * (0.5 + herisse * 26) + i) * (0.03 + herisse * 0.05);
         const L = s * (c ? 1.5 : 1.85) * respire;
         ctx.beginPath();
         ctx.moveTo(Math.cos(a) * s * 0.55, Math.sin(a) * s * 0.55);

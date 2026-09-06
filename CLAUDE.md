@@ -509,6 +509,73 @@ Corollaire à retenir : **plus la partie dure, plus l'artefact est violent**. Il
 est invisible en test court et flagrant après dix minutes, donc il faut le
 chercher en avançant l'horloge, pas en regardant une seconde de jeu.
 
+### LA CADENCE DE L'AQUARIUM : peu de gags, et rares
+
+Relevé du 6 septembre 2026 : **160 déclenchements de scène par minute** pour
+tout l'aquarium, soit près de trois par seconde. Le joueur ne contemplait plus
+rien, il assistait à un feu d'artifice — BOUH, prout, vroum, éclair, poof, sans
+interruption.
+
+**La référence est Theme Park** : le public y exprime des émotions en
+permanence — des visages, des petites réactions — mais les ÉVÉNEMENTS y sont
+rares. D'où la règle : **ce qui foisonne doit être SILENCIEUX** (le visage, les
+sourcils, le regard qui suit le curseur, le tangage, le clignotement, le
+gonflement d'avertissement) ; **ce qui claque doit être RARE**, pour qu'on ait
+le plaisir de le surprendre.
+
+`GAGS.CADENCE` (en tête de `gags.js`) est la table unique des fréquences, en
+déclenchements par minute **pour tout l'aquarium** — `Ecosystem.cadence` fait la
+division par l'effectif. Trois régimes :
+
+| Régime | Cible | Ce que c'est |
+|---|---|---|
+| **bruyant** | 0,3 – 0,5 /min | il y a un cri, une détonation, un éclair. Une fois toutes les deux à trois minutes quelque part. |
+| **scène** | 0,8 – 1,2 /min | visible mais silencieux : une pose, une danse, une disparition, un câlin. |
+| **vivant** | 2 – 4 /min | vie de fond discrète : une perle qui brille, un duo qui se reforme. |
+
+Mesuré après : **160 → 27 déclenchements/min**. Le « BOUH ! » du Dauphin passe
+de un toutes les 3,4 secondes à un toutes les trois minutes.
+
+Deux mécaniques ne sont pas des gags et se règlent ailleurs, mais suivent la
+même règle :
+
+- **La décharge de l'Anguille** partait 25 fois par minute — l'événement le plus
+  bruyant du jeu, devenu un bruit de fond. Son cooldown se calcule maintenant
+  sur l'effectif (`Ecosystem.cadence`), `shock.cooldown` n'étant plus qu'un
+  plancher.
+- **Le gonflement du Fugu** est un AVERTISSEMENT : répété toutes les quinze
+  secondes, il n'en est plus un. Un délai (`_gonfleCd`) l'empêche de re-gonfler
+  aussitôt.
+
+Ce qui est piloté par la simulation — embuscades, sauts, mastication, poursuite
+— n'a pas sa place dans la table : le régler reviendrait à régler l'écosystème.
+
+### Le ballon et les épines
+
+« Le pic-pic doit piquer, surtout les ballons. » Trois défauts se cumulaient :
+
+1. **L'Oursin vivait là où personne ne va.** Sa bande `[80, 2600]` répartissait
+   ses quatre groupes sur 5 400 px de fond valide, et ils se retrouvaient TOUS
+   entre 1 500 et 2 600 px de profondeur, à x > 2 900. Mesuré : le Fugu ne s'en
+   approchait **jamais** à moins de 1 200 px. Sa frayère disait déjà `reef` ; sa
+   bande la contredisait. Ramené à `[80, 1000]`, il est dans le récif — 91 px du
+   Fugu le plus proche.
+2. **Sa portée de 55 px** ne piquait que par accident, en le frôlant.
+3. **Le Fugu ne gonflait que devant du GROS et du MOBILE**, donc jamais devant
+   un Oursin — et un ballon dégonflé n'éclate pas. Or des épines, c'est
+   exactement ce qui doit lui faire peur. Le piquant le prévient maintenant
+   (`_alarmePiquant`, canal d'une frame) : **il gonfle à cause des piquants, et
+   c'est ça qui le fait éclater.**
+
+La règle est générique — tout `piquant` crève tout `gonflable` gonflé, donc la
+Rascasse le fait aussi. Le Fugu n'en meurt pas (seul le Barracuda le mange) : il
+se dégonfle d'un coup, part en vrille comme un ballon qu'on lâche, et repart
+sonné. Mesuré : **0,4 éclatement par minute**, pile dans le régime bruyant.
+
+L'Oursin **hérisse** en plus ses piquants à l'approche, en réutilisant le
+`_piquantGonfle` qui gonfle le Fugu : c'était le seul piquant du jeu qui ne
+prévenait pas.
+
 ### Une figure de banc doit être ATTEINTE, pas approchée
 
 La figure des Confettis — cœur, rond, carré — existait depuis longtemps et

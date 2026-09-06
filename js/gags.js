@@ -4,6 +4,60 @@
 // Chaque entrée est appelée à chaque frame depuis Entity.think via `def.gag`.
 // Voir EMOTIONS.md pour la table action → émotion, et le mode d'emploi d'une
 // scène (phases, `_freeze`, `_faceAt`, une seule bulle).
+// LA CADENCE DE L'AQUARIUM, EN UN SEUL ENDROIT.
+//
+// Relevé du 6 septembre 2026 : **160 déclenchements de scène par minute** pour
+// tout l'aquarium, soit près de trois par seconde. Le joueur ne contemplait
+// plus rien, il assistait à un feu d'artifice : BOUH, prout, vroum, éclair,
+// poof, sans interruption.
+//
+// La référence est Theme Park : le public y exprime des émotions en permanence
+// — des visages, des petites réactions — mais les ÉVÉNEMENTS y sont rares. Ce
+// qui foisonne doit être SILENCIEUX (le visage, les sourcils, le regard qui
+// suit le curseur, le tangage, le clignotement) ; ce qui claque doit être RARE,
+// pour qu'on ait le plaisir de le surprendre.
+//
+// Les valeurs sont des déclenchements par minute POUR TOUT L'AQUARIUM, pas par
+// individu — `Ecosystem.cadence` fait la division par l'effectif. Trois régimes :
+//
+//   BRUYANT (0,3–0,5) — il y a un cri, une détonation, un éclair. Une fois
+//     toutes les deux à trois minutes quelque part. C'est le régime des scènes
+//     dont on se souvient.
+//   SCÈNE   (0,8–1,2) — c'est visible mais silencieux : une pose, une danse,
+//     une disparition, un câlin.
+//   VIVANT  (2–4)     — de la vie de fond, discrète : une perle qui brille, un
+//     duo qui se reforme, un bâillement.
+//
+// Le reste — gonflement d'avertissement, sauts, embuscades, mastication — est
+// piloté par la simulation et n'a pas sa place ici : le régler reviendrait à
+// régler l'écosystème.
+const CADENCE = {
+  // BRUYANT
+  bouh:       0.3,   // le « BOUH ! » du Dauphin. Était à 3,58/min — une farce
+                     //   toutes les 3,4 s, l'exemple type de la saturation.
+  prout:      0.4,
+  vroum:      0.4,
+  decharge:   0.5,   // était à 25,5/min : cinquante fois trop
+  run:        0.4,
+  echo:       0.4,
+  fusee:      0.4,
+  baille:     0.4,
+  // SCÈNE
+  ninja:      1,     // était à 21/min
+  danse:      1,
+  guili:      1,
+  calin:      1,
+  gronde:     1,
+  demenage:   0.8,
+  ventouse:   0.8,
+  glouglou:   1,
+  soin:       1.2,   // un peu plus : il rend un service à l'écosystème
+  figure:     4,     // par BANC, pas par individu (cf. `cadenceBanc`)
+  // VIVANT
+  perle:      2,
+  chapardage: 1,
+};
+
 const GAGS = {
   // Elle porte son nom : chapelet de bulles permanent, et gros glouglou joyeux
   bulle_fofolle(e, dt, t) {
@@ -14,7 +68,7 @@ const GAGS = {
     if (Math.random() < dt * 0.9) Particles.bubble(e.x + e.size * 0.7, e.y, U.rand(2, 5));
     e._blubCd = (e._blubCd ?? U.rand(4, 10)) - dt;
     if (e._blubCd <= 0) {
-      e._blubCd = Ecosystem.cadence(e, 4);
+      e._blubCd = Ecosystem.cadence(e, CADENCE.glouglou);
       for (let i = 0; i < 8; i++) Particles.bubble(e.x + e.size * 0.8, e.y + U.rand(-6, 6), U.rand(3, 8));
       e.emote('happy', 1.8);
     }
@@ -22,7 +76,7 @@ const GAGS = {
 
   // Sa boule disco : il plante ses pinces, s'arrête net et DANSE sur place.
   crabe(e, dt, t) {
-    e._discoCd = (e._discoCd ?? Ecosystem.cadence(e, 4)) - dt;
+    e._discoCd = (e._discoCd ?? Ecosystem.cadence(e, CADENCE.danse)) - dt;
     if (e._discoCd <= 0 && !e._dancing) {
         e._dancing = U.rand(2.5, 4.5);
         e.emote('happy', 3, false);      // pas d'étincelles : ce sont des NOTES
@@ -34,7 +88,7 @@ const GAGS = {
     e._disco = true;                          // couleurs qui défilent (drawCrab)
     e._danceT = (e._danceT ?? 0) + dt;
     if (Math.random() < dt * 0.9) Particles.sparkles(e.x, e.y - e.size * 1.4, 2);
-    if (e._dancing <= 0) { e._dancing = 0; e._disco = false; e._discoCd = Ecosystem.cadence(e, 4); }
+    if (e._dancing <= 0) { e._dancing = 0; e._disco = false; e._discoCd = Ecosystem.cadence(e, CADENCE.danse); }
   },
 
   // cœur, gros cooldown, sinon on ne comprend pas d'où viennent les cœurs.
@@ -59,7 +113,7 @@ const GAGS = {
   clown(e, dt, t) {
     // Il dort DANS son anémone : on ne sort pas chatouiller la nuit.
     if (e.state === 'sleep') { e._tickleTarget = null; e._faceAt = null; return; }
-    e._kissCd = (e._kissCd ?? Ecosystem.cadence(e, 7)) - dt;
+    e._kissCd = (e._kissCd ?? Ecosystem.cadence(e, CADENCE.guili)) - dt;
 
     const c = e._tickleTarget;
     if (c && (c.dead || U.dist2(e.x, e.y, c.x, c.y) > 520 * 520)) { e._tickleTarget = null; e._faceAt = null; }
@@ -109,7 +163,7 @@ const GAGS = {
     if (e._kissT > 2.6) {
       o.emote('blush', 2);
       e._tickleTarget = null; e._faceAt = null;
-      e._kissCd = Ecosystem.cadence(e, 7);
+      e._kissCd = Ecosystem.cadence(e, CADENCE.guili);
     }
   },
 
@@ -121,7 +175,7 @@ const GAGS = {
 
   // « BERK ! » avec une tête dégoûtée.
   perroquet(e, dt, t) {
-    e._fartCd = (e._fartCd ?? U.rand(60, 130)) - dt;
+    e._fartCd = (e._fartCd ?? Ecosystem.cadence(e, CADENCE.prout)) - dt;
     if (e._fartCd > 0 && !e._farting) return;
 
     if (!e._farting) {                       // 1. anticipation : il se fige, gêné
@@ -154,12 +208,12 @@ const GAGS = {
       o.malaise(0.55, qx, qy);
     }
     e._farting = 0;
-    e._fartCd = U.rand(70, 150);
+    e._fartCd = Ecosystem.cadence(e, CADENCE.prout);
   },
 
   // 3. il se plie de rire sur place, en tournant sur lui-même
   dauphin(e, dt, t) {
-    e._farceCd = (e._farceCd ?? Ecosystem.cadence(e, 5)) - dt;
+    e._farceCd = (e._farceCd ?? Ecosystem.cadence(e, CADENCE.bouh)) - dt;
     const ph = e._farcePh;
 
     if (!ph) {
@@ -185,7 +239,7 @@ const GAGS = {
     }
 
     const c = e._farceCible;
-    if (!c || c.dead) { e._farcePh = null; e._farceCd = Ecosystem.cadence(e, 5); return; }
+    if (!c || c.dead) { e._farcePh = null; e._farceCd = Ecosystem.cadence(e, CADENCE.bouh); return; }
     e._farceT += dt;
 
     if (ph === 'approche') {
@@ -234,7 +288,7 @@ const GAGS = {
     if (e._farceT < dt * 2) Particles.comic(e.x, e.y - e.size, 'ha');
     if (e._farceT > 2.4) {
       e._farcePh = null; e._farceCible = null; e._farceRoll = 0;
-      e._farceCd = Ecosystem.cadence(e, 5);
+      e._farceCd = Ecosystem.cadence(e, CADENCE.bouh);
     }
   },
 
@@ -381,7 +435,7 @@ const GAGS = {
     e._vroumCd = (e._vroumCd ?? 0) - dt;
     const vite = e.speedNow > e.def.speed * 1.6;
     if (vite && !e._vroum && e._vroumCd <= 0) {
-      e._vroum = true; e._vroumCd = U.rand(18, 40);
+      e._vroum = true; e._vroumCd = Ecosystem.cadence(e, CADENCE.vroum);
       Particles.shout(e.x, e.y - e.size * 1.2, 'VROUUUM', '#8fd8f5', e.size * 1.4);
       Particles.wake(e.x - e.size, e.y);
     }
@@ -391,14 +445,14 @@ const GAGS = {
   // LE COQUILLAGE FABRIQUE UNE PERLE. Il s'ouvre en grand, la perle brille, il
   // se referme d'un coup dès qu'on la regarde de trop près.
   coquillage(e, dt, t) {
-    e._perleCd = (e._perleCd ?? Ecosystem.cadence(e, 4)) - dt;
+    e._perleCd = (e._perleCd ?? Ecosystem.cadence(e, CADENCE.perle)) - dt;
     if (e._perleCd > 0) { if (e._perle > 0) e._perle = Math.max(0, e._perle - dt * 0.7); return; }
     if (!e._perle) {
       e._perle = 1;
       e.emote('proud', 3);
       Particles.sparkles(e.x, e.y - e.size * 0.8, 6);
     }
-    e._perleCd = Ecosystem.cadence(e, 4);
+    e._perleCd = Ecosystem.cadence(e, CADENCE.perle);
   },
 
   // LA BALEINE RONFLE SI FORT QUE ÇA SOUFFLE LES PETITS. Le ronflement existait
@@ -458,9 +512,9 @@ const GAGS = {
   // Enfin une raison au nom « Echo ».
   orque(e, dt, t) {
     if (Main.nightAmount() < 0.5) return;
-    e._echoCd = (e._echoCd ?? U.rand(6, 18)) - dt;
+    e._echoCd = (e._echoCd ?? Ecosystem.cadence(e, CADENCE.echo)) - dt;
     if (e._echoCd > 0) return;
-    e._echoCd = U.rand(14, 30);
+    e._echoCd = Ecosystem.cadence(e, CADENCE.echo);
     Particles.spin(e.x, e.y, e.size * 2.2);
     Particles.comic(e.x, e.y - e.size * 1.2, '♪');
     let reveilles = 0;
@@ -501,9 +555,9 @@ const GAGS = {
       }
       return;
     }
-    e._fuseeCd = (e._fuseeCd ?? U.rand(14, 40)) - dt;
+    e._fuseeCd = (e._fuseeCd ?? Ecosystem.cadence(e, CADENCE.fusee)) - dt;
     if (e._fuseeCd > 0) return;
-    e._fuseeCd = U.rand(60, 140);
+    e._fuseeCd = Ecosystem.cadence(e, CADENCE.fusee);
     e._fusee = 0.9;                               // le décompte
     e._freeze = 0.9;
     if (Math.random() < 0.4) Particles.comic(e.x, e.y - e.size * 1.2, '3');
@@ -512,9 +566,9 @@ const GAGS = {
   // LA MURÈNE BÂILLE. Un jaillissement pour rien, qui fait détaler tout le
   // récif — c'est le seul moment où on la voit en entier.
   murene(e, dt, t) {
-    e._bailleCd = (e._bailleCd ?? U.rand(12, 35)) - dt;
+    e._bailleCd = (e._bailleCd ?? Ecosystem.cadence(e, CADENCE.baille)) - dt;
     if (e._bailleCd > 0) return;
-    e._bailleCd = U.rand(30, 70);
+    e._bailleCd = Ecosystem.cadence(e, CADENCE.baille);
     e.emote('eating', 2.2, false);                // la gueule grande ouverte
     let fuyards = 0;
     for (const o of Ecosystem.neighbors(e.x, e.y)) {
@@ -600,14 +654,14 @@ const GAGS = {
       // Dispersion : la gêne se lit sur le visage de TOUS, mais la goutte ne
       // sort que sur quelques-uns — un banc de 40 en faisait 40 d'un coup.
       e._figPh = null;
-      e._figCd = Ecosystem.cadenceBanc(e, membres, 4);
+      e._figCd = Ecosystem.cadenceBanc(e, membres, CADENCE.figure);
       for (const m of membres) {
         m._figX = null; m._figY = null; m._figSpeed = null; m._enFigure = false;
         m.emote('blush', 1.6, Math.random() < 0.12);
       }
       return;
     }
-    e._figCd = (e._figCd ?? Ecosystem.cadenceBanc(e, membres, 4)) - dt;
+    e._figCd = (e._figCd ?? Ecosystem.cadenceBanc(e, membres, CADENCE.figure)) - dt;
     if (e._figCd > 0) return;
     // ON NE PREND PAS LA POSE EN DORMANT. Depuis que le sommeil est une
     // décision de banc, la figure pouvait se déclencher sur un banc entièrement
@@ -664,13 +718,13 @@ const GAGS = {
       return;
     }
     e._monte = null;
-    e._ventouseCd = (e._ventouseCd ?? Ecosystem.cadence(e, 3)) - dt;
+    e._ventouseCd = (e._ventouseCd ?? Ecosystem.cadence(e, CADENCE.ventouse)) - dt;
     if (e._ventouseCd > 0) return;
     for (const o of Ecosystem.neighbors(e.x, e.y)) {
       if (o === e || o.dead || o.def.movement === 'fixed' || o.def.size < 16) continue;
       if (U.dist2(e.x, e.y, o.x, o.y) > 90 * 90) continue;
       e._monte = o; e._ventouseT = U.rand(6, 14);
-      e._ventouseCd = Ecosystem.cadence(e, 3);
+      e._ventouseCd = Ecosystem.cadence(e, CADENCE.ventouse);
       e.emote('happy', 2);
       o.emote('surprise', 1.6);
       Particles.comic(e.x, e.y - 18, '🎢');
@@ -684,13 +738,13 @@ const GAGS = {
   anemone(e, dt, t) {
     e._danse = 0.5 + 0.5 * Math.sin(t * 1.6 + e.phase);
     if (Math.random() < dt * 0.012) Particles.notes(e.x, e.y - e.size);
-    e._calinCd = (e._calinCd ?? Ecosystem.cadence(e, 4)) - dt;
+    e._calinCd = (e._calinCd ?? Ecosystem.cadence(e, CADENCE.calin)) - dt;
     if (e._calinCd > 0) return;
     for (const o of Ecosystem.neighbors(e.x, e.y)) {
       if (o === e || o.dead || o.def.movement === 'fixed') continue;
       if (o.speedNow < 12) continue;                  // ceux qui PASSENT
       if (U.dist2(e.x, e.y, o.x, o.y) > 80 * 80) continue;
-      e._calinCd = Ecosystem.cadence(e, 4);
+      e._calinCd = Ecosystem.cadence(e, CADENCE.calin);
       e.emote('happy', 2.2);
       o.emote('blush', 1.8);
       return;
@@ -814,9 +868,9 @@ const GAGS = {
 
     // Déclenchement : rarement, et jamais en fuite ni en chasse — un ninja
     // choisit son moment.
-    e._ninjaCd = (e._ninjaCd ?? U.rand(20, 50)) - dt;
+    e._ninjaCd = (e._ninjaCd ?? Ecosystem.cadence(e, CADENCE.ninja)) - dt;
     if (e._ninjaCd > 0 || e.state === 'flee' || e.state === 'hunt') return;
-    e._ninjaCd = U.rand(35, 80);
+    e._ninjaCd = Ecosystem.cadence(e, CADENCE.ninja);
     e._ninjaPh = 'guet'; e._ninjaT = 1.1;
     e.emote('surprise', 1.1, false);          // il vérifie que personne ne regarde
   },
@@ -854,12 +908,12 @@ const GAGS = {
         else c.emote('happy', 1.8);
         e.emote('proud', 2);
         c._soigneur = null;
-        e._client = null; e._faceAt = null; e._soinCd = Ecosystem.cadence(e, 5);
+        e._client = null; e._faceAt = null; e._soinCd = Ecosystem.cadence(e, CADENCE.soin);
       }
       return;
     }
     if (e._client) { e._client._soigneur = null; e._client = null; }
-    e._soinCd = (e._soinCd ?? Ecosystem.cadence(e, 5)) - dt;
+    e._soinCd = (e._soinCd ?? Ecosystem.cadence(e, CADENCE.soin)) - dt;
     if (e._soinCd > 0) return;
     // Priorité au requin édenté : c'est son patient le plus urgent.
     let best = null, bestScore = 1e9;
@@ -898,11 +952,11 @@ const GAGS = {
         e.hold('angry');
         e._fautif.emote('ashamed', 2);
       }
-      if (e._grondeT <= 0) { e.release(); e._fautif = null; e._faceAt = null; e._grondeCd = U.rand(14, 32); }
+      if (e._grondeT <= 0) { e.release(); e._fautif = null; e._faceAt = null; e._grondeCd = Ecosystem.cadence(e, CADENCE.gronde); }
       return;
     }
     e._fautif = null;
-    e._grondeCd = (e._grondeCd ?? U.rand(6, 18)) - dt;
+    e._grondeCd = (e._grondeCd ?? Ecosystem.cadence(e, CADENCE.gronde)) - dt;
     if (e._grondeCd > 0) return;
     for (const o of Ecosystem.neighbors(e.x, e.y)) {
       if (o === e || o.dead || o.speciesId === e.speciesId) continue;
@@ -1106,12 +1160,12 @@ const GAGS = {
         e._runPh = null; e._figX = null; e._figY = null; e._figSpeed = null;
         e._diveTargetY = null;
         e.emote('proud', 2.2);
-        e._runCd = Ecosystem.cadence(e, 2);
+        e._runCd = Ecosystem.cadence(e, CADENCE.run);
       }
       return;
     }
 
-    e._runCd = (e._runCd ?? Ecosystem.cadence(e, 2)) - dt;
+    e._runCd = (e._runCd ?? Ecosystem.cadence(e, CADENCE.run)) - dt;
     if (e._runCd > 0 || e.state === 'hunt' || e.state === 'flee') return;
     e._runPh = 'montee'; e._runT = 11;
     // Toujours vers le large quand il en est loin, sinon dans son sens de nage.
@@ -1122,14 +1176,14 @@ const GAGS = {
   // un oiseau qui vient d'attraper quelque chose, fond dessus, et repart avec.
   goeland(e, dt, t) {
     if (e._vol > 0) { e._vol -= dt; return; }
-    e._volCd = (e._volCd ?? U.rand(5, 15)) - dt;
+    e._volCd = (e._volCd ?? Ecosystem.cadence(e, CADENCE.chapardage)) - dt;
     if (e._volCd > 0) return;
     for (const o of Ecosystem.neighbors(e.x, e.y)) {
       if (o === e || o.dead || !o.def.aerial) continue;
       if (o._chew <= 0 && !(o._poche > 0)) continue;      // il n'a rien à voler
       if (U.dist2(e.x, e.y, o.x, o.y) > 320 * 320) continue;
       // Le hold-up
-      e._volCd = U.rand(25, 55); e._vol = 1.4;
+      e._volCd = Ecosystem.cadence(e, CADENCE.chapardage); e._vol = 1.4;
       e.x = o.x + U.rand(-30, 30); e.y = o.y - 30;
       o._chew = 0; o._chewPrey = null; o._poche = 0;
       o.emote('angry', 2.2);
@@ -1179,9 +1233,9 @@ const GAGS = {
   // petite, en cherche une autre — et va lorgner celle du Coquillage Rieur, qui
   // n'apprécie pas du tout.
   bernard(e, dt, t) {
-    e._demeCd = (e._demeCd ?? U.rand(25, 60)) - dt;
+    e._demeCd = (e._demeCd ?? Ecosystem.cadence(e, CADENCE.demenage)) - dt;
     if (e._demeCd > 0) return;
-    e._demeCd = U.rand(50, 110);
+    e._demeCd = Ecosystem.cadence(e, CADENCE.demenage);
     e.emote('surprise', 2);
     Particles.comic(e.x, e.y - e.size * 1.5, '🐚');
     for (const o of Ecosystem.neighbors(e.x, e.y)) {

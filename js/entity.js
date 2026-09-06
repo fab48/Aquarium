@@ -735,6 +735,7 @@ class Entity {
       if (!Entity.passe(o)) continue;
       const d2 = U.dist2(this.x, this.y, o.x, o.y);
       if (d2 > menace * menace) continue;
+      if (this.def.gonflable && this._gonfleCd > 0 && !(this._piquantGonfle > 0.5)) continue;
       // LE GONFLEMENT EST UN AVERTISSEMENT, DONC IL S'ADRESSE À UNE MENACE.
       // N'importe quel passant le déclenchait, krill compris : sur un récif
       // fréquenté, le Fugu enflait toutes les six secondes et ça devenait sa
@@ -742,12 +743,41 @@ class Entity {
       // mais tout ce qui touche se pique quand même, c'est le principe.
       if (o.size >= this.size * 1.6) proche = Math.max(proche, 1 - Math.sqrt(d2) / menace);
 
+      // LE BALLON ET LES ÉPINES. Le Fugu ne se gonflait que devant du GROS et du
+      // MOBILE : il ne gonflait donc jamais devant un Oursin, et le ballon
+      // n'éclatait jamais. Or des épines, c'est exactement ce qui doit lui
+      // faire peur — et c'est ce gonflement qui le perd. Il gonfle à cause des
+      // piquants, et c'est ça qui le fait éclater.
+      //
+      // L'alarme passe par un canal d'une frame (`_alarmePiquant`), relevé par
+      // le Fugu dans son propre `piquer()` : c'est le piquant qui prévient, pas
+      // le ballon qui devine.
+      if (o.def.gonflable) {
+        o._alarmePiquant = Math.max(o._alarmePiquant ?? 0, 1 - Math.sqrt(d2) / menace);
+      }
       // Contact : les épines entrent
       const touche = (this.size * this._piquantK() + o.size) * 0.9;
       if (d2 > touche * touche) continue;
       o._piqueCd = (o._piqueCd ?? 0) - dt;
       if (o._piqueCd > 0) continue;
       o._piqueCd = 12;                                   // 4 s : on repiquait le même voisin en boucle
+      // UN BALLON CONTRE DES PIQUANTS. Le Fugu se gonfle pour ne pas être
+      // mangé — et c'est exactement ce qui le perd face à un Oursin : plus il
+      // est gros, plus il offre de surface aux épines. Il ne meurt pas (seul le
+      // Barracuda le mange), il se dégonfle D'UN COUP et part en vrille comme
+      // un ballon qu'on lâche. La règle est générique : tout `piquant` crève
+      // tout `gonflable` gonflé, donc la Rascasse le fait aussi.
+      if (o.def.gonflable && (o._piquantGonfle ?? 0) > 0.4) {
+        o._piquantGonfle = 0; o._gonfle = 0; o._gonfleCd = 45;
+        Particles.shout(o.x, o.y - o.size, 'PSCHIII', '#cfe4f5', o.size * 1.4);
+        Particles.burst(o.x, o.y, '#ffe08a', 10);
+        for (let k = 0; k < 5; k++) Particles.bubble(o.x, o.y, U.rand(2, 5));
+        const a = Math.random() * Math.PI * 2;
+        o.vx += Math.cos(a) * 360; o.vy += Math.sin(a) * 360;
+        o.assomme(null, true);
+        this.emote('smug', 2.4, false);
+        continue;
+      }
       o.malaise(0.8, this.x, this.y);
       o.state = 'flee'; o.target = this; o.stateTimer = 2;
       Particles.burst(o.x, o.y, '#ffe08a', 5);
@@ -755,10 +785,20 @@ class Entity {
     }
     // Gonflement : plein au contact, nul quand personne n'approche. Amorti,
     // sinon il claque d'un coup dès qu'un poisson passe à la limite.
+    // `_alarmePiquant` est ce qu'un VOISIN PIQUANT lui a signalé cette frame :
+    // c'est le seul cas où il gonfle pour quelque chose de petit et d'immobile.
+    proche = Math.max(proche, this._alarmePiquant ?? 0);
+    this._alarmePiquant = 0;
     this._piquantGonfle = U.lerp(this._piquantGonfle ?? 0, proche, Math.min(1, dt * 4));
     if (this.def.gonflable) {
       this._gonfle = this._piquantGonfle;
       if (proche > 0.7 && this.exprTimer <= 0 && Math.random() < dt * 1.2) this.emote('angry', 1.2);
+      // UN AVERTISSEMENT QUI SE RÉPÈTE N'EN EST PLUS UN. Le gonflement partait
+      // 16 fois par minute — dès qu'un gros passait, et il en passe. On note le
+      // moment où il se dégonfle vraiment, et il ne peut pas re-gonfler tout de
+      // suite : c'est ce délai qui rend le geste sérieux.
+      if (this._piquantGonfle > 0.5) this._gonfleCd = 26;
+      else if (this._gonfleCd > 0) this._gonfleCd -= dt;
     }
   }
 
@@ -800,7 +840,14 @@ class Entity {
     }
     if (!cibles.length) return;                          // rien à zapper : on garde le jus
 
-    this._shockCd = U.rand(S.cooldown, S.cooldown * 1.8);
+    // LA DÉCHARGE EST L'ÉVÉNEMENT LE PLUS BRUYANT DU JEU — éclairs, cinq
+    // poissons en vrille, des étoiles partout. Elle partait 25 fois par minute
+    // quelque part dans l'aquarium, soit toutes les deux secondes et demie :
+    // on ne la remarquait plus, elle faisait partie du décor. Le cooldown se
+    // calcule donc sur l'EFFECTIF (`cadence`), pour une cadence d'aquarium
+    // d'environ une décharge par minute — assez rare pour qu'on la surprenne,
+    // assez fréquente pour qu'elle existe. `S.cooldown` reste le plancher.
+    this._shockCd = Math.max(S.cooldown, Ecosystem.cadence(this, 1, S.cooldown));
     Particles.eclairs(this.x, this.y, portee, 6);
     this.emote('smug', 1.8, false);
     // BORNÉE À HUIT VICTIMES, LES PLUS PROCHES. Une décharge lâchée dans un

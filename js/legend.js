@@ -32,6 +32,8 @@ const Legend = {
     ['🌿', 'le Fou Moustachu est remonté avec une algue au lieu d’un poisson'],
     ['un banc en forme de cœur', 'les Poissons Confetti prennent la pose, puis se dispersent, gênés'],
     ['un poisson tout rond', 'le Fugu Gonflé se gonfle : ne le touchez pas, ça rend malade'],
+    ['PSCHIII', 'le ballon a touché des épines — il se dégonfle d’un coup et part en vrille'],
+    ['des piquants qui s’allongent', 'l’Oursin Pic-Pic vous a vu venir'],
     ['une poche qui gigote', 'le Pélican a raté : le poisson ressort par le haut'],
   ],
 

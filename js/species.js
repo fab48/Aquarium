@@ -853,10 +853,19 @@ const SPECIES = {
   oursin: {
     name: 'Oursin Pic-Pic', realName: 'Oursin', trophic: 1, movement: 'fixed',
     nursery: 'reef',
-    depthBand: [80, 2600], size: 10, speed: 0,
+    // IL APPARTIENT AU RÉCIF, pas au large. Avec [80, 2600] les quatre groupes
+    // se répartissaient régulièrement sur 5 400 px de fond valide et se
+    // retrouvaient TOUS entre 1 500 et 2 600 px de profondeur, à x > 2 900 —
+    // c'est-à-dire loin de toute vie. Mesuré : le Fugu, qu'il est censé crever,
+    // ne s'en approchait jamais à moins de 1 200 px. Sa frayère disait déjà
+    // `reef` ; sa bande le contredisait.
+    depthBand: [80, 1000], size: 10, speed: 0,
     schooling: false, groupSize: [3, 5], popCap: 14,
     favoriteFood: 'plancton_dore', eatsFood: true,
-    piquant: { range: 55 },
+    // Portée relevée : à 55 px, on ne se piquait que par accident en le frôlant.
+    // C'est le piquant le plus assumé du roster (« On ne touche pas. Vraiment
+    // pas. ») et il crève les ballons — encore faut-il qu'on l'approche.
+    piquant: { range: 78 },
     colors: ['#3a2b52', '#6d5a8a'],
     render: 'urchin', sizeVar: 0.18,
     lifespan: [800, 1300],

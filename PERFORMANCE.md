@@ -591,3 +591,67 @@ paragraphe a été mesuré ainsi.
 La refonte du vocabulaire des marques d'émotion (cf. `EMOTIONS.md` §3 bis) a
 retiré au passage ~1 270 particules/min. Cumul depuis le relevé initial :
 **35 736 → 13 728 particules créées par minute, soit −62 %.**
+
+---
+
+## 9. Troisième passe (2026-09-06) — la cadence, le mobile, et la persistance
+
+Trois changements, aucun ne touche l'écosystème. Tous vérifiés en pilotant
+`Main.frame` avec des timestamps synthétiques (le panneau d'aperçu gèle rAF,
+on ne peut pas y mesurer une cadence réelle).
+
+### 9.1 Plafond de cadence (`Main.fpsCap`, 60 par défaut)
+
+rAF bat à la cadence de l'ÉCRAN : sur un téléphone à 120 Hz le jeu tournait à
+120 fps — deux fois le travail pour un gain nul sur un aquarium contemplatif,
+et l'étranglement thermique au bout (le téléphone chauffe, ralentit, et LÀ les
+frames deviennent vraiment lentes). La frame arrivée trop tôt est **sautée,
+simulation comprise** — c'est tout l'intérêt : diviser le travail, pas le
+lisser. `lastFrame` n'avance que sur une frame rendue, donc le `dt` s'accumule
+et le temps simulé suit le temps réel.
+
+Vérifié : 120 Hz plafonné 60 → 120 rendues sur 240 (une sur deux) ; plafonné
+30 → 60 sur 240 (une sur quatre) ; 60 Hz plafonné 60 → 120 sur 120 (le seuil
+laisse 5 ms de jeu, le jitter de rAF ne fait jamais sauter de frame à la
+cadence exacte). Temps simulé = temps réel dans les quatre cas.
+
+### 9.2 `adaptResolution` : seuil RELATIF, et un palier 30 fps
+
+Le seuil de déclenchement n'est plus une constante : c'est le **budget du
+plafond de cadence plus une marge** (16 ms au tactile, 23 au bureau — ce qui
+redonne exactement l'ancien seuil de 40 ms à plafond 60 sur bureau). Sans ça,
+à plafond 30, une frame parfaitement saine dure déjà 33 ms et l'ancien seuil
+fixe de 40 aurait continué d'adapter un jeu qui tient sa cadence — jusqu'à
+brider le dézoom pour rien.
+
+L'échelle des paliers gagne un barreau : dpr d'abord (le moins visible), puis
+**cadence 30 fps** (30 stables se lisent mieux qu'un 45 qui pompe, rien ne se
+déplace vite dans un aquarium), et la bride du dézoom en dernier (elle recadre
+la vue, c'est le plus visible des trois).
+
+### 9.3 dpr initial à 1,5 au tactile
+
+Sur un OLED de 390 px de large, la différence entre dpr 1,5 et 2 est à peine
+perceptible — et c'est **44 % de pixels en moins d'entrée de jeu** (mesuré :
+canvas 562×1218 au lieu de 750×1624 sur un 375×812 à devicePixelRatio 2), sans
+attendre que la mesure condamne dpr 2 après trois secondes de rame.
+`adaptResolution` garde la main pour descendre plus bas.
+
+### 9.4 Hors performance, même passe : la sauvegarde a une porte de sortie
+
+iOS efface le localStorage des sites non visités depuis 7 jours (ITP) : un
+joueur iPhone qui pose le jeu deux semaines perdait son aquarium. Deux parades
+livrées ensemble : la **PWA** (générée par `build.py` — une PWA installée est
+exemptée de la purge) et les boutons **💾/📂** d'export/import de la
+sauvegarde (3-10 ko de JSON ; un fichier illisible est refusé avant de toucher
+au stockage — vérifié sur trois fichiers invalides, stockage intact).
+
+### Ce qu'il reste au chantier mobile
+
+Le **profil de population petit écran** (réduire les plafonds des espèces
+d'ambiance de ~40 % quand l'écran est petit) : le plus gros gain de simulation
+restant par la courbe en n^1,4, et le seul levier qui touche l'écosystème —
+donc à valider par une simulation longue de contrôle, comme le culling en son
+temps. Et le fondu sous-pixel (ne pas dessiner ce qui fait moins de 2 px
+écran), gain modeste mais ciblé sur le krill.
+

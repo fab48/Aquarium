@@ -33,6 +33,11 @@
        déjà calibrée au pixel pour tenir dans les 375 px d'un petit téléphone :
        un septième bouton la ferait déborder. -->
   <button id="reset-btn" title="Recommencer un aquarium tout neuf">↻</button>
+  <!-- Emporter/rapporter la sauvegarde : mêmes boutons discrets que ↻, même
+       colonne. La raison d'être est iOS, qui efface le localStorage des sites
+       non visités depuis 7 jours — le fichier est la seule persistance sûre. -->
+  <button id="export-btn" title="Emporter la sauvegarde (fichier)">💾</button>
+  <button id="import-btn" title="Rapporter une sauvegarde">📂</button>
   <div id="info"></div>
 </div>
 <!-- LIEN VERS L'ATELIER DES CRÉATURES.

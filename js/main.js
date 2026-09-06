@@ -204,6 +204,31 @@ const Main = {
     btn.addEventListener('click', () => {
       if (confirm('Recommencer un aquarium tout neuf ?\nCelui-ci sera perdu.')) Save.recommencer();
     });
+
+    // Emporter / rapporter la sauvegarde (cf. save.js — la parade au
+    // localStorage effacé par iOS au bout de 7 jours sans visite).
+    const ex = document.getElementById('export-btn');
+    if (ex) ex.addEventListener('click', () => Save.exporter());
+    const im = document.getElementById('import-btn');
+    if (im) im.addEventListener('click', () => {
+      const inp = document.createElement('input');
+      inp.type = 'file';
+      inp.accept = 'application/json,.json';
+      inp.onchange = () => {
+        const f = inp.files && inp.files[0];
+        if (!f) return;
+        if (!confirm('Remplacer l\'aquarium actuel par celui du fichier ?')) return;
+        // FileReader et pas Blob.text() : ce dernier n'existe qu'à partir de
+        // Safari 14, or le socle du jeu est Safari 13.1.
+        const r = new FileReader();
+        r.onload = () => {
+          if (!Save.importer(String(r.result)))
+            alert('Ce fichier n\'est pas une sauvegarde d\'aquarium lisible.');
+        };
+        r.readAsText(f);
+      };
+      inp.click();
+    });
   },
 
   // LES DEUX BARRES SONT LA MÊME BARRE, tournée de 90°. C'est ce que le HUD

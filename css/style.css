@@ -105,15 +105,23 @@ html, body {
 /* Recommencer : en haut à gauche, sous l'indicateur de zone, discret et loin du
    pouce. Il s'allume en rouge au survol — la couleur dit ce qu'il fait avant
    même la confirmation. */
-#reset-btn {
+/* La colonne de gauche : recommencer, emporter, rapporter. Un seul style —
+   trois boutons écrits séparément divergeraient au premier réglage (même
+   leçon que les deux barres du HUD). Seule la position verticale change. */
+#reset-btn, #export-btn, #import-btn {
   position: absolute; top: 46px; left: 12px; pointer-events: auto;
   font-size: 17px; width: 34px; height: 34px; border-radius: 50%;
   border: 2px solid rgba(255,255,255,.22); background: rgba(10,40,70,.55);
   color: #cfe4f5; cursor: pointer; opacity: .55;
   transition: opacity .2s, border-color .2s, transform .1s;
 }
+#export-btn { top: 88px; font-size: 14px; }
+#import-btn { top: 130px; font-size: 14px; }
 #reset-btn:hover, #reset-btn:focus-visible {
   opacity: 1; border-color: #ff8a6a; color: #ff8a6a; transform: rotate(-45deg);
+}
+#export-btn:hover, #import-btn:hover, #export-btn:focus-visible, #import-btn:focus-visible {
+  opacity: 1; border-color: #7fd4ff;
 }
 .food-btn {
   font-size: 22px; width: 46px; height: 46px; border-radius: 50%;
@@ -155,7 +163,10 @@ html, body {
   .food-btn, #legend-btn, #info-btn { width: 48px; height: 48px; font-size: 23px; margin-left: 0; }
   /* Sur mobile la barre de zones prend TOUTE la largeur (46-67 px) : le bouton
      doit passer dessous, sinon il la chevauche. */
-  #reset-btn { width: 42px; height: 42px; font-size: 20px; opacity: .7; top: 78px; }
+  #reset-btn, #export-btn, #import-btn { width: 42px; height: 42px; opacity: .7; }
+  #reset-btn { font-size: 20px; top: 78px; }
+  #export-btn { top: 128px; }
+  #import-btn { top: 178px; }
   #food-bar { gap: 7px; bottom: 12px; width: max-content; }
   #info { display: none; }              /* le texte d'aide parle de la molette */
   #legend { right: 8px; left: 8px; width: auto; max-height: 60vh; bottom: 84px; }

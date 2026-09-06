@@ -99,12 +99,24 @@ const Save = {
     for (const k in SPECIES) SPECIES[k].id = k;
     const remap = new Map();
     let posees = 0, ignorees = 0;
+    // Espèce -> entrées à position illisible. Un NaN de position devient `null`
+    // dans le JSON (JSON.stringify ne connaît pas NaN) : c'est arrivé — une
+    // session de debug qui appelait Ecosystem.update sans dt a mis tous les
+    // nageurs libres en NaN, la sauvegarde suivante a écrit des null, et la
+    // restauration jetait les 7 espèces d'un coup. L'autosave gravait ensuite
+    // la perte : une extinction silencieuse, exactement ce que ce fichier
+    // promet d'empêcher.
+    const corrompues = {};
     for (const speciesId in d.pop) {
       // Une espèce renommée ou retirée depuis la sauvegarde est simplement
       // sautée. L'immigration la ramènera si elle existe encore.
       if (!SPECIES[speciesId]) { ignorees += d.pop[speciesId].length; continue; }
       for (const [x, y, adulte, g] of d.pop[speciesId]) {
-        if (!Number.isFinite(x) || !Number.isFinite(y)) { ignorees++; continue; }
+        if (!Number.isFinite(x) || !Number.isFinite(y)) {
+          corrompues[speciesId] = (corrompues[speciesId] || 0) + 1;
+          ignorees++;
+          continue;
+        }
         let groupId = null;
         if (g >= 0) {
           const cle = speciesId + '#' + g;
@@ -122,6 +134,21 @@ const Save = {
     // aquarium mort : on repart de zéro.
     if (!posees) return false;
 
+    // Réparation : une espèce dont TOUTES les entrées étaient illisibles
+    // repart d'un groupe neuf, comme le ferait l'immigration — mais tout de
+    // suite, pas dans quelques minutes. Si des congénères valides ont survécu,
+    // on ne fait rien : reproduction et immigration s'en chargent. Placé APRÈS
+    // le `return false` : quand la restauration est abandonnée, on ne doit pas
+    // avoir déjà semé des groupes dans un monde qu'Ecosystem.init va repeupler.
+    let repeuplees = 0;
+    for (const speciesId in corrompues) {
+      if (Ecosystem.countSpecies(speciesId) > 0) continue;
+      Ecosystem.spawnGroups(speciesId, 1);
+      // au moins un couple, sinon la lignée s'éteint aussitôt (cf. immigration)
+      if (Ecosystem.countSpecies(speciesId) < 2) Ecosystem.spawnGroups(speciesId, 1);
+      repeuplees++;
+    }
+
     Main.time = Number.isFinite(d.t) ? d.t : 0;
     if (Array.isArray(d.cam)) {
       Camera.x = Camera.tx = d.cam[0]; Camera.y = Camera.ty = d.cam[1];
@@ -130,7 +157,8 @@ const Save = {
       // dimensions jusqu'au premier coup de molette.
       if (d.cam[2] > 0) Camera.setZoom(d.cam[2]);
     }
-    console.info(`Aquarium restauré : ${posees} créatures${ignorees ? `, ${ignorees} ignorées` : ''}.`);
+    console.info(`Aquarium restauré : ${posees} créatures${ignorees ? `, ${ignorees} ignorées` : ''}`
+      + `${repeuplees ? `, ${repeuplees} espèce(s) repeuplée(s)` : ''}.`);
     return true;
   },
 
@@ -152,6 +180,40 @@ const Save = {
     if (this._acc < this.INTERVALLE) return;
     this._acc = 0;
     this.ecrire();
+  },
+
+  // --- Emporter / rapporter ---------------------------------------------------
+  // La sauvegarde ne vit qu'en localStorage, et iOS EFFACE le localStorage des
+  // sites non visités depuis 7 jours (Intelligent Tracking Prevention) : un
+  // joueur iPhone qui pose le jeu deux semaines perdait son aquarium. Le
+  // fichier exporté (3-10 ko) est la parade universelle — et il sert aussi à
+  // déménager un aquarium d'un navigateur ou d'un appareil à l'autre.
+  exporter() {
+    this.ecrire();                                   // l'état le plus frais
+    let brut = null;
+    try { brut = localStorage.getItem(this.CLE); } catch (e) { /* mode privé */ }
+    if (!brut) return false;
+    const a = document.createElement('a');
+    const url = URL.createObjectURL(new Blob([brut], { type: 'application/json' }));
+    a.href = url;
+    a.download = 'aquarium-sauvegarde.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    return true;
+  },
+
+  // Même validation que `lire()` : un fichier illisible est refusé AVANT de
+  // toucher au stockage — l'aquarium courant ne risque rien. Un fichier valide
+  // remplace la sauvegarde puis recharge, exactement le chemin de `recommencer`
+  // (reconstruire à chaud demanderait de vider une à une toutes les listes).
+  importer(texte) {
+    let d = null;
+    try { d = JSON.parse(texte); } catch (e) { return false; }
+    if (!d || d.v !== this.VERSION || !d.pop || !Number.isFinite(d.graine)) return false;
+    try { localStorage.setItem(this.CLE, texte); } catch (e) { return false; }
+    this._actif = false;              // que l'autosave ne réécrase pas en partant
+    location.reload();
+    return true;
   },
 
   // Le bouton « recommencer » : on efface, on tire une graine neuve, on

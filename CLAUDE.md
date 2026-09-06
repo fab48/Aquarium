@@ -509,6 +509,94 @@ Corollaire à retenir : **plus la partie dure, plus l'artefact est violent**. Il
 est invisible en test court et flagrant après dix minutes, donc il faut le
 chercher en avançant l'horloge, pas en regardant une seconde de jeu.
 
+### Un colosse se règle par le RIVAGE, pas par sa strate
+
+La Baleine Gros Dodo était déclarée entre 750 et 2 600 px de profondeur ; elle
+vivait mesurée entre 69 et 1 045. La contrainte ne servait qu'à la mettre en
+faute — et pire, à la garder 95 % de son temps en migration de ponte, à faire
+l'aller-retour vers une frayère qu'elle ne pouvait pas atteindre depuis sa bande.
+
+Ce qui compte pour un colosse n'est pas sa strate, c'est **le rivage**. Trois
+garde-fous s'en chargent déjà et suffisent : le tirant d'eau (`size * 2.2`), la
+barrière dure de `limiteLarge()` et les 900 px d'eau exigés d'un colosse. Sa
+bande couvre donc maintenant toute la colonne ([140, 3200]). Mesuré après :
+barrière à x = 2 420 pour un rivage à 980, les trois baleines entre x 3 383 et
+6 443, dans 1 590 à 2 900 px d'eau, **zéro échouage** — et 90 % de leur temps
+passé à nager au lieu de 3 %.
+
+### Un animal rare et qui vit vieux ne se reproduit pas souvent
+
+Mesuré : la Baleine passait **95 % de son temps à se reproduire** (54 % de
+parade, 41 % de migration), le Pélican 56 %, le Goéland 48 %, le Cormoran 43 %,
+le Fou Moustachu 41 %. Ils ne faisaient jamais ce pour quoi ils existent.
+
+Deux corrections, toutes deux générales :
+
+- **Les aériens et les colosses ne migrent plus vers leur frayère**
+  (`Ecosystem.migre`). Les lents en étaient déjà exclus parce qu'ils n'y
+  arrivaient pas ; ceux-là en sont exclus parce qu'ils y arrivent trop bien, et
+  que leur frayère est à l'autre bout du monde de leur zone de vie. Ils pondent
+  en diffusion, là où ils sont.
+- **`Entity.repos()`** espace les pontes selon la longévité : une Baleine qui
+  vit 2 000 à 3 000 s et plafonne à trois individus n'a pas besoin du même délai
+  qu'un Confetti qui vit quatre minutes.
+
+Mesuré après : Baleine **90 % d'errance** (0 % de parade, 0 % de migration),
+Goéland 99 %, Cormoran 98 %, Pélican 97 %, Fou Moustachu 94 % — et les quatre
+oiseaux chassent enfin.
+
+### On ne harcèle pas une espèce qui passe sa vie à fuir
+
+Le plancher de population (`refugeFloor`) protège une espèce qui s'effondre en
+NOMBRE. Il ne dit rien d'une espèce nombreuse mais épuisée : mesuré, le
+**Maquereau Métronome passait 61 % de son temps en fuite** — contre 15 % à errer
+— et déclenchait `scared` 254 fois par heure. Suivaient la Dorade (31 %), le
+Poisson Volant (31 %), la Crevette Sauteuse (24 %). Un poisson qui fuit ne fait
+rien d'autre : il ne mange pas, ne se reproduit pas, et n'a plus d'autre
+expression que la peur.
+
+`Ecosystem.harcelee(id)` est le pendant « stress » du plancher de population :
+la part de l'espèce en fuite est relevée chaque frame, lissée sur ~4 s, et
+au-delà de **50 %** l'espèce sort des menus le temps qu'elle souffle. Avec
+hystérésis (on ne la rechasse qu'une fois retombée à 35 %) — sans elle, le répit
+la fait cesser de fuir, donc la remet aussitôt au menu, donc elle refuit.
+
+Mesuré après : Maquereau **61 % → 33 %**, Dorade 31 → 20, Crevette Sauteuse
+24 → 15.
+
+### Aucune espèce ne doit être immangeable par accident
+
+Relevé du 6 septembre 2026 : **19 espèces sur 51 n'avaient aucun prédateur**.
+Neuf étaient des sommets de chaîne, et c'est normal. Les dix autres étaient des
+maillons morts — Oursin, Coquillage, Étoile, Nudibranche, Concombre, Anguille
+Jardinière, Krill, Raie, Poisson-lune, Tortue, Police, Anguille Coup-de-Jus,
+Bernard-l'Ermite. Rien ne les mangeait, donc elles plafonnaient et ne mouraient
+que de vieillesse : aucune tension, rien à regarder.
+
+Chacune a reçu **un seul** nouveau prédateur, choisi pour que la rencontre soit
+possible (bandes qui se recouvrent, sprint supérieur à la fuite) et cohérente :
+
+| Proie | Prédateur | Pourquoi |
+|---|---|---|
+| Oursin | Mérou Patatras | il aspire, et il mange déjà un piquant (le Fugu) |
+| Étoile · Coquillage · Concombre | Raie Ronron | elle fouit le sable — c'est son gag — et n'en mangeait rien |
+| Nudibranche · Anguille Jardinière | Anguille Coup-de-Jus | elle vit dans le sable et y mange ce qui y vit |
+| Krill | Poisson-lune Bada-boum | une mola gobe du plancton |
+| Bernard-l'Ermite | Poisson-Tapis | il mange déjà du crabe |
+| Police | Barracuda Perce-Ballon | même bande, et il est deux fois plus rapide |
+| Poisson-lune | Orque Echo | une orque qui mange une mola, c'est du documentaire |
+| Raie · Tortue · Anguille | Requin Dents-Molles | et il se prend une décharge en tentant l'Anguille |
+
+Restent sans prédateur, volontairement : les onze sommets, les quatre oiseaux,
+le Dentiste (`intouchable`), et le Corail et l'Anémone — les manger détruirait
+les frayères du récif.
+
+**Le garde-fou a été respecté** : chaque nouvelle proie n'a qu'UN nouveau
+prédateur, et la Raie a dû voir sa bande élargie ([1300, 1700] était une lame de
+400 px) pour atteindre le fond qu'elle est censée fouiller. Validé sur 15 min :
+**51 espèces sur 51 vivantes**, prises entre 0,1 et 0,7 par minute — une
+régulation douce, pas un massacre.
+
 ### LA CADENCE DE L'AQUARIUM : peu de gags, et rares
 
 Relevé du 6 septembre 2026 : **160 déclenchements de scène par minute** pour

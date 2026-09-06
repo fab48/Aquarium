@@ -124,7 +124,11 @@ const SPECIES = {
     // qu'à taille triplée (138), où le rayon de prise du requin vidait ses
     // proies jusqu'à leur plancher de report avant qu'il ne s'affame lui-même.
     schooling: false, groupSize: [1, 2], popCap: 6,
-    prey: ['thon', 'perroquet'], missChance: 0.5, grazes: true,   // rate souvent (gag signature)
+    // La Raie, la Tortue et l'Anguille n'avaient aucun prédateur. Un requin mange
+    // les trois — et se prend une décharge en essayant l'Anguille, ce qui est
+    // exactement le genre de scène qu'on veut voir.
+    prey: ['thon', 'perroquet', 'raie', 'tortue', 'anguille'],
+    missChance: 0.5, grazes: true,   // rate souvent (gag signature)
     colors: ['#8aa3b8'],
     bodyRatio: 0.42, tail: 'shark', fin: true,
     // Premier sprite de l'éditeur SVG (Assets/SharkSVG.json). Le visage commun
@@ -341,9 +345,16 @@ const SPECIES = {
   raie: {
     name: 'Raie Ronron', realName: 'Raie manta', trophic: 3, movement: 'wideband',
     nursery: 'deep',
-    depthBand: [1300, 1700], size: 34, speed: 40,
+    // Bande élargie : 400 px de haut, c'était une lame. Elle fouit le sable
+    // (c'est son gag), il lui faut le FOND, pas une tranche d'eau.
+    depthBand: [900, 2200], size: 34, speed: 40,
     schooling: false, groupSize: [1, 2],
     favoriteFood: 'vers_de_sable', eatsFood: true,
+    // ELLE MANGE LE FOND. C'est déjà ce que raconte son gag — elle plonge le
+    // museau dans le sable et soulève un nuage — mais elle ne mangeait
+    // personne, et l'Étoile, le Coquillage et le Concombre n'avaient aucun
+    // prédateur. Une raie broie les coquillages, c'est son métier.
+    prey: ['etoile', 'coquillage', 'concombre'], missChance: 0.3, senseRange: 700,
     colors: ['#6a7a8a'],
     render: 'ray',
     lifespan: [350, 550],
@@ -384,7 +395,7 @@ const SPECIES = {
     schooling: false, groupSize: [2, 3], popCap: 10,
     // `senseRange` porte bien plus loin que `ambush.range` : la première distance
     // sert à REPÉRER (et à ramper vers), la seconde à jaillir.
-    prey: ['lanterne', 'crevette', 'crabe'], senseRange: 950,
+    prey: ['lanterne', 'crevette', 'crabe', 'bernard'],   // le bernard n'avait personne, et il mange déjà du crabe senseRange: 950,
     eatsPoop: true,                    // il avale les cacas SANS être malade
     ambush: { range: 175, missChance: 0.3 },   // idem murène : la proie esquive désormais toute seule
     colors: ['#a0785a'],
@@ -402,7 +413,7 @@ const SPECIES = {
     depthBand: [200, 1900], size: 50, speed: 18, sprintSpeed: 65,
     // Géant placide : métabolisme lent, il ne meurt pas de faim entre deux méduses
     schooling: false, groupSize: [1, 2], popCap: 8, metabolism: 0.5,
-    prey: ['meduse', 'crevette'],   // principal régulateur des méduses (GDD §13)
+    prey: ['meduse', 'crevette', 'krill'],   // principal régulateur des méduses (GDD §13)
     colors: ['#e0d8c8'],
     render: 'sunfish', sleeps: true,
     lifespan: [800, 1100],
@@ -428,7 +439,10 @@ const SPECIES = {
     // qu'une seule proie repasse au-dessus de son plancher une minute pour que
     // l'Orque cesse de brouter alors qu'elle n'attrapera rien pour autant.
     // Mesuré sans : 5 mortes de faim et l'espèce éteinte en 10 min.
-    prey: ['thon', 'calamar'], grazes: true, trickster: true,
+    // Le Poisson-lune s'y ajoute : il n'avait aucun prédateur, il pèse 50 et il
+    // dérive à 18 px/s dans sa bande. Une orque qui mange une mola, c'est du
+    // documentaire.
+    prey: ['thon', 'calamar', 'poisson_lune'], grazes: true, trickster: true,
     colors: ['#1c2733'],
     bodyRatio: 0.42, tail: 'whale',
     lifespan: [850, 1150],
@@ -567,7 +581,7 @@ const SPECIES = {
     nursery: 'deep',
     depthBand: [900, 2200], size: 26, speed: 34,
     schooling: false, groupSize: [1, 2], popCap: 6, metabolism: 0.7,
-    prey: ['crabe'], missChance: 0.4, grazes: true,   // grazes : le plancton couvre les creux entre deux crabes
+    prey: ['crabe', 'nudibranche', 'jardiniere'], missChance: 0.4, grazes: true,   // grazes : le plancton couvre les creux entre deux crabes
     shock: { range: 150, cooldown: 9 },
     piquant: { range: 60 },            // même à l'arrêt, on ne la touche pas impunément
     colors: ['#6f7fa8', '#b9d4f0'],
@@ -617,7 +631,7 @@ const SPECIES = {
     nursery: 'reef',
     depthBand: [250, 1200], size: 38, speed: 34, sprintSpeed: 150,
     schooling: false, groupSize: [1, 2], popCap: 6, metabolism: 0.7,
-    prey: ['clown', 'fugu'], missChance: 0.35, senseRange: 700, grazes: true,
+    prey: ['clown', 'fugu', 'oursin'], missChance: 0.35, senseRange: 700, grazes: true,
     ambush: { range: 190, missChance: 0.3 },
     colors: ['#7d5a3c', '#c9a06a'],
     bodyRatio: 0.72, tail: 'fan', sizeVar: 0.16,
@@ -889,7 +903,7 @@ const SPECIES = {
     depthBand: [150, 1200], size: 40, speed: 110, sprintSpeed: 420,
     schooling: false, groupSize: [1, 3], popCap: 7,
     // Il lâche le Maquereau, qui avait trois prédateurs et tombait de 19 à 7.
-    prey: ['fugu', 'dorade'], missChance: 0.3, senseRange: 1400, grazes: true,
+    prey: ['fugu', 'dorade', 'police'], missChance: 0.3, senseRange: 1400, grazes: true,
     perceBallon: true,                 // il crève les piquants sans en souffrir
     colors: ['#8d9aa8', '#e2ecf4'],
     bodyRatio: 0.28, tail: 'lunate', sizeVar: 0.12,

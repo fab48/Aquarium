@@ -292,6 +292,25 @@ embarquée, donc on ne la retrouve plus.
   poser un. **Deux types**, parce que ce sont deux gestes différents :
   - **nageoire** — la forme *pivote* autour de l'ancre. Le disque affiché est le
     **rayon d'influence** : plein effet au centre, plus rien au bord.
+  - **aile** — l'angle **croît le long de l'envergure** : l'épaule tient, la
+    plume du bout décrit tout l'arc. C'est l'inverse exact d'une `nageoire`,
+    dont le plein effet est **sur** l'ancre, là où le bras de levier est nul —
+    le défaut qui donnait 1,4 px de débattement sur le Confetti. Relevé sur une
+    aile de 200 px à 55° : épaule **1,0 px**, milieu 91,2 px, bout **318,3 px**.
+
+    L'angle est en plus **retardé** vers le bout (curseur *souplesse*) : la
+    pointe traîne derrière le bras, donc l'aile se **courbe** au lieu de rester
+    une planche. C'est ce retard qui la fait lire comme une aile et pas comme
+    une pagaie.
+
+    Et le battement est **asymétrique** — un oiseau porte son poids : descente
+    vive, remontée molle. Mesuré sur la fonction : **35 %** du cycle pour la
+    descente, **65 %** pour la remontée, avec une vitesse de pointe **1,86 fois**
+    plus grande à la descente. Un sinus bat autant vers le haut que vers le bas :
+    c'est du carton qui claque.
+
+    Quatre espèces l'attendent — Pélican, Goéland, Cormoran, Fou Moustachu — et
+    le Poisson Volant, dont les pectorales sont exactement ça.
   - **pince** — une **charnière** à l'ancre, et seule la mâchoire d'un côté de
     l'axe pivote ; l'autre reste solidaire du membre. Faire tourner les deux
     ferait tourner la pince entière au lieu de l'ouvrir.
@@ -826,6 +845,13 @@ entièrement caché derrière elle — les silhouettes le tirent déjà à ~1,7 
 taille de la créature), et il doit savoir lire une couleur `rgb(…)` et pas
 seulement `#rrggbb`, sinon une teinte tirée au sort ressort en halo **blanc**.
 
+La luminescence est **toujours allumée dans l'atelier** : son faux `Main` déclare
+la nuit en permanence. On règle une lampe, on la voit. En jeu, six espèces seules
+déclarent `glowAtNight` — méduse, lanterne, crevette, calamar, anguille, krill —
+et chez elles le halo attend la nuit ; l'outil n'a pas à rejouer cette règle. Un
+bouton « 🌙 nuit » a existé pour ça et n'a été retiré que parce qu'il ne servait
+qu'à ces six espèces : partout ailleurs il était inerte.
+
 Plus, dans le panneau : un curseur d'**échelle**, un bouton **silhouette
 d'origine**, qui superpose en gris la silhouette procédurale que le dessin
 remplace (le repère pour juger d'une taille — surtout sur un dessin importé sans
@@ -1043,7 +1069,7 @@ d'espèce reste lu : le manifeste ne fait que le compléter ou l'annuler.
 | `r` | rayon d'influence (nageoire) ou **longueur** (tentacule) | 1 |
 | `calques` | les formes entraînées, **plusieurs possibles** | `[layerIndex]` |
 | `layerIndex` | forme unique — forme historique, toujours lue | — |
-| `type` | `'nageoire'` (rotation), `'tentacule'` (onde progressive) ou `'pince'` (charnière qui claque) | `nageoire` |
+| `type` | `'nageoire'` (rotation), `'tentacule'` (onde progressive), `'pince'` (charnière qui claque) ou `'aile'` (angle croissant, retardé, battement asymétrique) | `nageoire` |
 | `miroir` | second ancrage en miroir de l'axe vertical, jouant en sens inverse | non |
 | `amp` | degrés de rotation, ou **% de la longueur** pour un tentacule | celle du calque |
 | `phase` | déphasage en degrés — indispensable dès qu'il y a plusieurs pattes | 0 |

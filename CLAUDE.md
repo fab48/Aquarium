@@ -1503,7 +1503,12 @@ Quatre règles :
 - **Un appendice n'est pas forcément une nageoire.** `fins[].type` vaut
   `nageoire` (rotation autour de l'ancre, pondérée par la distance),
   `tentacule` (**onde progressive** le long d'un axe : base fixe, bout qui
-  parcourt toute l'amplitude) ou `pince` (**une charnière et deux mâchoires** :
+  parcourt toute l'amplitude) `aile` (**l'angle croît le long de l'envergure** — l'épaule tient, le bout décrit
+  tout l'arc, l'inverse exact de la nageoire dont le plein effet est sur l'ancre
+  où le bras de levier est nul ; retardé vers le bout, donc l'aile se courbe ;
+  et battement **asymétrique**, 35 % de descente vive contre 65 % de remontée
+  molle — un oiseau porte son poids) ou `pince` (**une charnière et deux
+  mâchoires** :
   seule celle d'un côté de l'axe pivote — faire tourner les deux ferait tourner
   la pince au lieu de l'ouvrir). Le rythme d'une pince n'est pas un va-et-vient :
   fermée 55 % du cycle, ouverture douce sur 30 %, puis **clac** sur les 15 %

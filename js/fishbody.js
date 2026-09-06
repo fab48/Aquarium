@@ -1035,6 +1035,18 @@ const FishBody = {
     return 1 - t * t;
   },
 
+  // LE BATTEMENT D'UNE AILE N'EST PAS UN SINUS. Un oiseau porte son poids : la
+  // descente est vive et puissante, la remontée lente et molle. Un va-et-vient
+  // symétrique bat autant vers le haut que vers le bas — c'est du carton qui
+  // claque, pas quelque chose qui vole.
+  //
+  // `u` parcourt 0→1 sur un cycle. Renvoie −1 (aile haute) à +1 (aile basse) :
+  // 35 % du cycle pour la descente, 65 % pour la remontée.
+  battementAile(u) {
+    if (u < 0.35) return -Math.cos(Math.PI * u / 0.35);
+    return Math.cos(Math.PI * (u - 0.35) / 0.65);
+  },
+
   // Déformation d'UN point : queue puis appendices. `d` vient de `prepDeform`.
   // LA COLONNE VERTÉBRALE — le squelette 1D d'une pose de scène. Cinq
   // poignées le long du corps, chacune {dy: écart vertical en FRACTION de la
@@ -1123,7 +1135,34 @@ const FishBody = {
         // même côté au lieu de battre comme une paire de pattes.
         const cotes = f.miroir ? [[f.x, 1], [2 * sp.cx - f.x, -1]] : [[f.x, 1]];
         for (const [fx, sens] of cotes) {
-          if (f.type === 'pince') {
+          if (f.type === 'aile') {
+            // UNE AILE N'EST PAS UNE NAGEOIRE AVEC PLUS D'AMPLITUDE.
+            //
+            // La `nageoire` pondère à l'envers pour ce cas : plein effet SUR
+            // l'ancre — où le bras de levier est nul — et zéro au bord. C'est ce
+            // qui donnait 1,4 px de débattement mesurés sur le Confetti. Ici
+            // l'angle CROÎT le long de l'envergure : l'épaule ne bouge pas, la
+            // plume du bout décrit tout l'arc.
+            //
+            // Et l'angle est RETARDÉ le long de l'envergure (`ondes`, la
+            // souplesse) : le bout traîne derrière le bras, donc l'aile se
+            // courbe au lieu de rester une planche. C'est ce retard qui la fait
+            // lire comme une aile plutôt que comme une pagaie.
+            const L = Math.max(1, f.r || 1);
+            const a0 = (f.ang != null ? f.ang : 180) * Math.PI / 180;
+            const ax = Math.cos(a0) * sens, ay = Math.sin(a0);
+            const px = x - fx, py = y - f.y;
+            const u = U.clamp((px * ax + py * ay) / L, 0, 1);
+            if (u <= 0) continue;                 // côté corps : l'épaule tient
+            const retard = (f.ondes != null ? f.ondes : 0.35) * Math.PI * 2;
+            let w = ((anim.ph * 0.7 * vit + dph - u * retard) / (Math.PI * 2)) % 1;
+            if (w < 0) w += 1;
+            const bat = this.battementAile(w);
+            const a = sens * bat * u * anim.vigueur * A * Math.PI / 180;
+            const cos = Math.cos(a), sin = Math.sin(a);
+            x = fx + px * cos - py * sin;
+            y = f.y + px * sin + py * cos;
+          } else if (f.type === 'pince') {
             // Une PINCE a une charnière et deux mâchoires : seule celle d'un
             // côté de l'axe bouge, l'autre reste solidaire du membre. Faire
             // pivoter les deux ferait tourner la pince entière au lieu de

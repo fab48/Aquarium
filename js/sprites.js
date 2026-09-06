@@ -64,6 +64,12 @@
 //                             l'ancre, direction `ang`, longueur `r`. C'est ce
 //                             qu'il faut pour une patte, une antenne, un bras
 //                             de poulpe — une rotation en bloc les rend raides.
+//                 `aile`      — l'angle CROÎT le long de l'envergure (l'épaule
+//                             tient, le bout décrit tout l'arc) et il est
+//                             RETARDÉ (`ondes` = la souplesse), donc l'aile se
+//                             courbe. Battement asymétrique : descente vive sur
+//                             35 % du cycle, remontée lente sur 65 %. Un sinus
+//                             bat autant vers le haut que vers le bas.
 //                 `pince`     — une CHARNIÈRE et deux mâchoires : seule celle
 //                             d'un côté de l'axe `ang` pivote. Elle reste
 //                             fermée 55 % du cycle, s'ouvre en douceur, puis

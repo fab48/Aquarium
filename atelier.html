@@ -239,7 +239,6 @@
     <button id="bAnime" title="Jouer l'animation du dessin entier">▶ Animer</button>
     <button id="bRecadrer" title="Recentrer la vue sur le dessin">⛶ Recadrer</button>
     <button id="bFantome" title="Superposer en gris la silhouette procédurale remplacée">👻 Silhouette</button>
-    <button id="bNuit" title="Forcer la nuit : c'est la seule façon de voir une luminescence">🌙 Nuit</button>
     <select id="selScene" title="Jouer une scène cartoon du jeu sur l'aperçu — cabré, flèche, crash du Coyote…">
       <option value="">🎬 Scène…</option>
       <option value="pose">Pose manuelle (poignées)</option>
@@ -353,7 +352,13 @@
 // Le jeu n'est pas lancé ici : on ne charge que ce qui dessine, et on bouche
 // le reste. Les silhouettes lisent l'heure, la pente du fond et la souris.
 window.GAGS = {};
-window.Main = { time: 0, nightAmount: () => 0, dayT: () => 0.25, dpr: 1 };
+// `nightAmount` vaut 1 EN PERMANENCE ici. Une luminescence de calque n'est
+// allumée, en jeu, que si la fiche de l'espèce déclare `glowAtNight` — six
+// espèces sur cinquante et une. L'atelier n'a pas à rejouer cette règle : on y
+// règle une lampe, on doit la voir. Le jeu, lui, décide seul du moment où elle
+// s'allume. Un bouton « nuit » a existé pour ça et ne servait qu'à ces six
+// espèces ; partout ailleurs il était inerte.
+window.Main = { time: 0, nightAmount: () => 1, dayT: () => 0.25, dpr: 1 };
 window.World = { slopeAt: () => 0, floorY: () => 99999, planktonAt: () => 1,
                  isUnderwater: () => true, shoreX: 0, depthAt: () => 1000 };
 window.Camera = { zoom: 1, x: 0, y: 0, w: 1200, h: 800, vw: 1200, vh: 800,
@@ -414,7 +419,6 @@ const colNeutre = () => ({ dx: [0, 0, 0, 0, 0], dy: [0, 0, 0, 0, 0],
 let colEdit = null, colPoint = -1, colHandles = [];
 let animeSel = '';           // l'animation ouverte dans la timeline
 let fantome = false;    // superposition de la silhouette procédurale
-let nuit = false;       // force la nuit : sans ça une luminescence est invisible ici
 let attrape = null;     // ce que la souris tient en ce moment
 let filtreTxt = '';     // filtre du rail — 51 espèces, on ne les parcourt plus à l'œil
 // Le bandeau du bas : les humeurs, ou le MÊME dessin sur plusieurs individus.
@@ -474,7 +478,7 @@ function calquesDe(f) {
 // l'affichage. Ajouter un type se fait ICI — l'oublier laisse le panneau croire
 // à une nageoire alors que le rendu, lui, obéit déjà.
 function TYPE(f) {
-  return (f.type === 'tentacule' || f.type === 'pince') ? f.type : 'nageoire';
+  return ['tentacule', 'pince', 'aile'].includes(f.type) ? f.type : 'nageoire';
 }
 
 // NOM D'UN CALQUE. « forme 7 » ne dit rien : sur un dessin à vingt pièces —
@@ -518,7 +522,17 @@ function ampleurApp(f) {
   for (const j of calquesDe(f)) {
     const sh = doc.shapes[j]; if (!sh) continue;
     for (const p of sh.points) {
-      if (TYPE(f) === 'pince') {
+      if (TYPE(f) === 'aile') {
+        // L'angle croît avec `u`, donc le déplacement du bout est un arc dont
+        // le rayon est la distance à l'épaule.
+        const L = Math.max(1, f.r || 1);
+        const a0 = (f.ang != null ? f.ang : 180) * Math.PI / 180;
+        const px = p[0] - f.x, py = p[1] - f.y;
+        const u = U.clamp((px * Math.cos(a0) + py * Math.sin(a0)) / L, 0, 1);
+        if (u <= 0) continue;
+        // crête à crête : le battement va de −1 à +1
+        maxi = Math.max(maxi, Math.hypot(px, py) * u * A * Math.PI / 180 * 2);
+      } else if (TYPE(f) === 'pince') {
         // Une pince ouvre d'autant plus qu'on s'éloigne de la charnière : la
         // course du bout est un arc, pas une translation. Et seule la mâchoire
         // d'un côté de l'axe compte.
@@ -1743,8 +1757,11 @@ function sectionAppendices() {
       <button data-typeapp="nageoire" class="${t === 'nageoire' ? 'on' : ''}">Nageoire</button>
       <button data-typeapp="tentacule" class="${t === 'tentacule' ? 'on' : ''}">Tentacule</button>
       <button data-typeapp="pince" class="${t === 'pince' ? 'on' : ''}">🦀 Pince</button>
+      <button data-typeapp="aile" class="${t === 'aile' ? 'on' : ''}">🕊 Aile</button>
     </div>`
-    + A(t === 'pince'
+    + A(t === 'aile'
+      ? 'L\'angle <b>croît le long de l\'envergure</b> : l\'épaule tient, le bout décrit tout l\'arc — l\'inverse d\'une nageoire, dont le plein effet est sur l\'ancre, là où le bras de levier est nul. Et il est <b>retardé</b> vers le bout (curseur <i>souplesse</i>), donc l\'aile se courbe au lieu de rester une planche. Le battement est <b>asymétrique</b> : descente vive, remontée lente — un va-et-vient régulier, c\'est du carton qui claque.'
+      : t === 'pince'
       ? 'Une <b>charnière</b> à l\'ancre, et seule la mâchoire d\'un côté de la flèche s\'ouvre — l\'autre reste solidaire du membre. Elle reste <b>fermée</b> les trois quarts du temps, s\'ouvre en douceur, puis <b>claque</b> : c\'est ce rythme qui se lit, un va-et-vient régulier ne dirait rien.'
       : tent
       ? 'Une <b>onde court</b> de l\'ancre vers la pointe de la flèche : la base ne bouge pas, le bout parcourt toute l\'amplitude. C\'est ce qu\'il faut pour une patte, une antenne, un bras — un pivot les rend raides.'
@@ -1754,6 +1771,11 @@ function sectionAppendices() {
   if (axe) h += `
     <label>Direction <span class="val" id="vFA">${Math.round(f.ang != null ? f.ang : (tent ? 180 : 0))}°</span></label>
     <input type="range" id="sFA" min="-180" max="180" value="${Math.round(f.ang != null ? f.ang : (tent ? 180 : 0))}">`;
+  if (t === 'aile') h += `
+    <label>Souplesse <span class="val" id="vFO">${(f.ondes != null ? f.ondes : 0.35).toFixed(2)}</span></label>
+    <input type="range" id="sFO" min="0" max="1" step="0.05" value="${f.ondes != null ? f.ondes : 0.35}">`
+    + A(`Le <b>retard</b> du bout sur le bras. À 0 l'aile est une planche rigide ; plus on
+        monte, plus elle se courbe et plus la plume du bout traîne derrière.`);
   if (tent) h += `
     <label>Ondes sur la longueur <span class="val" id="vFO">${(f.ondes != null ? f.ondes : 1).toFixed(2)}</span></label>
     <input type="range" id="sFO" min="0" max="2" step="0.05" value="${f.ondes != null ? f.ondes : 1}">`
@@ -1767,7 +1789,7 @@ function sectionAppendices() {
   const ampl = ampleurApp(f);
   const pc = ampl / Math.max(1, doc.naturalW) * 100;
   h += `
-    <label>${t === 'pince' ? 'Ouverture' : 'Amplitude'} <span class="val" id="vFAm">${ampDe(f)}</span>${tent ? ' %' : '°'}</label>
+    <label>${t === 'pince' ? 'Ouverture' : t === 'aile' ? 'Battement' : 'Amplitude'} <span class="val" id="vFAm">${ampDe(f)}</span>${tent ? ' %' : '°'}</label>
     <input type="range" id="sFAm" min="0" max="${tent ? 100 : 180}" value="${ampDe(f)}">
     <p class="aide" style="color:${pc < 1 ? '#b3261e' : 'var(--doux)'}">
       débattement obtenu : <b>${ampl.toFixed(1)} px</b> du dessin (${pc.toFixed(1)} % de sa largeur)${
@@ -2107,9 +2129,10 @@ function sectionApparence() {
     <input type="range" id="sAlpha" min="0.05" max="1" step="0.05" value="${sh.alpha == null ? 1 : sh.alpha}">
     <label>Luminescence <span class="val" id="vLueur">${(sh.lueur ? (sh.lueur === true ? 1 : sh.lueur) : 0).toFixed(2)}</span></label>
     <input type="range" id="sLueur" min="0" max="1" step="0.05" value="${sh.lueur ? (sh.lueur === true ? 1 : sh.lueur) : 0}">`
-    + A(`La luminescence pose un <b>halo</b> de la couleur de la forme. Si l'espèce déclare
-        <code>glowAtNight</code> — méduse, lanterne, calamar — il ne s'allume que la nuit :
-        le bouton 🌙 du bandeau permet de le voir.`);
+    + A(`La luminescence pose un <b>halo</b> de la couleur de la forme. Elle est
+        <b>toujours allumée ici</b> : on règle une lampe, on la voit. En jeu, six espèces
+        déclarent <code>glowAtNight</code> — méduse, lanterne, crevette, calamar,
+        anguille, krill — et chez elles seules le halo attend la nuit.`);
 
   h += `<h2>Couleur par individu</h2>
     <select id="selCoul">${modes.map(([k, t]) =>
@@ -2254,7 +2277,7 @@ function sectionFond() {
 // Un champ de saisie comme le nom du fichier n'y survivait pas.
 function barre(nom) {
   const ouvert = !!doc;
-  for (const sel of ['#bAnime', '#bRecadrer', '#bFantome', '#bNuit',
+  for (const sel of ['#bAnime', '#bRecadrer', '#bFantome',
                      '#bEnreg', '#bActiver', '#nomFichier', '#selEspece']) {
     const e = $(sel); if (e) e.disabled = !ouvert;
   }
@@ -2268,7 +2291,6 @@ function barre(nom) {
   $('#bAnime').classList.toggle('on', anime);
   $('#bAnime').textContent = anime ? '⏸ Animation' : '▶ Animer';
   $('#bFantome').classList.toggle('on', fantome);
-  $('#bNuit').classList.toggle('on', nuit);
   $('#bAnnuler').disabled = !doc || !histoire.length;
   $('#bRetablir').disabled = !doc || !futur.length;
   $('#bAnnuler').title = histoire.length ? `Annuler (${histoire.length} pas) — Ctrl+Z` : 'Rien à annuler';
@@ -2438,13 +2460,6 @@ function cablerBarres() {
   }, { capture: true, passive: false });
   on('#bRecadrer', 'click', cadrer);
   on('#bFantome', 'click', () => { fantome = !fantome; barre(); dessiner(); });
-  // Sans ce bouton, une luminescence ne se voit jamais dans l'atelier : le faux
-  // `Main` de la page renvoie toujours « plein jour ».
-  on('#bNuit', 'click', () => {
-    nuit = !nuit;
-    Main.nightAmount = () => (nuit ? 1 : 0);
-    barre(); dessiner();
-  });
   // Changer d'espèce CIBLE sans refermer le dessin : c'est tout l'intérêt.
   // `choisir()` ferait le contraire — il chargerait le dessin de l'espèce.
   on('#selEspece', 'change', e => {
@@ -2653,13 +2668,17 @@ function cabler() {
     // Les unités diffèrent d'un type à l'autre (degrés de rotation, pourcentage
     // de longueur, degrés d'ouverture) : garder l'ancienne valeur donnait une
     // patte qui décollait du corps au changement de type.
-    f.amp = f.type === 'tentacule' ? 25 : (f.type === 'pince' ? 45 : 20);
+    f.amp = f.type === 'tentacule' ? 25
+          : f.type === 'pince' ? 45
+          : f.type === 'aile' ? 55 : 20;
     // L'ANGLE aussi change de sens d'un type à l'autre : pour un tentacule c'est
     // l'axe le long duquel l'onde court (vers la queue par défaut), pour une
     // pince l'axe de la charnière (vers l'avant, là où regarde la bête). Garder
     // la valeur précédente donnait une pince qui s'ouvre à l'envers, héritée du
     // tentacule qu'elle venait de remplacer.
-    if (f.type === 'tentacule') f.ang = 180;
+    // Une aile part de l'épaule vers le bout, donc vers l'ARRIÈRE du dessin,
+    // comme un tentacule.
+    if (f.type === 'tentacule' || f.type === 'aile') f.ang = 180;
     else if (f.type === 'pince') f.ang = 0;
     else delete f.ang;
     marquer(); panneau();

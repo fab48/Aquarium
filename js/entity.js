@@ -2228,6 +2228,31 @@ class Entity {
       // plate — et dans le sens du virage, d'où `_virSens`.
       ctx.rotate(vir * 0.22 * (this._virSens ?? 1));
     }
+    // CODES DU CARTOON — deux canaux de déformation que les gags pilotent,
+    // posés dans le repère du CORPS et à volume conservé (même leçon que le
+    // demi-tour : ce que la silhouette perd dans un axe, elle le reprend dans
+    // l'autre, sinon elle maigrit au lieu de se déformer) :
+    //   `_crispe` (0→1) = l'ANTICIPATION. Le ressort se comprime : squash, arc,
+    //     et un frisson HORIZONTAL qui monte avec la compression (jamais
+    //     vertical — un tremblement en y met la tête en bas). C'est lui qui
+    //     fait lire la détente qui suit : la vitesse ne se lit qu'au contraste.
+    //   `_etire` (0→1) = la DÉTENTE. La flèche : étirement, et la nage se
+    //     RAIDIT (`FishBody.raideur`) — « droit comme un i ».
+    const crispe = U.clamp(this._crispe ?? 0, 0, 1);
+    // L'étirement de SPRINT est générique : toute nage au-delà de ~1,3× la
+    // croisière allonge un peu la silhouette — c'est ce qui fait lire une
+    // charge ou une fuite partout, sans que chaque gag ait à le demander.
+    // Lissé (l'allure fluctue à chaque frame), et lui ne raidit PAS la queue :
+    // un sprinteur ordinaire bat FORT, seule la flèche d'un gag glisse figée.
+    const cibleNage = U.clamp((FishBody.allure(this) - 1.3) / 0.7, 0, 1) * 0.11;
+    this._etireNage = U.lerp(this._etireNage ?? 0, cibleNage, 0.08);
+    const etire = Math.max(U.clamp(this._etire ?? 0, 0, 1), this._etireNage);
+    if (crispe > 0.01) {
+      ctx.translate(Math.sin(t * 44 + this.phase) * crispe * this.size * 0.05, 0);
+      ctx.transform(1, crispe * 0.4, 0, 1, 0, 0);       // l'arc : il se voûte
+      ctx.scale(1 - crispe * 0.26, 1 + crispe * 0.32);  // le ressort comprimé
+    }
+    if (etire > 0.01) ctx.scale(1 + etire * 0.4, 1 - etire * 0.24);
     // Le dauphin se tord de rire : il roule sur lui-même
     if (this._farceRoll) ctx.rotate(Math.sin(this._farceRoll) * 0.5);
 

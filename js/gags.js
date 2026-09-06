@@ -254,8 +254,10 @@ const GAGS = {
     }
 
     if (ph === 'bouh') {
-      // JAILLISSEMENT : il fonce dans le banc, gueule ouverte
+      // JAILLISSEMENT : il fonce dans le banc, gueule ouverte — étiré comme
+      // une flèche le temps du bond, c'est ce qui le fait lire comme un BOND.
       e._farceX = c.x; e._farceY = c.y;
+      e._etire = Math.max(0, 0.8 - e._farceT * 1.6);
       if (e._farceT < dt * 2) {
         Particles.shout(e.x + e.size * 0.5, e.y - e.size * 0.7, 'BOUH !', '#fff', e.size);
         Particles.burst(e.x, e.y, '#cfe9ff', 14);
@@ -543,10 +545,20 @@ const GAGS = {
   },
 
   // LE CALMAR DÉCOLLE : 3, 2, 1… et il file en marche arrière, trop fort.
+  // Un calamar se propulse LITTÉRALEMENT en se contractant : le décompte est
+  // donc une compression (`_crispe`, l'anticipation du cartoon), et le départ
+  // une détente étirée (`_etire`) qui se relâche en une demi-seconde.
   calamar(e, dt, t) {
+    if (e._fuseeJet > 0) {
+      e._fuseeJet -= dt;
+      e._etire = Math.max(0, e._fuseeJet / 0.7) * 0.9;
+    }
     if (e._fusee > 0) {
       e._fusee -= dt;
+      const k = 1 - Math.max(0, e._fusee) / 0.9;    // 0 → 1 sur le décompte
+      e._crispe = k * k;
       if (e._fusee <= 0) {
+        e._crispe = 0; e._fuseeJet = 0.7;
         const dir = e._facing >= 0 ? -1 : 1;      // il part À RECULONS
         e.vx += dir * 260; e.vy -= 90;
         Particles.bubble(e.x - dir * e.size, e.y, 6);
@@ -1111,10 +1123,15 @@ const GAGS = {
   // 460 px/s de sprint, presque quatre fois sa vitesse de croisière — et on ne
   // le voyait jamais s'en servir : il ne sprintait qu'en chasse, sur quelques
   // dizaines de pixels, et le sifflement partait sans qu'on comprenne d'où.
-  // Le run est une scène à part entière, en trois temps :
+  // Le run est une scène à part entière, en quatre temps — les codes du
+  // cartoon, l'ANTICIPATION en tête (la vitesse ne se lit qu'au contraste) :
   //   1. `montee` — il met le cap au large et remonte JUSTE sous la surface ;
-  //   2. `run`    — ligne droite plein gaz, sillage continu, un seul « FIOUUU » ;
-  //   3. `fin`    — il ralentit, très content de lui.
+  //   2. `charge` — il s'arrête NET, grimace, et se comprime comme un ressort
+  //                 (`_crispe`), en reculant même d'un poil ;
+  //   3. `run`    — la détente : étiré, RAIDE, « droit comme un i » (`_etire`,
+  //                 qui fige aussi le battement — cf. FishBody.raideur), un
+  //                 seul « FIOUUU » ;
+  //   4. `fin`    — il se relâche et lève le pied, très content de lui.
   // Il se joue AU GRAND LARGE exprès : c'est une raison d'aller y voir, et la
   // pleine eau est le seul endroit où deux mille pixels de ligne droite
   // tiennent sans qu'il percute quoi que ce soit.
@@ -1129,8 +1146,30 @@ const GAGS = {
         e._diveTargetY = SURF;                      // le rappel vertical générique
         const enPlace = Math.abs(e.y - SURF) < 60 && e.x > World.zonesX.hauteMer;
         if (enPlace || e._runT <= 0) {
+          e._runPh = 'charge'; e._runT = 1.15;
+          e._figX = null; e._figY = null; e._figSpeed = null;
+          e.hold('angry');                          // la grimace de concentration, TENUE
+        }
+        return;
+      }
+
+      if (e._runPh === 'charge') {
+        // L'ANTICIPATION. Sans elle le FIOUUU sortait de nulle part : on voyait
+        // un poisson accélérer, pas un sprinteur se détendre. Il se fige, FIXE
+        // sa ligne (`_faceAt` — à l'arrêt la vitesse ne dit plus où il regarde),
+        // et la compression s'accélère jusqu'au départ.
+        e._freeze = 0.25;
+        e._faceAt = { x: e.x + e._runDir * 400, y: e.y };
+        e._diveTargetY = SURF;
+        const k = 1 - Math.max(0, e._runT) / 1.15;    // 0 → 1
+        e._crispe = k * k;
+        e.x -= e._runDir * dt * 10;                   // le recul du ressort
+        if (e._runT <= 0) {
           e._runPh = 'run'; e._runT = 4.6;
+          e._crispe = 0; e._etire = 1;
+          e._faceAt = null; e.release();
           Particles.shout(e.x, e.y - e.size, 'FIOUUU', '#cfe4f5', e.size * 1.5);
+          Particles.burst(e.x - e._runDir * e.size, e.y, '#cfe4f5', 8);   // la détente
           e.emote('angry', 1.6, false);               // le regard de la charge
         }
         return;
@@ -1145,6 +1184,9 @@ const GAGS = {
         e._figX = e.x + e._runDir * 2400; e._figY = SURF;
         e._diveTargetY = SURF;
         e._figSpeed = e.def.sprintSpeed;
+        // Droit comme un i : la flèche part à fond (1) puis se pose à 0,6 —
+        // toujours étirée, toujours raide, mais plus une caricature.
+        e._etire = Math.max(0.6, (e._etire ?? 0.6) - dt * 1.6);
         if (Math.random() < dt * 9) Particles.wake(e.x - e._runDir * e.size, e.y);
         if (Math.random() < dt * 3) Particles.bubble(e.x - e._runDir * e.size, e.y, U.rand(2, 4));
         // Le rivage et le bord du monde arrêtent le run : mieux vaut le finir
@@ -1154,11 +1196,12 @@ const GAGS = {
         return;
       }
 
-      // `fin` : il lève le pied, et il se sait beau
+      // `fin` : il lève le pied, se relâche, et il se sait beau
       e._figSpeed = e.def.speed;
+      e._etire = Math.max(0, (e._etire ?? 0) - dt * 1.4);   // la détente se retire
       if (e._runT <= 0) {
         e._runPh = null; e._figX = null; e._figY = null; e._figSpeed = null;
-        e._diveTargetY = null;
+        e._diveTargetY = null; e._etire = 0;
         e.emote('proud', 2.2);
         e._runCd = Ecosystem.cadence(e, CADENCE.run);
       }

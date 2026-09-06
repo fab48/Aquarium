@@ -14,6 +14,15 @@ from PIL import Image
 SRC = 'Assets/Concepts/Design Final.png'
 OUT = 'Assets/Reperes'
 COLS, ROWS = 5, 6
+# MARGE AUTOUR DE LA CASE. La grille est un reperage, pas une frontiere : les
+# creatures debordent de leur case, et decouper AU RAS coupait 17 vignettes sur
+# 30 — toujours d'un cote, jamais en haut ni en bas (le perroquet perdait
+# 96 pixels de bec sur son bord droit). On travaille donc sur une case elargie,
+# et c'est la COMPOSANTE de la creature qui decide du cadrage final.
+#
+# Le choix de la bonne composante, lui, reste juge sur la case NOMINALE : sans
+# ca on attraperait la voisine, qui est maintenant visible elle aussi.
+MARGE = 0.25
 
 # L'ordre de la planche, qui est aussi celui de FICHES.md.
 ESPECES = [
@@ -65,7 +74,15 @@ def main():
             if idx >= len(ESPECES):
                 continue
             y0, y1, x0, x1 = int(r * ch), int((r + 1) * ch), int(c * cw), int((c + 1) * cw)
-            sub, ssat = ink[y0:y1, x0:x1].copy(), sat[y0:y1, x0:x1]
+            # Case elargie, bornee a la planche.
+            ey0, ey1 = max(0, int(y0 - ch * MARGE)), min(H, int(y1 + ch * MARGE))
+            ex0, ex1 = max(0, int(x0 - cw * MARGE)), min(W, int(x1 + cw * MARGE))
+            # Position de la case NOMINALE dans la case elargie : tous les tests
+            # de placement (« la legende est en bas de la case », « la creature
+            # est au centre ») restent exprimes dans la case d'origine, sinon la
+            # marge les decale et ils attrapent la voisine.
+            offx, offy = x0 - ex0, y0 - ey0
+            sub, ssat = ink[ey0:ey1, ex0:ex1].copy(), sat[ey0:ey1, ex0:ex1]
             h, w = sub.shape
             # Les GLYPHES d'abord. La legende de l'etoile touchait un de ses
             # bras : dilatee, elle entrait dans la composante du dessin et plus
@@ -77,14 +94,14 @@ def main():
                 if (gst[i, cv2.CC_STAT_AREA] < 900
                         and gst[i, cv2.CC_STAT_HEIGHT] < 34
                         and ssat[m].mean() < 25
-                        and gcen[i][1] > h * 0.55):
+                        and gcen[i][1] - offy > ch * 0.55):
                     sub[m] = 0
             big = cv2.dilate(sub, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7)))
             n, lab, st, cen = cv2.connectedComponentsWithStats(big, 8)
             best, barea = 0, 0
             for i in range(1, n):
-                cx, cy = cen[i]
-                if not (0.1 * w < cx < 0.9 * w and 0.05 * h < cy < 0.8 * h):
+                cx, cy = cen[i][0] - offx, cen[i][1] - offy
+                if not (0.1 * cw < cx < 0.9 * cw and 0.05 * ch < cy < 0.8 * ch):
                     continue
                 if st[i, cv2.CC_STAT_AREA] > barea:
                     barea, best = st[i, cv2.CC_STAT_AREA], i
@@ -108,7 +125,7 @@ def main():
                     # y tombe est du texte : les morceaux du dessin, eux, sont
                     # deja soudes au corps par la dilatation. Sans cette regle,
                     # « Etoile Ventouse » restait collee sous son etoile.
-                    if cen[i][1] > h * 0.78:
+                    if cen[i][1] - offy > ch * 0.78:
                         continue
                 garde[m] = 1
             garde = bouche_trous((garde & sub).astype(np.uint8))
@@ -116,7 +133,7 @@ def main():
             pad = 3
             sx0, sx1 = max(0, xs.min() - pad), min(w, xs.max() + 1 + pad)
             sy0, sy1 = max(0, ys.min() - pad), min(h, ys.max() + 1 + pad)
-            rgb = im[y0:y1, x0:x1][sy0:sy1, sx0:sx1]
+            rgb = im[ey0:ey1, ex0:ex1][sy0:sy1, sx0:sx1]
             mask = garde[sy0:sy1, sx0:sx1]
             # bord adouci : un detourage au pixel donne un lisere en escalier
             alpha = cv2.GaussianBlur(mask * 255, (3, 3), 0)

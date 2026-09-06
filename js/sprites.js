@@ -17,7 +17,13 @@
 //                               debut, fin } — la transition a un DÉBUT et une
 //                             FIN : confondus, frontière franche ; écartés,
 //                             fondu large, et on choisit où.
-//                 `reflet`  : { x, y, largeur, epaisseur, angle, force, couleur }
+//                 `reflet`  : { x, y, largeur, epaisseur, angle, courbe, force,
+//                               couleur, dessus } — la bande de lumière.
+//                             `courbe` (-1..1) la tord d'un côté ou de l'autre
+//                             (un dos n'est pas plat) ; `dessus` la reporte
+//                             par-dessus TOUS les calques, une lumière étant
+//                             posée par l'éclairage et non par l'ordre
+//                             d'empilement.
 //                             — la bande de lumière sur le dos, DÉCOUPÉE dans le
 //                             contour déformé, donc elle ondule avec la nage.
 //                 `couleur` : { mode: 'espece'|'especeSombre'|'palette'|'teinte',
@@ -58,6 +64,11 @@
 //                             l'ancre, direction `ang`, longueur `r`. C'est ce
 //                             qu'il faut pour une patte, une antenne, un bras
 //                             de poulpe — une rotation en bloc les rend raides.
+//                 `pince`     — une CHARNIÈRE et deux mâchoires : seule celle
+//                             d'un côté de l'axe `ang` pivote. Elle reste
+//                             fermée 55 % du cycle, s'ouvre en douceur, puis
+//                             claque. Un sinus ne sait pas dire « clac » : il
+//                             referme aussi lentement qu'il ouvre.
 //                 Communs : `calques` (les formes entraînées), `miroir`,
 //                 `amp`, `phase`, `vitesse`.
 //

@@ -141,8 +141,32 @@ en tire **une image par espèce** :
 python decoupe_planche.py          # -> Assets/Reperes/<espèce>.png + index.json
 ```
 
-Ce n'est pas une grille aveugle. Dans chaque case, on garde la **plus grosse
-composante connexe** et ce qui la touche : ça écarte d'un coup la légende et le
+**La grille est un repérage, pas une frontière.** Les créatures débordent de leur
+case, et découper au ras en coupait **17 sur 30** — toujours d'un côté, jamais en
+haut ni en bas : le perroquet perdait 96 pixels de bec sur son bord droit. Chaque
+vignette est donc taillée dans une case **élargie de 25 %**, et c'est la
+composante de la créature qui décide du cadrage final ; le choix de la bonne
+composante, lui, reste jugé sur la case **nominale**, sinon on attrape la
+voisine, désormais visible elle aussi.
+
+Mesuré avant/après, en comptant les pixels d'encre qui touchent le bord de la
+vignette :
+
+| | avant | après |
+|---|---|---|
+| vignettes coupées | **17 / 30** | **2 / 30** |
+| pixels au bord | 621 | 71 |
+| encre totale | 398 572 | 412 378 (+3,5 %) |
+
+Les plus grosses reprises : perroquet **+21 %**, orque **+18 %**, raie +13 %,
+pélican +9 %, calamar géant +10 %. Les deux qui restent sont la **murène** et la
+**raie**, voisines de case et qui se chevauchent sur la planche : chacune s'arrête
+là où l'autre commence. C'est une limite du dessin d'origine, pas du découpage —
+élargir davantage ne fait qu'empirer (mesuré : 71 px à 25 %, 78 à 30 %, 114 à
+35 %).
+
+Ce n'est pas non plus une grille aveugle. Dans chaque case, on garde la **plus
+grosse composante connexe** et ce qui la touche : ça écarte d'un coup la légende et le
 bout de dessin de la case d'à côté, qui débordent tous les deux des lignes de la
 grille. Trois règles s'y sont ajoutées, chacune pour un cas rencontré :
 
@@ -174,9 +198,18 @@ Le panneau la règle : opacité, échelle, x/y, « caler sur le dessin »,
 bouton, une espèce reprise de sa silhouette recouvre entièrement sa référence
 d'un corps opaque et il n'y a plus rien à comparer.
 
-Elle **ne s'enregistre pas** dans le document : elle appartient au dépôt, elle
+L'**image** ne s'enregistre pas dans le document : elle appartient au dépôt, elle
 est reposée toute seule à l'ouverture, et la recopier en base64 dans trente
-fichiers coûterait 1 Mo pour rien.
+fichiers coûterait 1 Mo pour rien. Son **cadrage**, lui, s'enregistre — et c'est
+une correction, pas une nuance : jeter l'objet entier jetait avec lui l'échelle,
+la position, l'opacité et le dessus/dessous, si bien que tout le calage refait à
+la main était perdu au rechargement et qu'il fallait le refaire à chaque séance.
+Seuls les pixels partent ; les quelques nombres qui disent **où** elle est posée
+restent, et le chemin de l'image se reconstruit depuis son nom.
+
+Vérifié sur un aller-retour complet — réglé à `k 3,42 · x −55 · y 12 · opacité
+0,85 · dessus · miroir`, le fichier contient exactement ces valeurs, aucune donnée
+d'image (4,6 ko), et la vignette se recharge depuis le seul nom de planche.
 
 ### Deux barres, et la séparation est celle du geste
 
@@ -259,6 +292,23 @@ embarquée, donc on ne la retrouve plus.
   poser un. **Deux types**, parce que ce sont deux gestes différents :
   - **nageoire** — la forme *pivote* autour de l'ancre. Le disque affiché est le
     **rayon d'influence** : plein effet au centre, plus rien au bord.
+  - **pince** — une **charnière** à l'ancre, et seule la mâchoire d'un côté de
+    l'axe pivote ; l'autre reste solidaire du membre. Faire tourner les deux
+    ferait tourner la pince entière au lieu de l'ouvrir.
+    Son rythme n'est pas un va-et-vient : elle reste **fermée 55 %** du cycle,
+    s'ouvre en douceur sur 30 %, puis **claque** sur les 15 % restants. Un sinus
+    ne sait pas dire « clac » — il passe autant de temps ouvert que fermé et
+    referme aussi lentement qu'il ouvre. Relevé sur une pince de 100 px réglée à
+    45°, position du bout de la mâchoire au fil du cycle :
+
+    ```
+    u   0 ──────────── 0,55   0,60   0,65   0,70   0,75   0,80   0,85 │ 0,90   0,95    1
+    y      80 (fermée)         85,8   99,8  116,7  131,7  141,4  144,9│ 139,6  120,4   80
+           └─ immobile ─┘      └──── ouverture progressive ──────────┘ └─ clac ─┘
+    ```
+
+    64,9 px d'ouverture, une fermeture qui accélère (−5,3 puis −19,2 puis
+    −40,4 px), et la mâchoire fixe qui ne bouge pas **d'un millième**.
   - **tentacule** — une **onde court** de l'ancre vers la pointe de la flèche :
     la base ne bouge pas, le bout parcourt toute l'amplitude. C'est ce qu'il faut
     pour une patte de crabe ou un bras de poulpe — un pivot les rend raides,
@@ -283,11 +333,34 @@ embarquée, donc on ne la retrouve plus.
   anguille, dont le corps entier est un tentacule. Et la liste **formes qui
   ondulent** restreint la déformation quand un élément doit rester rigide — une
   carapace, un coquillage porté sur le dos.
+- **Déplacer la vue** se fait au bouton du **milieu** ou au bouton **droit**,
+  dans tous les outils — la convention du jeu. Le bouton gauche appartient à
+  l'outil : sur un dessin qui remplit l'écran il n'y a pratiquement aucun fond
+  libre où commencer un déplacement, et dans l'outil Points le moindre appui
+  au-dessus d'un calque le sélectionnait et volait le geste. Cette sélection est
+  désormais décidée au **relâchement**, et seulement si le curseur n'a pas bougé
+  de plus de 4 px. Mesuré : glissé de 70/30 px au bouton gauche au-dessus d'un
+  autre calque → la vue suit **exactement** (+70/+30) et la sélection ne change
+  pas ; simple clic au même endroit → la sélection change.
 - **Points** — tirer les carrés retouche le contour ; clic sur le trait insère un
   point, <kbd>alt</kbd>+clic en supprime un. **Un clic dans un autre calque le
   sélectionne** : c'était le seul moyen manquant pour reprendre un dessin
   existant, il fallait deviner son rang dans la liste.
-- **✏️ Dessiner** — poser les sommets d'un polygone au clic. Double-clic,
+- **✏️ Dessiner** — deux façons de poser un calque.
+  - **Formes simples** : trait, rond, demi-rond, quart, rectangle, triangle,
+    goutte. On tire un rectangle, la forme s'y inscrit — et elle le **remplit**,
+    demi-rond et quart compris : ce qu'on tire est ce qu'on obtient, c'est la
+    seule règle qu'on n'a pas à retenir. Un rond tracé à la main au clic est
+    bosselé et une droite parfaite demande de viser deux pixels : ce sont
+    justement les formes que l'outil doit poser tout seul. Le **trait** sort en
+    contour **ouvert**, sans remplissage — ce qu'il faut à une antenne ou à une
+    moustache ; les autres sortent pleines, à la couleur de base primaire. Un
+    clic sans glissé ne pose rien, plutôt qu'une forme de zéro pixel introuvable
+    autrement qu'en fouillant la liste.
+    Tout est converti en **points** dès la pose : le format ne connaît que des
+    contours, et une primitive restée « paramétrique » échapperait aux points,
+    aux appendices et à la queue.
+  - **Tracé libre** : poser les sommets d'un polygone au clic. Double-clic,
   <kbd>Entrée</kbd> ou un clic sur le premier sommet ferment la forme ;
   <kbd>retour arrière</kbd> retire le dernier point, <kbd>Échap</kbd> abandonne.
   Couleur et **contour lissé** se choisissent avant, et se rechangent après dans
@@ -309,8 +382,28 @@ embarquée, donc on ne la retrouve plus.
   Ils l'agrandissent, la tournent, la retournent ou la dupliquent autour de son
   centre. Cliquer n'importe quel calque le sélectionne (le calque actif garde la
   priorité, sinon celui du dessus lui volerait le clic). Un miroir horizontal
-  sert à faire la nageoire de l'autre côté : dupliquer, retourner, déplacer — et
-  **la copie emporte les appendices** qui animaient l'original, décalés comme
+  sert à faire la nageoire de l'autre côté : dupliquer, retourner, déplacer.
+  **Tous ces gestes portent sur le GROUPE entier** quand le calque est aplati.
+  Déplacement, échelle, rotation et miroir le faisaient déjà (`transformer`) ;
+  la duplication était le seul resté sur une pièce, et copier un tiers d'une
+  patte dessinée en trois morceaux ne donne rien d'utilisable. La copie forme un
+  **nouveau groupe** — c'en est un autre, pas une extension — et elle emporte
+  aussi ce qui faisait vivre l'original : les appendices qui le visaient, décalés
+  comme elle, et son appartenance aux calques qui ondulent (sinon la copie sort
+  rigide au milieu d'un corps qui bat).
+
+  Mesuré, groupe `G1` = calques 1 et 2, un appendice visant `[1,2]`,
+  `queueCalques [1]` :
+
+  | | calques | appendices | ondulent |
+  |---|---|---|---|
+  | avant | `0 · 1:G1 · 2:G1 · 3` | `[1,2]` | `[1]` |
+  | après | `0 · 1:G1 · 2:G1 · **3:G2 · 4:G2** · 5` | `[1,2]` · **`[3,4]`** | `[1,3]` |
+
+  Le calque isolé glisse de 3 à 5, et une seconde duplication enchaîne
+  proprement (`G3`, appendice `[5,6]`, `queueCalques [1,3,5]`).
+
+  **La copie emporte les appendices** qui animaient l'original, décalés comme
   elle. Sans ça la copie sortait inerte et il fallait refaire l'ancrage à la
   main, avec ses cinq réglages, à chaque fois, alors que le geste sert justement
   à faire la paire de l'autre côté. Vérifié : une forme visée par un appendice
@@ -495,6 +588,78 @@ Deux choses la font lire comme une **lumière** et pas comme une rayure peinte :
 2. elle **s'éteint à ses pointes**. Un aplat aux bouts francs se lit comme un
    trait de peinture ; le dégradé le long de son axe en fait un éclat.
 
+**Elle se redresse jusqu'à la verticale.** L'inclinaison va de −90° à +90° :
+un reflet n'est pas toujours couché le long du dos — sur un flanc, sur une joue,
+sur une nageoire dressée, il est debout. Trois raccourcis (*à plat*, *debout*
+dans les deux sens) évitent de viser la butée au curseur.
+
+Sa **longueur reste comptée sur la largeur de la forme** et ne change pas quand
+on la tourne : une bande ne doit pas grandir parce qu'on la redresse. Mesuré, même
+réglage à tous les angles :
+
+| inclinaison | largeur × hauteur | pixels |
+|---|---|---|
+| 0° | **51 × 13** | 478 |
+| 45° | 37 × 37 | 487 |
+| 90° | **12 × 51** | 483 |
+
+À 90° les dimensions sont exactement inversées, à 45° la bande est carrée, et le
+nombre de pixels ne varie que de 1 % : elle **tourne**, elle ne se déforme pas.
+
+**Elle se tord.** Un dos n'est pas plat, et une lumière qui court dessus ne l'est
+pas non plus. La bande est donc une **lentille** — deux quadratiques entre les
+deux pointes — et non une ellipse : décaler leurs points de contrôle du même
+écart déplace le **milieu** sans bouger les **bouts**. Le curseur *courbure* va
+de −1 (⌒) à +1 (⌣), avec trois raccourcis.
+
+Contrôle non visuel, bande mesurée seule à l'échelle du dessin :
+
+| courbure | x des pointes | y à gauche | y au milieu | y à droite |
+|---|---|---|---|---|
+| −0,8 | 74 → 122 | 171,0 | **165,5** | 171,0 |
+| 0 | 73 → 122 | 172,0 | **171,5** | 172,0 |
+| +0,8 | 73 → 122 | 172,0 | **177,5** | 172,0 |
+
+Les pointes ne bougent pas (le ±1 vient de l'anti-aliasing d'une pointe effilée)
+et le milieu se déplace linéairement, symétriquement autour du cas droit.
+
+À courbure nulle la lentille garde les extrêmes de l'ellipse d'avant — mêmes
+pointes, même épaisseur au milieu — elle est seulement ~13 % plus effilée aux
+quarts, ce que le dégradé y effaçait déjà.
+
+**Elle ondule avec le corps.** Elle était peinte à des coordonnées **fixes**,
+seulement *découpée* par le contour déformé : le poisson battait de la queue et
+la lumière restait immobile, collée comme sur une vitre. Ses quatre points
+caractéristiques — les deux pointes et les deux points de contrôle — passent
+maintenant par **exactement la même déformation** que le contour
+(`FishBody.deformer`, extraite de `tracerForme` pour ça). Quatre points
+suffisent : la courbe reste lisse entre eux. Le dégradé est bâti entre les deux
+pointes **déformées**, sinon il glisserait le long de la bande dès qu'elle bouge.
+
+Contrôle non visuel — bande posée en pleine zone de battement (x = 0,15),
+amplitude de queue 40, relevé à quatre phases :
+
+| phase | y de la bande |
+|---|---|
+| 0 | 184,1 |
+| π/2 | **224,2** |
+| π | 184,1 |
+| 3π/2 | **144,1** |
+
+80,1 px de course, sinusoïdale et symétrique autour du repos — et le nombre de
+pixels reste constant (207 → 214), donc la bande se **déplace** au lieu de se
+déformer n'importe comment. Avant, les quatre valeurs étaient identiques.
+
+**Elle peut passer par-dessus TOUS les calques** (`reflet.dessus`). Une lumière
+est posée par l'éclairage, pas par l'ordre d'empilement : celle du dos passait
+sous la nageoire dorsale et sous les rayures peintes par-dessus, alors qu'elle
+devrait glisser dessus. Le report coûte un second tracé de la forme — le premier
+a été détruit par le `beginPath()` de la lentille — pour les seules formes
+concernées, et elle reste découpée dans **sa** forme : elle ne déborde pas.
+Mesuré sur le Mérou, mêmes réglages : **3 042** pixels visibles en place,
+**8 581** en report, soit 2,8 fois plus. Les calques au-dessus en cachaient les
+deux tiers.
+
 Un piège de mise en œuvre : le reflet est dessiné **en dernier**, après le
 contour. Il lui faut un `beginPath()` pour son ellipse, ce qui détruirait le
 tracé de la forme — dont le contour a encore besoin. Le **découpage**, lui,
@@ -632,6 +797,14 @@ Trois points qui ne vont pas de soi :
   frontière franche où l'on veut ; écartés (`0,15` / `0,90`), un fondu large.
   Trois boutons — *frontière franche*, *fondu court*, *fondu large* — écartent
   les deux arrêts autour de leur milieu sans le déplacer.
+- **Le centre d'un dégradé radial se place.** Cloué au milieu de la boîte, il ne
+  savait faire qu'un halo centré ; décalé, il fait un reflet de sphère, un ventre
+  éclairé par en dessous, une joue. `cx`/`cy` sont des **fractions de la boîte de
+  la forme** et peuvent en sortir (−0,5 à 1,5), `rayon` en règle l'étendue.
+  Mesuré, en relevant le point le plus sombre (l'arrêt 0 du dégradé) : réglage
+  `0,15 / 0,25` → centre à **0,13 / 0,22** ; `0,50 / 0,10` → **0,46 / 0,13**. Un
+  centre posé hors de la silhouette se lit au point le plus proche qui, lui, est
+  dessiné — c'est voulu.
 - **Le dégradé part de la couleur de la forme**, pas d'une couleur fixe. Un
   dégradé à deux couleurs déclarées annulerait la variation individuelle — c'est
   précisément ce qu'on vient de gagner. Le second arrêt vaut par défaut la même
@@ -691,7 +864,13 @@ Les sections s'ouvrent par défaut selon l'outil : *Formes* et *Apparence* avec
 Calque, Points et Dessiner ; *Formes* seule avec Appendices et Queue ; aucune
 avec Ancres et Visage, où on regarde un visage.
 
-<kbd>Ctrl</kbd>+<kbd>Z</kbd> annule, partout — **la sélection fait partie de
+**Annuler et rétablir ont deux grosses flèches** dans la barre, ↶ et ↷. Un
+raccourci clavier ne sert à rien à qui ne le connaît pas, et l'atelier est utilisé
+par des enfants. Elles sont **grisées quand il n'y a rien à faire** — c'est cette
+dernière chose qui apprend ce que fait le bouton — et leur infobulle compte les
+pas disponibles.
+
+<kbd>Ctrl</kbd>+<kbd>Z</kbd> annule aussi, partout — **la sélection fait partie de
 l'instantané**, sinon annuler une duplication laisse la forme active sur un
 indice qui a changé de sens, et on croit tirer une nageoire en en déplaçant une
 autre. Molette pour zoomer, glissé du fond pour déplacer la vue.
@@ -805,10 +984,10 @@ d'espèce reste lu : le manifeste ne fait que le compléter ou l'annuler.
 | `shapes[].smooth` | contour lissé plutôt qu'en ligne brisée | lignes droites |
 | `shapes[].alpha` | opacité de la forme, multipliée à l'alpha courant | 1 |
 | `shapes[].lueur` | **bioluminescence** (halo) 0→1, bridée à la nuit si l'espèce déclare `glowAtNight` | éteinte |
-| `shapes[].degrade` | `{ type: 'lineaire'\|'radial', ang, de, vers, debut, fin }` — le premier arrêt vaut la couleur **résolue** de la forme ; la transition a un **début** et une **fin** (`pos` reste lu : fin, début à 0) | aplat |
+| `shapes[].degrade` | `{ type: 'lineaire'\|'radial', ang, de, vers, debut, fin, cx, cy, rayon }` — `cx`/`cy`/`rayon` placent le centre d'un radial, en fractions de la boîte — le premier arrêt vaut la couleur **résolue** de la forme ; la transition a un **début** et une **fin** (`pos` reste lu : fin, début à 0) | aplat |
 | `base` | `{ primaire, secondaire }` — les deux couleurs du dessin ; la secondaire donne son défaut à l'encre du visage | aucune |
 | `shapes[].nom` | nom libre du calque, affiché à la place de « forme n » | le numéro |
-| `shapes[].reflet` | `{ x, y, largeur, epaisseur, angle, force, couleur }` — la **bande de lumière** sur le dos, découpée dans le contour déformé | aucun |
+| `shapes[].reflet` | `{ x, y, largeur, epaisseur, angle, courbe, force, couleur, dessus }` — la **bande de lumière** sur le dos, découpée dans le contour déformé ; `courbe` (−1..1) la tord d'un côté ou de l'autre | aucun |
 | `shapes[].couleur` | **couleur propre à l'individu** : `{ mode: 'espece'\|'especeSombre'\|'palette'\|'teinte', couleurs[], amplitude }` | la couleur du dessin |
 | `shapes[].pivot` | rotation en bloc — **repli** quand aucun `fins[]` ne vise la forme | elle ondule |
 | `shapes[].amp` | amplitude d'animation, en degrés pour une nageoire | 15 |
@@ -831,7 +1010,7 @@ d'espèce reste lu : le manifeste ne fait que le compléter ou l'annuler.
 | `r` | rayon d'influence (nageoire) ou **longueur** (tentacule) | 1 |
 | `calques` | les formes entraînées, **plusieurs possibles** | `[layerIndex]` |
 | `layerIndex` | forme unique — forme historique, toujours lue | — |
-| `type` | `'nageoire'` (rotation) ou `'tentacule'` (onde progressive) | `nageoire` |
+| `type` | `'nageoire'` (rotation), `'tentacule'` (onde progressive) ou `'pince'` (charnière qui claque) | `nageoire` |
 | `miroir` | second ancrage en miroir de l'axe vertical, jouant en sens inverse | non |
 | `amp` | degrés de rotation, ou **% de la longueur** pour un tentacule | celle du calque |
 | `phase` | déphasage en degrés — indispensable dès qu'il y a plusieurs pattes | 0 |

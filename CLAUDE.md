@@ -214,6 +214,54 @@ Pièges de mise en scène déjà rencontrés :
 - Secouer une victime en `vy` la met la tête en bas : préférer un frisson **horizontal** et brider son inclinaison.
 - Un gag qui modifie une émotion doit passer `vfx: false` s'il a déjà son propre effet, sinon les deux se cumulent.
 
+### L'anticipation, puis la flèche : la vitesse ne se lit qu'au contraste
+
+Le grand run de l'Espadon partait sans préavis : on voyait un poisson accélérer,
+pas un sprinteur se détendre. Le code du cartoon qui manquait partout est
+l'**anticipation** — se comprimer comme un ressort AVANT l'action — et son
+pendant, l'**étirement** pendant l'action. Deux canaux génériques, posés par
+les gags et lus par `Entity.draw` dans le repère du CORPS, à volume conservé
+(même leçon que le demi-tour : ce qui se perd en largeur se reprend en hauteur,
+vérifié à l'encre près) :
+
+- **`_crispe` (0→1)** — l'ANTICIPATION. Squash, arc (il se voûte) et frisson
+  **horizontal** qui monte avec la compression (jamais vertical : la tête en
+  bas). Mesuré sur l'Espadon : 110×41 → **82×76**, encre constante.
+- **`_etire` (0→1)** — la DÉTENTE. La flèche : 110×41 → **149×32**, et la nage
+  se **raidit** (`FishBody.raideur`, −85 % d'amplitude de battement) — « droit
+  comme un i », le corps ne bat plus, il fend l'eau.
+
+Trois scènes s'en servent : l'**Espadon** (phase `charge` de 1,15 s entre la
+montée et le run — arrêt net, grimace tenue `hold('angry')`, compression en k²,
+recul de quelques pixels, puis flèche à 1 qui se pose à 0,6 pendant le run) ;
+le **Calamar Fusée** (le décompte est une compression — un calamar se propulse
+littéralement en se contractant — et le départ une détente de 0,7 s) ; le
+**jaillissement du Dauphin** (flèche de 0,8 qui s'efface en une demi-seconde).
+Vérifié en simulation accélérée : la scène de l'Espadon se joue montée 6,7 s →
+charge 1,2 s (crispe max 0,97) → run 4,6 s (438 px/s, 1 150 px de ligne droite)
+→ fin 1,8 s, et les **résidus des deux canaux sont à 0** après chaque scène —
+chaque phase doit remettre son canal à zéro en sortant, sinon la déformation
+reste gravée sur le poisson.
+
+S'y ajoute un **étirement de sprint générique** : toute nage au-delà de 1,3×
+la croisière allonge la silhouette jusqu'à 11 % (lissé — l'allure fluctue à
+chaque frame). Lui ne raidit **pas** la queue : un sprinteur ordinaire bat
+FORT, seule la flèche d'un gag glisse figée.
+
+Candidats relevés à l'audit mais volontairement pas faits : les embusqués
+(murène, rascasse, poisson-tapis) frappent sans détente préalable, mais leur
+strike est piloté par la simulation — y insérer un délai d'anticipation, c'est
+régler l'écosystème (le temps d'esquive de la proie), pas l'habillage.
+
+Piège de vérification : **prendre une capture réveille `requestAnimationFrame`**
+(le panneau passe au premier plan), donc la scène avance entre le moment où on
+la met en place et la photo — une pose de 1,15 s est déjà passée. Pour une
+capture déterministe : pousser `Main.fpsCap` à ~0 (toutes les frames rAF sont
+sautées, la boucle ne fait que se replanifier), avancer et RENDRE à la main
+(sim + `Background/Ecosystem/Particles.draw`, sans replanifier de rAF — en
+appeler un soi-même démultiplie les boucles pour toujours), photographier, puis
+restaurer `fpsCap`.
+
 Garde-fou : le total de bulles était monté à ~930/min et saturait l'écran. Cible : **~250/min** pour tout l'aquarium.
 
 **Ce ne sont PAS les bulles de BD qui coûtent, ce sont les particules.**
@@ -1278,9 +1326,14 @@ Quatre règles :
   seul tenant (murène, anguille : le corps entier est un tentacule) ;
   `queueCalques`, qui laisse une carapace **rigide** pendant que le reste ondule.
 - **Un appendice n'est pas forcément une nageoire.** `fins[].type` vaut
-  `nageoire` (rotation autour de l'ancre, pondérée par la distance) ou
+  `nageoire` (rotation autour de l'ancre, pondérée par la distance),
   `tentacule` (**onde progressive** le long d'un axe : base fixe, bout qui
-  parcourt toute l'amplitude). Une patte de crabe ou un bras de poulpe animés
+  parcourt toute l'amplitude) ou `pince` (**une charnière et deux mâchoires** :
+  seule celle d'un côté de l'axe pivote — faire tourner les deux ferait tourner
+  la pince au lieu de l'ouvrir). Le rythme d'une pince n'est pas un va-et-vient :
+  fermée 55 % du cycle, ouverture douce sur 30 %, puis **clac** sur les 15 %
+  restants. Un sinus ne sait pas dire « clac », il referme aussi lentement qu'il
+  ouvre. Une patte de crabe ou un bras de poulpe animés
   par une rotation sont raides, articulés sur une seule charnière.
   Chaque appendice a son `phase` et sa `vitesse` : sans eux les huit pattes d'un
   crabe battent **toutes ensemble**, ce qui se lit comme un tressaillement et
@@ -1366,6 +1419,11 @@ sable 12 % → 4,3 %.
   liste, tenue à jour toute seule, de ce qu'il reste à dessiner.
 - `decoupe_planche.py` — découpe `Assets/Concepts/Design Final.png` (les 30
   créatures dessinées) en **un repère par espèce** dans `Assets/Reperes/`.
+  La grille est un **repérage, pas une frontière** : les créatures débordent de
+  leur case, et découper au ras en coupait 17 sur 30 (le perroquet perdait 96 px
+  de bec). Chaque vignette est taillée dans une case **élargie de 25 %**, le
+  choix de la bonne composante restant jugé sur la case nominale — sinon on
+  attrape la voisine. Mesuré : 17/30 coupées → **2/30**, 621 px au bord → 71.
   L'atelier les pose tout seuls en calque de repérage. Les 17 vignettes qui
   regardent à gauche sont **retournées à la découpe** : le jeu dessine tout
   vers la droite, une planche à l'envers est un patron à l'envers.

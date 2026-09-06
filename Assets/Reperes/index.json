@@ -21,19 +21,19 @@
 "h": 101,
 "rang": 27,
 "retourne": true,
-"w": 196
+"w": 211
 },
 "calamar": {
 "h": 150,
 "rang": 22,
 "retourne": true,
-"w": 173
+"w": 177
 },
 "calamar_geant": {
 "h": 148,
 "rang": 23,
 "retourne": true,
-"w": 186
+"w": 230
 },
 "clown": {
 "h": 112,
@@ -57,7 +57,7 @@
 "h": 160,
 "rang": 26,
 "retourne": false,
-"w": 183
+"w": 185
 },
 "crevette": {
 "h": 144,
@@ -69,7 +69,7 @@
 "h": 147,
 "rang": 10,
 "retourne": true,
-"w": 179
+"w": 192
 },
 "etoile": {
 "h": 160,
@@ -81,7 +81,7 @@
 "h": 146,
 "rang": 28,
 "retourne": true,
-"w": 178
+"w": 204
 },
 "hippocampe": {
 "h": 176,
@@ -93,7 +93,7 @@
 "h": 146,
 "rang": 20,
 "retourne": true,
-"w": 186
+"w": 213
 },
 "meduse": {
 "h": 165,
@@ -111,61 +111,61 @@
 "h": 135,
 "rang": 3,
 "retourne": false,
-"w": 161
+"w": 169
 },
 "murene": {
 "h": 152,
 "rang": 16,
 "retourne": false,
-"w": 184
+"w": 235
 },
 "orque": {
-"h": 143,
+"h": 144,
 "rang": 19,
 "retourne": false,
-"w": 164
+"w": 214
 },
 "pelican": {
 "h": 147,
 "rang": 4,
 "retourne": false,
-"w": 182
+"w": 214
 },
 "perroquet": {
 "h": 128,
 "rang": 9,
 "retourne": true,
-"w": 185
+"w": 232
 },
 "poisson_lune": {
 "h": 190,
 "rang": 18,
 "retourne": true,
-"w": 146
+"w": 153
 },
 "poisson_tapis": {
 "h": 105,
 "rang": 24,
 "retourne": true,
-"w": 192
+"w": 216
 },
 "poulpe": {
 "h": 146,
 "rang": 25,
 "retourne": false,
-"w": 175
+"w": 180
 },
 "raie": {
 "h": 170,
 "rang": 17,
 "retourne": false,
-"w": 177
+"w": 229
 },
 "requin": {
 "h": 125,
 "rang": 15,
 "retourne": true,
-"w": 194
+"w": 215
 },
 "thon": {
 "h": 121,

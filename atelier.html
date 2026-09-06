@@ -65,6 +65,12 @@
      dans la scène (≈1060 px sur un écran de 1600), sinon la barre se replie en
      deux et le repère « quel outil est actif » se perd dans le pli. */
   #barre button, #barre2 button, #barre2 a { padding: 5px 8px; font-size: 12.5px; }
+  /* ANNULER / RÉTABLIR EN GRAND. Le raccourci clavier ne sert à rien à qui ne le
+     connaît pas — et l'atelier est utilisé par des enfants. Deux flèches, plus
+     grosses que le reste, et grisées quand il n'y a rien à annuler : c'est cette
+     dernière chose qui apprend ce que fait le bouton. */
+  #barre .fleche { font-size: 19px; line-height: 1; padding: 2px 10px; }
+  #barre .fleche:disabled { opacity: .3; }
   #barre .grow, #barre2 .grow { flex: 1; }
   #barre2 #nomFichier { width: 150px; flex: none; }
   #barre2 #selEspece { width: 168px; flex: none; padding: 4px 6px; font-size: 12.5px; }
@@ -208,6 +214,8 @@
     <button data-outil="forme" title="Déplacer / tourner / colorer un calque (5)">⬛ Calque</button>
     <button data-outil="points" title="Retoucher le contour (6)">◻ Points</button>
     <button data-outil="dessiner" title="Tracer un nouveau calque (7)">✏️ Dessiner</button>
+    <button id="bAnnuler" class="fleche" title="Annuler (Ctrl+Z)">↶</button>
+    <button id="bRetablir" class="fleche" title="Rétablir (Ctrl+Y)">↷</button>
     <button id="bAide" class="on" title="Afficher / masquer les explications du panneau">💡</button>
     <span class="grow"></span>
     <hr class="sep">
@@ -312,6 +320,8 @@ let fichierOuvert = null;   // dessin libre en cours d'édition, s'il y en a un
 let coches = new Set();     // formes cochées, pour les gestes de groupe
 let trace = null;           // polygone en cours de tracé (mode Dessiner)
 let couleurTrace = '#5b8fb5';
+let primitive = null;       // forme simple armée dans l'outil Dessiner
+let apercuPrim = null;      // le rectangle en cours de tirage
 let lisseTrace = true;
 let imgFond = null;         // Image() de l'éventuel calque de repérage
 let REPERES = {};           // espèce -> { w, h, rang } : la planche découpée
@@ -416,7 +426,18 @@ function ampleurApp(f) {
   for (const j of calquesDe(f)) {
     const sh = doc.shapes[j]; if (!sh) continue;
     for (const p of sh.points) {
-      if (TYPE(f) === 'tentacule') {
+      if (TYPE(f) === 'pince') {
+        // Une pince ouvre d'autant plus qu'on s'éloigne de la charnière : la
+        // course du bout est un arc, pas une translation. Et seule la mâchoire
+        // d'un côté de l'axe compte.
+        const L = Math.max(1, f.r || 1);
+        const a0 = (f.ang != null ? f.ang : 0) * Math.PI / 180;
+        const ax = Math.cos(a0), ay = Math.sin(a0);
+        const px = p[0] - f.x, py = p[1] - f.y;
+        const along = px * ax + py * ay, cote = -px * ay + py * ax;
+        if (along <= 0 || cote <= 0) continue;
+        maxi = Math.max(maxi, Math.hypot(px, py) * U.clamp(along / L, 0, 1) * A * Math.PI / 180);
+      } else if (TYPE(f) === 'tentacule') {
         const L = Math.max(1, f.r || 1);
         const a0 = (f.ang != null ? f.ang : 180) * Math.PI / 180;
         const u = U.clamp(((p[0] - f.x) * Math.cos(a0) + (p[1] - f.y) * Math.sin(a0)) / L, 0, 1);
@@ -651,7 +672,10 @@ function reprendreFond() {
   imgFond = null;
   // Sans document ouvert, on montre quand même la planche de l'espèce : c'est
   // ce qu'on regarde avant de décider de dessiner.
-  const src = (doc && doc.fond) ? (doc.fond.data || doc.fond.src)
+  // Le chemin d'une planche se reconstruit depuis son nom : il n'est plus
+  // enregistré, seul son cadrage l'est.
+  const f = doc && doc.fond;
+  const src = f ? (f.data || f.src || (f.planche ? `Assets/Reperes/${f.planche}.png` : null))
             : (aRepere(espece) ? `Assets/Reperes/${espece}.png` : null);
   if (!src) return;
   imgFond = new Image();
@@ -962,6 +986,26 @@ function dessiner() {
 
   poignees(sp);
 
+  // Aperçu de la forme simple pendant qu'on tire son rectangle : on montre la
+  // FORME, pas le rectangle — c'est elle qu'on est en train de viser.
+  if (apercuPrim && primitive) {
+    const pts = pointsPrimitive(primitive, apercuPrim.x0, apercuPrim.y0, apercuPrim.x1, apercuPrim.y1);
+    if (pts.length > 1) {
+      ctx.strokeStyle = couleurTrace; ctx.lineWidth = 2;
+      ctx.fillStyle = couleurTrace + '55';
+      ctx.beginPath();
+      pts.forEach((p, i) => { const [x, y] = versEcran(p); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+      if (primitive !== 'trait') { ctx.closePath(); ctx.fill(); }
+      ctx.stroke();
+      // le rectangle qui la contient, en pointillés : il dit ce que la souris règle
+      ctx.setLineDash([4, 4]); ctx.strokeStyle = 'rgba(21,96,216,.45)'; ctx.lineWidth = 1;
+      const [ax, ay] = versEcran([apercuPrim.x0, apercuPrim.y0]);
+      const [bx, by] = versEcran([apercuPrim.x1, apercuPrim.y1]);
+      ctx.strokeRect(ax, ay, bx - ax, by - ay);
+      ctx.setLineDash([]);
+    }
+  }
+
   // Polygone en cours de tracé : les sommets posés, le segment vers le curseur,
   // et le retour à la fermeture. Sans le retour on ne voit pas la forme venir.
   if (trace && trace.length) {
@@ -1019,8 +1063,8 @@ function poignees(sp) {
       ctx.strokeStyle = vif ? 'rgba(45,127,211,.9)' : 'rgba(45,127,211,.35)';
       ctx.lineWidth = vif ? 2 : 1;
       if (image) ctx.setLineDash([6, 5]);
-      if (TYPE(f) === 'tentacule') {
-        const a0 = (f.ang != null ? f.ang : 180) * Math.PI / 180;
+      if (TYPE(f) !== 'nageoire') {
+        const a0 = (f.ang != null ? f.ang : (TYPE(f) === 'pince' ? 0 : 180)) * Math.PI / 180;
         const ax = Math.cos(a0) * sens, ay = Math.sin(a0);
         const bx = x + ax * r, by = y + ay * r;
         ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(bx, by); ctx.stroke();
@@ -1463,17 +1507,21 @@ function sectionAppendices() {
 
     <h2>Type</h2>
     <div class="rangee">
-      <button data-typeapp="nageoire" class="${tent ? '' : 'on'}">Nageoire</button>
-      <button data-typeapp="tentacule" class="${tent ? 'on' : ''}">Tentacule</button>
+      <button data-typeapp="nageoire" class="${t === 'nageoire' ? 'on' : ''}">Nageoire</button>
+      <button data-typeapp="tentacule" class="${t === 'tentacule' ? 'on' : ''}">Tentacule</button>
+      <button data-typeapp="pince" class="${t === 'pince' ? 'on' : ''}">🦀 Pince</button>
     </div>`
-    + A(tent
+    + A(t === 'pince'
+      ? 'Une <b>charnière</b> à l\'ancre, et seule la mâchoire d\'un côté de la flèche s\'ouvre — l\'autre reste solidaire du membre. Elle reste <b>fermée</b> les trois quarts du temps, s\'ouvre en douceur, puis <b>claque</b> : c\'est ce rythme qui se lit, un va-et-vient régulier ne dirait rien.'
+      : tent
       ? 'Une <b>onde court</b> de l\'ancre vers la pointe de la flèche : la base ne bouge pas, le bout parcourt toute l\'amplitude. C\'est ce qu\'il faut pour une patte, une antenne, un bras — un pivot les rend raides.'
       : 'La forme <b>pivote</b> autour de l\'ancre : plein effet au centre du disque, plus rien à son bord.')
-    + `<label>${tent ? 'Longueur' : 'Rayon d\'influence'} <span class="val" id="vFR">${Math.round(f.r)}</span></label>
+    + `<label>${axe ? 'Longueur' : 'Rayon d\'influence'} <span class="val" id="vFR">${Math.round(f.r)}</span></label>
     <input type="range" id="sFR" min="10" max="${Math.round(doc.naturalW * 0.9)}" value="${Math.round(f.r)}">`;
+  if (axe) h += `
+    <label>Direction <span class="val" id="vFA">${Math.round(f.ang != null ? f.ang : (tent ? 180 : 0))}°</span></label>
+    <input type="range" id="sFA" min="-180" max="180" value="${Math.round(f.ang != null ? f.ang : (tent ? 180 : 0))}">`;
   if (tent) h += `
-    <label>Direction <span class="val" id="vFA">${Math.round(f.ang != null ? f.ang : 180)}°</span></label>
-    <input type="range" id="sFA" min="-180" max="180" value="${Math.round(f.ang != null ? f.ang : 180)}">
     <label>Ondes sur la longueur <span class="val" id="vFO">${(f.ondes != null ? f.ondes : 1).toFixed(2)}</span></label>
     <input type="range" id="sFO" min="0" max="2" step="0.05" value="${f.ondes != null ? f.ondes : 1}">`
     + A(`Tire la <b>pointe de la flèche</b> sur le dessin : direction et longueur d'un
@@ -1486,7 +1534,7 @@ function sectionAppendices() {
   const ampl = ampleurApp(f);
   const pc = ampl / Math.max(1, doc.naturalW) * 100;
   h += `
-    <label>Amplitude <span class="val" id="vFAm">${ampDe(f)}</span>${tent ? ' %' : '°'}</label>
+    <label>${t === 'pince' ? 'Ouverture' : 'Amplitude'} <span class="val" id="vFAm">${ampDe(f)}</span>${tent ? ' %' : '°'}</label>
     <input type="range" id="sFAm" min="0" max="${tent ? 100 : 180}" value="${ampDe(f)}">
     <p class="aide" style="color:${pc < 1 ? '#b3261e' : 'var(--doux)'}">
       débattement obtenu : <b>${ampl.toFixed(1)} px</b> du dessin (${pc.toFixed(1)} % de sa largeur)${
@@ -1572,13 +1620,102 @@ function sectionCalque() {
     <div class="rangee"><button id="bTourneG">↺ 3°</button><button id="bTourneD">↻ 3°</button></div>
     <label>Miroir</label>
     <div class="rangee"><button id="bMiroirX">↔ horizontal</button><button id="bMiroirY">↕ vertical</button></div>
-    <div class="rangee"><button id="bDupliquer">Dupliquer la forme</button></div>`
+    <div class="rangee"><button id="bDupliquer">${groupeDe(formeSel).length > 1
+      ? 'Dupliquer le groupe (' + groupeDe(formeSel).length + ')' : 'Dupliquer la forme'}</button></div>`
     + A(`Un miroir horizontal sert à faire la nageoire de l'autre côté : dupliquer, puis
-        retourner, puis déplacer.<br><kbd>Ctrl</kbd>+<kbd>Z</kbd> annule chaque geste.`);
+        retourner, puis déplacer.<br>
+        Tous ces gestes portent sur le <b>groupe entier</b> quand le calque est aplati —
+        déplacement, échelle, rotation, miroir et duplication. Copier une seule pièce
+        d'une patte dessinée en trois morceaux ne donnerait rien d'utilisable.<br>
+        <kbd>Ctrl</kbd>+<kbd>Z</kbd> annule chaque geste.`);
+}
+
+// FORMES SIMPLES. Tracer un rond à la main au clic donne un polygone bosselé, et
+// une droite parfaite demande de viser deux pixels : ce sont justement les
+// formes qu'un outil doit poser tout seul. Chacune est convertie en points dès
+// la pose — le format ne connaît que des contours, et une primitive qui resterait
+// « paramétrique » échapperait aux points, aux appendices et à la queue.
+const PRIMITIVES = {
+  trait:      { nom: '╱ Trait',      aide: 'un segment : antenne, moustache, rayure' },
+  rond:       { nom: '● Rond',       aide: 'un disque : œil, bulle, tache' },
+  demi:       { nom: '◗ Demi-rond',  aide: 'une moitié de disque, côté plat en bas' },
+  quart:      { nom: '◔ Quart',      aide: 'un quart de disque : coin, écaille, nageoire' },
+  rect:       { nom: '▭ Rectangle',  aide: 'une bande droite : rayure, planche, dent' },
+  triangle:   { nom: '▲ Triangle',   aide: 'trois côtés : dent, épine, aileron' },
+  goutte:     { nom: '💧 Goutte',    aide: 'ronde d’un bout, pointue de l’autre : écaille, pétale' },
+};
+
+// Les points d'une primitive, inscrite dans le rectangle tiré à la souris.
+// Tout est ramené à un contour : c'est la seule chose que le format connaisse.
+function pointsPrimitive(type, x0, y0, x1, y1) {
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  const rx = Math.abs(x1 - x0) / 2, ry = Math.abs(y1 - y0) / 2;
+  const arcDe = (a0, a1, n, ox, oy, ax, ay, centre) => {
+    const p = [];
+    if (centre) p.push([ox, oy]);
+    for (let i = 0; i <= n; i++) {
+      const a = a0 + (a1 - a0) * (i / n);
+      p.push([ox + Math.cos(a) * ax, oy + Math.sin(a) * ay]);
+    }
+    return p;
+  };
+  const arc = (a0, a1, n, centre) => arcDe(a0, a1, n, cx, cy, rx, ry, centre);
+  const demiArc = (a0, a1, n, ox, oy, ax, ay, centre) => arcDe(a0, a1, n, ox, oy, ax, ay, centre);
+  switch (type) {
+    // Un trait est un contour OUVERT : le refermer dessinerait une corde en
+    // travers. Il part du point de départ et suit le glissé, sans passer par la
+    // boîte — sinon on ne pourrait tracer que des diagonales.
+    case 'trait': return [[x0, y0], [x1, y1]];
+    case 'rond': return arc(0, Math.PI * 2, 28, false);
+    // Un demi-rond et un quart REMPLISSENT le rectangle tiré, ils ne s'inscrivent
+    // pas dans la moitié haute de la boîte du disque entier : ce qu'on tire est
+    // ce qu'on obtient, c'est la seule règle qu'on n'a pas à retenir. Côté plat
+    // EN BAS pour le demi — c'est la moitié qu'on pose sur un dos ou une tête.
+    case 'demi': return demiArc(Math.PI, Math.PI * 2, 18, cx, Math.max(y0, y1), rx, ry * 2, false);
+    case 'quart': return demiArc(Math.PI, Math.PI * 1.5, 12,
+                                 Math.min(x0, x1), Math.max(y0, y1), rx * 2, ry * 2, true);
+    case 'rect': return [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+    case 'triangle': return [[cx, Math.min(y0, y1)], [Math.max(x0, x1), Math.max(y0, y1)],
+                             [Math.min(x0, x1), Math.max(y0, y1)]];
+    // Goutte : un demi-disque à droite, une pointe à gauche.
+    case 'goutte': return [[cx - rx, cy]].concat(arc(-Math.PI / 2, Math.PI / 2, 14, false));
+    default: return [];
+  }
+}
+
+function poserPrimitive(type, x0, y0, x1, y1) {
+  const pts = pointsPrimitive(type, x0, y0, x1, y1);
+  if (pts.length < 2) return;
+  instantane();
+  const trait = type === 'trait';
+  const sh = { points: pts, smooth: !trait && type !== 'rect' && type !== 'triangle',
+               pivot: null, amp: 15, ferme: !trait };
+  if (trait) {
+    sh.fill = null;
+    sh.stroke = base('secondaire') || couleurTrace;
+    sh.lineWidth = 3;
+  } else {
+    sh.fill = base('primaire') || couleurTrace;
+  }
+  doc.shapes.push(sh);
+  formeSel = doc.shapes.length - 1;
+  marquer(); panneau();
+  dire(`${PRIMITIVES[type].nom.replace(/^\S+\s/, '')} posé — ${pts.length} points`, 'ok');
 }
 
 function sectionDessiner() {
-  return A(`Clique pour poser les sommets. <kbd>double-clic</kbd> ou <b>Fermer</b> termine
+  return `<h2>Forme simple</h2>
+    <div class="rangee" style="flex-wrap:wrap">` + Object.keys(PRIMITIVES).map(k =>
+      `<button data-prim="${k}" class="${primitive === k ? 'on' : ''}" title="${PRIMITIVES[k].aide}"
+        style="flex:0 0 auto">${PRIMITIVES[k].nom}</button>`).join('') + `</div>`
+    + A(primitive
+      ? `<b>${PRIMITIVES[primitive].aide}</b> — tire un rectangle sur le dessin, la forme
+         s'y inscrit. <kbd>Échap</kbd> revient au tracé libre.`
+      : `Tirer un rectangle y inscrit la forme choisie. Un rond tracé à la main au clic
+         est bosselé et une droite parfaite demande de viser deux pixels : ce sont
+         justement les formes que l'outil doit poser tout seul.`)
+    + `<h2>Tracé libre</h2>`
+    + A(`Clique pour poser les sommets. <kbd>double-clic</kbd> ou <b>Fermer</b> termine
       la forme, <kbd>Échap</kbd> l'abandonne, <kbd>retour arrière</kbd> retire le dernier point.`)
     + `<label>Couleur</label>
     ${champCouleur('id="cTrace"', couleurTrace)}
@@ -1638,7 +1775,18 @@ function sectionApparence() {
       ${champCouleur('id="cDegVers"', (deg.vers && deg.vers[0] === '#') ? deg.vers : '#243447')}
       <button id="bDegAuto" class="${deg.vers ? '' : 'on'}" title="La couleur de la forme, assombrie">auto</button>
     </div>`
-    + (deg.type === 'radial' ? '' : `
+    + (deg.type === 'radial' ? `
+    <div class="duo">
+      <div><label>Centre ↔ <span class="val" id="vDegCX">${(deg.cx == null ? 0.5 : deg.cx).toFixed(2)}</span></label>
+        <input type="range" id="sDegCX" min="-0.5" max="1.5" step="0.01" value="${deg.cx == null ? 0.5 : deg.cx}"></div>
+      <div><label>Centre ↕ <span class="val" id="vDegCY">${(deg.cy == null ? 0.5 : deg.cy).toFixed(2)}</span></label>
+        <input type="range" id="sDegCY" min="-0.5" max="1.5" step="0.01" value="${deg.cy == null ? 0.5 : deg.cy}"></div>
+    </div>
+    <label>Rayon <span class="val" id="vDegR">${(deg.rayon == null ? 1 : deg.rayon).toFixed(2)}</span>×</label>
+    <input type="range" id="sDegR" min="0.15" max="2.5" step="0.05" value="${deg.rayon == null ? 1 : deg.rayon}">`
+    + A(`Le centre est donné en <b>fractions de la boîte de la forme</b>, et il peut
+        sortir de la boîte (−0,5 à 1,5) : c'est ce qui fait un ventre éclairé par en
+        dessous plutôt qu'un halo bêtement centré.`) : `
     <label>Angle <span class="val" id="vDegAng">${deg.ang == null ? 90 : deg.ang}°</span></label>
     <input type="range" id="sDegAng" min="-180" max="180" value="${deg.ang == null ? 90 : deg.ang}">`)
     + `<label>Début de la transition <span class="val" id="vDegDeb">${degDebut.toFixed(2)}</span></label>
@@ -1687,14 +1835,39 @@ function sectionApparence() {
         <input type="range" id="sRefE" min="0.01" max="0.5" step="0.005" value="${rf.epaisseur == null ? 0.09 : rf.epaisseur}"></div>
     </div>
     <label>Inclinaison <span class="val" id="vRefA">${Math.round(rf.angle || 0)}°</span></label>
-    <input type="range" id="sRefA" min="-45" max="45" value="${Math.round(rf.angle || 0)}">
+    <input type="range" id="sRefA" min="-90" max="90" value="${Math.round(rf.angle || 0)}">
+    <div class="rangee">
+      <button data-refang="0">— à plat</button>
+      <button data-refang="-90">│ debout</button>
+      <button data-refang="90">│ debout ↕</button>
+    </div>
+    <label>Courbure <span class="val" id="vRefC">${(rf.courbe || 0).toFixed(2)}</span></label>
+    <input type="range" id="sRefC" min="-1" max="1" step="0.05" value="${rf.courbe || 0}">
+    <div class="rangee">
+      <button data-refcbe="-0.5">⌒ vers le haut</button>
+      <button data-refcbe="0">— droite</button>
+      <button data-refcbe="0.5">⌣ vers le bas</button>
+    </div>
     <label>Couleur</label>
-    ${champCouleur('id="cRefC"', (rf.couleur && rf.couleur[0] === '#') ? rf.couleur : '#ffffff')}`
+    ${champCouleur('id="cRefC"', (rf.couleur && rf.couleur[0] === '#') ? rf.couleur : '#ffffff')}
+    <label class="puce"><input type="checkbox" id="cRefDessus" ${rf.dessus ? 'checked' : ''}>
+      par-dessus tous les calques</label>`
     + A(`La bande de lumière qui court sur le dos d'un poisson. Elle est <b>découpée dans
         le contour</b>, donc elle ne déborde jamais et elle <b>ondule avec la nage</b> —
         dessinée à la main dans un calque, elle restait figée pendant que le corps
         bougeait. Et elle s'éteint à ses pointes : un aplat aux bouts francs se lit comme
-        un trait de peinture, pas comme un reflet.`);
+        un trait de peinture, pas comme un reflet.<br>
+        L'<b>inclinaison</b> va jusqu'à <b>90°</b>, donc jusqu'à la verticale : un reflet
+        n'est pas toujours couché le long du dos — sur un flanc, sur une joue, sur une
+        nageoire dressée, il est debout. Sa <b>longueur</b> reste comptée sur la largeur
+        de la forme, elle ne change pas quand on la tourne : une bande ne doit pas
+        grandir parce qu'on la redresse.<br>
+        La <b>courbure</b> la tord d'un côté ou de l'autre : elle épouse alors le dos,
+        qui n'est pas plat. Les pointes ne bougent pas, seul le milieu se déplace.<br>
+        <b>Par-dessus tous les calques</b> : une lumière est posée par l'éclairage, pas
+        par l'ordre d'empilement. Sans ça celle du dos passe sous la nageoire dorsale et
+        sous les rayures peintes par-dessus, alors qu'elle devrait glisser dessus. Elle
+        reste découpée dans <b>sa</b> forme, elle ne déborde pas.`);
 
   h += `<h2>Matière</h2>
     <label>Opacité <span class="val" id="vAlpha">${(sh.alpha == null ? 1 : sh.alpha).toFixed(2)}</span></label>
@@ -1863,6 +2036,10 @@ function barre(nom) {
   $('#bAnime').textContent = anime ? '⏸ Animation' : '▶ Animer';
   $('#bFantome').classList.toggle('on', fantome);
   $('#bNuit').classList.toggle('on', nuit);
+  $('#bAnnuler').disabled = !doc || !histoire.length;
+  $('#bRetablir').disabled = !doc || !futur.length;
+  $('#bAnnuler').title = histoire.length ? `Annuler (${histoire.length} pas) — Ctrl+Z` : 'Rien à annuler';
+  $('#bRetablir').title = futur.length ? `Rétablir (${futur.length} pas) — Ctrl+Y` : 'Rien à rétablir';
   $('#bDesactiver').disabled = !manifeste[espece];
   $('#bActiver').textContent = fichierOuvert
     ? `Rattacher à ${(SPECIES[espece] || {}).name || espece}`
@@ -1906,6 +2083,8 @@ function cablerBarres() {
       ? `${fichierOuvert}.json sera rattaché à ${SPECIES[espece].name}`
       : `mis à l'échelle de ${SPECIES[espece].name}`, 'ok');
   });
+  on('#bAnnuler', 'click', () => annuler(histoire, futur));
+  on('#bRetablir', 'click', () => annuler(futur, histoire));
   on('#bEnreg', 'click', enregistrer);
   on('#bActiver', 'click', () => activer(($('#nomFichier').value || '').trim()));
   on('#bDesactiver', 'click', () => activer(null));
@@ -1962,7 +2141,11 @@ function panneau() {
      : outil === 'dessiner' ? sectionDessiner()
      : A(`Tire les carrés pour retoucher le contour de la forme sélectionnée.
           <kbd>clic</kbd> sur le trait pour insérer un point, <kbd>alt</kbd>+clic sur un
-          point pour le supprimer.<br><kbd>Ctrl</kbd>+<kbd>Z</kbd> annule, partout.`);
+          point pour le supprimer, <kbd>clic</kbd> dans un autre calque pour le
+          sélectionner.<br>
+          <b>Déplacer la vue :</b> bouton du <b>milieu</b> ou bouton <b>droit</b>, dans
+          tous les outils — le bouton gauche appartient à l'outil.<br>
+          <kbd>Ctrl</kbd>+<kbd>Z</kbd> annule, partout.`);
 
   // Sections communes, repliées par défaut sauf celles dont l'outil se sert.
   const surCalque = outil === 'forme' || outil === 'points' || outil === 'dessiner';
@@ -2067,8 +2250,13 @@ function cabler() {
     // Les deux réglages ne sont pas dans la même unité (degrés de rotation d'un
     // côté, pourcentage de longueur de l'autre) : garder l'ancienne valeur
     // donnait une patte qui décollait du corps au changement de type.
-    f.amp = f.type === 'tentacule' ? 25 : 20;
+    // Les unités diffèrent d'un type à l'autre (degrés de rotation, pourcentage
+    // de longueur, degrés d'ouverture) : garder l'ancienne valeur donnait une
+    // patte qui décollait du corps au changement de type.
+    f.amp = f.type === 'tentacule' ? 25 : (f.type === 'pince' ? 45 : 20);
     if (f.type === 'tentacule' && f.ang == null) f.ang = 180;
+    // Une pince s'ouvre vers l'AVANT par défaut : c'est là que regarde la bête.
+    if (f.type === 'pince' && f.ang == null) f.ang = 0;
     marquer(); panneau();
   }));
   document.querySelectorAll('[data-cal]').forEach(c => c.addEventListener('change', () => {
@@ -2192,6 +2380,11 @@ function cabler() {
     $('#vEch').textContent = (+e.target.value).toFixed(2);
     marquer();
   });
+  document.querySelectorAll('[data-prim]').forEach(b => b.addEventListener('click', () => {
+    primitive = primitive === b.dataset.prim ? null : b.dataset.prim;
+    trace = null;                       // les deux modes ne cohabitent pas
+    panneau(); dessiner();
+  }));
   on('#cTrace', 'input', e => { couleurTrace = e.target.value; dessiner(); });
   on('#cLisse', 'change', e => { lisseTrace = e.target.checked; });
   on('#bFermer', 'click', fermerTrace);
@@ -2328,6 +2521,18 @@ function cabler() {
   // Début et fin de transition. Ils sont TENUS l'un par l'autre : croisés, le
   // dégradé s'inverse sans prévenir, ce qui se lit comme un bug de rendu.
   ['#sDegDeb', '#sDegFin'].forEach(sel => on(sel, 'pointerdown', instantane));
+  const degCurseur = (sel, cle, val, defaut) => {
+    on(sel, 'pointerdown', instantane);
+    on(sel, 'input', e => {
+      const v = +e.target.value;
+      if (Math.abs(v - defaut) < 0.001) delete sh().degrade[cle]; else sh().degrade[cle] = v;
+      $(val).textContent = v.toFixed(2);
+      marquer();
+    });
+  };
+  degCurseur('#sDegCX', 'cx', '#vDegCX', 0.5);
+  degCurseur('#sDegCY', 'cy', '#vDegCY', 0.5);
+  degCurseur('#sDegR', 'rayon', '#vDegR', 1);
   on('#sDegDeb', 'input', e => {
     const d = sh().degrade;
     d.debut = Math.min(+e.target.value, (d.fin != null ? d.fin : 1) - 0.01);
@@ -2375,7 +2580,25 @@ function cabler() {
   refl('#sRefL', 'largeur', '#vRefL', 2);
   refl('#sRefE', 'epaisseur', '#vRefE', 3);
   refl('#sRefA', 'angle', '#vRefA', 0);
+  refl('#sRefC', 'courbe', '#vRefC', 2);
+  document.querySelectorAll('[data-refang]').forEach(b => b.addEventListener('click', () => {
+    instantane();
+    const v = +b.dataset.refang;
+    if (v === 0) delete sh().reflet.angle; else sh().reflet.angle = v;
+    marquer(); panneau();
+  }));
+  document.querySelectorAll('[data-refcbe]').forEach(b => b.addEventListener('click', () => {
+    instantane();
+    const v = +b.dataset.refcbe;
+    if (v === 0) delete sh().reflet.courbe; else sh().reflet.courbe = v;
+    marquer(); panneau();
+  }));
   on('#cRefC', 'input', e => { sh().reflet.couleur = e.target.value; marquer(); });
+  on('#cRefDessus', 'change', e => {
+    instantane();
+    if (e.target.checked) sh().reflet.dessus = true; else delete sh().reflet.dessus;
+    marquer(); panneau();
+  });
   on('#cCont', 'change', e => {
     instantane();
     const f = sh(); if (!f) return;
@@ -2521,41 +2744,67 @@ function miroirForme(axe) {
   transformer(p => (axe === 'x' ? [2 * cx - p[0], p[1]] : [p[0], 2 * cy - p[1]]));
 }
 function dupliquerForme() {
+  const lot = groupeDe(formeSel).slice().sort((a, b) => a - b);
+  if (!lot.length || !doc.shapes[formeSel]) return;
   instantane();
   const dx = doc.naturalW * 0.04, dy = doc.naturalH * 0.04;
-  const src = formeSel;
-  // Les appendices qui animaient l'original, RELEVÉS AVANT tout décalage.
-  // Dupliquer une nageoire sans son ancrage donnait une pièce inerte : on
-  // refaisait l'appendice à la main, avec ses cinq réglages, à chaque copie —
-  // alors que le geste sert justement à faire la paire de l'autre côté.
-  const aCopier = doc.fins.filter(f => calquesDe(f).includes(src));
-  const sh = JSON.parse(JSON.stringify(doc.shapes[src]));
-  sh.points = sh.points.map(p => [p[0] + dx, p[1] + dy]);
-  // La copie sort du groupe : dupliquer une nageoire, c'est en faire une AUTRE.
-  delete sh.groupe;
-  doc.shapes.splice(src + 1, 0, sh);
-  // Les appendices visant une forme au-delà du point d'insertion se décalent.
-  decalerCalques(j => (j > src ? j + 1 : j));
-  // La copie de l'appendice ne vise QUE la copie de la forme, et suit son
-  // décalage : posée sur l'ancre d'origine, elle déformerait autour du vide.
+  const fin = lot[lot.length - 1];          // on insère juste après le groupe
+  const n = lot.length;
+
+  // UN GROUPE APLATI SE DUPLIQUE EN ENTIER. Copier une seule pièce d'une patte
+  // dessinée en trois morceaux, ou d'un corps peint en quatre couches, ne donne
+  // rien d'utilisable : ce sont justement les calques qu'on a déclarés
+  // solidaires. Déplacer, tourner et retourner le faisaient déjà pour tout le
+  // groupe (`transformer`) ; dupliquer était le seul geste resté sur une pièce.
+  const copies = lot.map(j2 => {
+    const sh = JSON.parse(JSON.stringify(doc.shapes[j2]));
+    sh.points = sh.points.map(p => [p[0] + dx, p[1] + dy]);
+    return sh;
+  });
+  // Correspondance ancien -> nouvel indice, POUR LES MEMBRES DU LOT.
+  const vers = {};
+  lot.forEach((j2, k) => { vers[j2] = fin + 1 + k; });
+  // La copie forme un GROUPE À PART : c'en est un autre, pas une extension.
+  // Une pièce seule, elle, sort de tout groupe — dupliquer une nageoire, c'est
+  // en faire une AUTRE.
+  const nom = n > 1 ? nomGroupeLibre() : null;
+  for (const sh of copies) { if (nom) sh.groupe = nom; else delete sh.groupe; }
+
+  // Les appendices qui animaient le lot, relevés AVANT tout décalage.
+  const aCopier = doc.fins.filter(f => calquesDe(f).some(j2 => lot.includes(j2)));
+  const ondulants = doc.queueCalques ? doc.queueCalques.filter(j2 => lot.includes(j2)) : [];
+
+  doc.shapes.splice(fin + 1, 0, ...copies);
+  // Tout ce qui visait une forme au-delà du point d'insertion se décale.
+  decalerCalques(j2 => (j2 > fin ? j2 + n : j2));
+
+  // La copie de l'appendice vise les COPIES, et suit leur décalage : posée sur
+  // l'ancre d'origine, elle déformerait autour du vide.
   for (const f of aCopier) {
     const g = JSON.parse(JSON.stringify(f));
-    g.calques = [src + 1];
+    g.calques = calquesDe(f).filter(j2 => vers[j2] != null).map(j2 => vers[j2]);
     delete g.layerIndex;
     g.x += dx; g.y += dy;
     doc.fins.push(g);
   }
-  formeSel = src + 1;
+  // Une copie ondule comme son original : sans ça elle sortait rigide au milieu
+  // d'un corps qui bat.
+  if (ondulants.length && doc.queueCalques) {
+    doc.queueCalques = [...new Set(doc.queueCalques.concat(ondulants.map(j2 => vers[j2])))]
+      .sort((a, b) => a - b);
+  }
+
+  formeSel = fin + 1;
   if (aCopier.length) finSel = doc.fins.length - 1;
   marquer(); panneau();
-  dire(aCopier.length
-    ? `forme dupliquée avec ${aCopier.length} appendice${aCopier.length > 1 ? 's' : ''}`
-    : 'forme dupliquée', 'ok');
+  dire(`${n > 1 ? n + ' calques dupliqués' : 'forme dupliquée'}`
+     + (aCopier.length ? ` avec ${aCopier.length} appendice${aCopier.length > 1 ? 's' : ''}` : ''), 'ok');
 }
 
-// Toute renumérotation des calques doit être répercutée sur ce qui les VISE :
-// les appendices et la liste des calques qui ondulent. C'était fait à la main,
-// à trois endroits, sur le seul `layerIndex` — et rien ne suivait `calques`.
+// Répercute une renumérotation des calques sur TOUT ce qui les vise par leur
+// indice. Oubliée quelque part, elle ne casse rien tout de suite : un appendice
+// se met à animer la mauvaise forme, la queue à onduler une autre, un calque
+// éteint à en éteindre un voisin — et on cherche longtemps.
 function decalerCalques(map) {
   const conv = (l) => l.map(map).filter(j => j != null);
   for (const f of doc.fins) {
@@ -2634,7 +2883,7 @@ function degrouper() {
   dire('groupe défait');
 }
 
-function marquer() { if (espece && doc) brouillons[espece] = doc; dessiner(); rail(); }
+function marquer() { if (espece && doc) brouillons[espece] = doc; dessiner(); rail(); barre(); }
 
 // Le tracé devient une forme, posée AU-DESSUS de la pile : on dessine
 // généralement du corps vers les détails.
@@ -2678,6 +2927,7 @@ function annuler(pile, autre) {
 addEventListener('keydown', ev => {
   if (!(ev.ctrlKey || ev.metaKey)) return;
   if (ev.key === 'Escape' && pipette) { pipette = null; majCurseur(); panneau(); return; }
+  if (ev.key === 'Escape' && primitive) { primitive = null; apercuPrim = null; panneau(); dessiner(); return; }
   const k = ev.key.toLowerCase();
   if (k === 'z' && !ev.shiftKey) { ev.preventDefault(); annuler(histoire, futur); }
   else if (k === 'y' || (k === 'z' && ev.shiftKey)) { ev.preventDefault(); annuler(futur, histoire); }
@@ -2735,8 +2985,8 @@ function pres(sx, sy) {
     // met les deux poignées à portée l'une de l'autre.
     for (let i = 0; i < doc.fins.length; i++) {
       const f = doc.fins[i];
-      if (TYPE(f) !== 'tentacule') continue;
-      const a0 = (f.ang != null ? f.ang : 180) * Math.PI / 180;
+      if (TYPE(f) === 'nageoire') continue;
+      const a0 = (f.ang != null ? f.ang : (TYPE(f) === 'pince' ? 0 : 180)) * Math.PI / 180;
       const [x, y] = versEcran([f.x + Math.cos(a0) * (f.r || 60), f.y + Math.sin(a0) * (f.r || 60)]);
       if (Math.hypot(sx - x, sy - y) < seuil) return { type: 'boutApp', i };
     }
@@ -2813,10 +3063,24 @@ function segmentPres(sx, sy) {
 // transforme le prochain clic d'édition en prélèvement, sans prévenir.
 function majCurseur() { vue.style.cursor = pipette ? 'crosshair' : ''; }
 
+// Le menu contextuel gênerait le déplacement au bouton droit.
+vue.addEventListener('contextmenu', ev => ev.preventDefault());
+
 vue.addEventListener('pointerdown', ev => {
   if (!doc) return;
   const r = vue.getBoundingClientRect();
   const sx = ev.clientX - r.left, sy = ev.clientY - r.top;
+  // DÉPLACER LA VUE, dans TOUS les outils, au bouton du milieu ou au bouton
+  // droit — la convention du jeu, et celle de tous les éditeurs. Le bouton
+  // gauche reste à l'outil : sur un dessin qui remplit l'écran, il n'y a
+  // pratiquement aucun fond libre où commencer un déplacement.
+  if (ev.button === 1 || ev.button === 2) {
+    ev.preventDefault();
+    attrape = { type: 'vue', sx, sy, ox: vueT.x, oy: vueT.y };
+    vue.setPointerCapture(ev.pointerId);
+    return;
+  }
+  if (ev.button !== 0) return;
   // PIPETTE : elle passe avant tout, et se désarme après un prélèvement.
   if (pipette) {
     instantane();
@@ -2869,6 +3133,15 @@ vue.addEventListener('pointerdown', ev => {
     return;
   }
 
+  // Forme simple armée : on TIRE un rectangle, la forme s'y inscrit.
+  if (outil === 'dessiner' && primitive) {
+    const [x, y] = versDoc(sx, sy);
+    attrape = { type: 'prim', x0: x, y0: y };
+    apercuPrim = { x0: x, y0: y, x1: x, y1: y };
+    vue.setPointerCapture(ev.pointerId);
+    return;
+  }
+
   // Mode Dessiner : chaque clic pose un sommet. Un clic sur le PREMIER sommet
   // referme la forme, comme dans tout outil de tracé.
   if (outil === 'dessiner') {
@@ -2898,10 +3171,18 @@ vue.addEventListener('pointerdown', ev => {
     }
     // Ni point ni contour sous le curseur : un clic dans un AUTRE calque le
     // sélectionne, pour retoucher un dessin existant sans passer par la liste.
+    //
+    // Mais c'est un CLIC, pas un APPUI : sélectionner dès l'enfoncement volait
+    // tout déplacement de la vue, puisque sur un dessin qui remplit l'écran on
+    // appuie presque toujours au-dessus d'un calque. On retient donc le
+    // candidat, on commence le déplacement, et `pointerup` tranche selon que le
+    // curseur a bougé ou non.
     const [wx, wy] = versDoc(sx, sy);
     for (let i = doc.shapes.length - 1; i >= 0; i--) {
       if (i !== formeSel && dansForme(doc.shapes[i].points, wx, wy)) {
-        formeSel = i; panneau(); dessiner(); return;
+        attrape = { type: 'vue', sx, sy, ox: vueT.x, oy: vueT.y, candidat: i };
+        vue.setPointerCapture(ev.pointerId);
+        return;
       }
     }
   }
@@ -2943,6 +3224,11 @@ vue.addEventListener('pointermove', ev => {
     transformer(p => [p[0] + dx, p[1] + dy]);
     return;                       // `transformer` a déjà appelé `marquer`
   }
+  else if (a.type === 'prim') {
+    apercuPrim = { x0: a.x0, y0: a.y0, x1: x, y1: y };
+    dessiner();
+    return;
+  }
   else if (a.type === 'echForme' || a.type === 'rotForme') {
     // Le geste est INCRÉMENTAL : `transformer()` applique une transformation
     // relative (et déplace au passage les ancrages de nageoire), on lui donne
@@ -2969,7 +3255,24 @@ vue.addEventListener('pointermove', ev => {
   marquer();
 });
 
-vue.addEventListener('pointerup', () => {
+vue.addEventListener('pointerup', ev => {
+  if (attrape && attrape.type === 'prim') {
+    const p = apercuPrim;
+    apercuPrim = null; attrape = null;
+    // Un simple clic ne pose rien : un rond de zéro pixel serait invisible et
+    // impossible à rattraper autrement qu'en fouillant la liste des formes.
+    const assez = Math.hypot(p.x1 - p.x0, p.y1 - p.y0) * vueT.k > 8;
+    if (assez) poserPrimitive(primitive, p.x0, p.y0, p.x1, p.y1);
+    else { dire('trop petit — tire un rectangle', 'ko'); dessiner(); }
+    return;
+  }
+  // Un déplacement qui n'a PAS bougé était en fait un clic : c'est là que se
+  // décide la sélection d'un autre calque dans l'outil Points.
+  if (attrape && attrape.type === 'vue' && attrape.candidat != null) {
+    const r = vue.getBoundingClientRect();
+    const bouge = Math.hypot(ev.clientX - r.left - attrape.sx, ev.clientY - r.top - attrape.sy);
+    if (bouge < 4) { formeSel = attrape.candidat; panneau(); dessiner(); }
+  }
   if (attrape && attrape.type !== 'vue') panneau();
   attrape = null;
 });
@@ -3092,10 +3395,14 @@ window.Atelier = { ouvrir, choisir, get doc() { return doc; } };
 function aEnvoyer() {
   const d = JSON.parse(JSON.stringify(doc));
   delete d.espece; delete d.nom;
-  // La planche du design ne s'enregistre pas : elle est reposée toute seule à
-  // l'ouverture, et elle appartient au dépôt, pas au dessin. Une image importée
-  // au disque, elle, reste embarquée — sans elle le document n'est plus repris.
-  if (d.fond && d.fond.planche) delete d.fond;
+  // LA PLANCHE NE S'ENREGISTRE PAS, MAIS SON CADRAGE SI. C'était l'IMAGE qu'on
+  // ne voulait pas recopier — 30 vignettes en base64, 1 Mo pour rien, alors
+  // qu'elle appartient au dépôt et se repose toute seule. Jeter l'objet entier
+  // jetait avec lui l'échelle, la position, l'opacité et le dessus/dessous :
+  // tout le calage refait à la main était perdu au rechargement, et il fallait
+  // le refaire à chaque séance. Seuls les pixels partent ; les quelques nombres
+  // qui disent OÙ elle est posée restent.
+  if (d.fond && d.fond.planche) { delete d.fond.data; delete d.fond.src; }
   // Les calques éteints sont un réglage de TRAVAIL : rouvrir un dessin avec des
   // pièces manquantes, sans savoir pourquoi, serait le pire des pièges.
   delete d.masques;
@@ -3113,8 +3420,8 @@ function aEnvoyer() {
     // Les fractions du reflet et du dégradé : trois décimales suffisent à un
     // réglage qui s'exprime en fraction de la boîte de la forme.
     const arr = (o, cles) => { if (o) for (const c of cles) if (o[c] != null) o[c] = Math.round(o[c] * 1000) / 1000; };
-    arr(sh.reflet, ['force', 'x', 'y', 'largeur', 'epaisseur', 'angle']);
-    arr(sh.degrade, ['debut', 'fin', 'pos', 'ang']);
+    arr(sh.reflet, ['force', 'x', 'y', 'largeur', 'epaisseur', 'angle', 'courbe']);
+    arr(sh.degrade, ['debut', 'fin', 'pos', 'ang', 'cx', 'cy', 'rayon']);
   }
   for (const c in d.points) {
     const pt = d.points[c];

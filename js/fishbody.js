@@ -1151,13 +1151,37 @@ const FishBody = {
             const L = Math.max(1, f.r || 1);
             const a0 = (f.ang != null ? f.ang : 180) * Math.PI / 180;
             const ax = Math.cos(a0) * sens, ay = Math.sin(a0);
-            const px = x - fx, py = y - f.y;
+            let px = x - fx, py = y - f.y;
             const u = U.clamp((px * ax + py * ay) / L, 0, 1);
             if (u <= 0) continue;                 // côté corps : l'épaule tient
             const retard = (f.ondes != null ? f.ondes : 0.35) * Math.PI * 2;
             let w = ((anim.ph * 0.7 * vit + dph - u * retard) / (Math.PI * 2)) % 1;
             if (w < 0) w += 1;
             const bat = this.battementAile(w);
+            // LE RETOURNEMENT, et c'est lui qui fait voler.
+            //
+            // Une aile qui pivote en gardant sa largeur est un éventail rigide :
+            // elle monte et descend, elle ne VOLE pas. Une vraie aile, vue de
+            // côté, se présente de face aux extrêmes de la course et sur la
+            // TRANCHE au passage du milieu — c'est ce rétrécissement, puis ce
+            // basculement, qu'on lit comme un battement.
+            //
+            // On écrase donc la corde (la largeur perpendiculaire à l'envergure)
+            // en suivant la position dans la course : pleine aux extrêmes, nulle
+            // au passage, et NÉGATIVE au-delà — l'aile montre son autre face.
+            //   flip = 0    : largeur constante, le comportement d'avant
+            //   flip = 0,5  : elle s'affine jusqu'à disparaître en haut
+            //   flip = 1    : elle se retourne complètement
+            // Le déphasage `w` est celui du point, donc le retournement COURT le
+            // long de l'aile comme le reste : la pointe bascule après le bras.
+            const flip = f.flip == null ? 0.55 : f.flip;
+            if (flip > 0.001) {
+              const k = (1 - flip) + flip * bat;
+              const le = px * ax + py * ay;          // le long de l'envergure
+              const co = (-px * ay + py * ax) * k;   // la corde, écrasée
+              px = le * ax - co * ay;
+              py = le * ay + co * ax;
+            }
             const a = sens * bat * u * anim.vigueur * A * Math.PI / 180;
             const cos = Math.cos(a), sin = Math.sin(a);
             x = fx + px * cos - py * sin;

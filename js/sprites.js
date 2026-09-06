@@ -70,6 +70,11 @@
 //                             courbe. Battement asymétrique : descente vive sur
 //                             35 % du cycle, remontée lente sur 65 %. Un sinus
 //                             bat autant vers le haut que vers le bas.
+//                             `flip` (0..1, défaut 0,55) ÉCRASE la corde selon
+//                             la position dans la course : l'aile se présente de
+//                             face aux extrêmes et sur la tranche au passage du
+//                             milieu, puis montre son autre face. Sans lui,
+//                             c'est un éventail rigide qui monte et descend.
 //                 `pince`     — une CHARNIÈRE et deux mâchoires : seule celle
 //                             d'un côté de l'axe `ang` pivote. Elle reste
 //                             fermée 55 % du cycle, s'ouvre en douceur, puis

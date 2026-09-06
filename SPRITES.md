@@ -309,6 +309,26 @@ embarquée, donc on ne la retrouve plus.
     plus grande à la descente. Un sinus bat autant vers le haut que vers le bas :
     c'est du carton qui claque.
 
+    **Et elle se RETOURNE** (`flip`, 0,55 par défaut). C'est ce qui manquait au
+    premier jet : une aile qui pivote en gardant sa largeur est un **éventail
+    rigide** — elle monte et descend, elle ne vole pas. Vue de côté, une vraie
+    aile se présente de face aux extrêmes de la course et sur la **tranche** au
+    passage du milieu, puis montre son autre face. La corde est donc écrasée en
+    suivant la position dans la course, et le retournement **court le long de
+    l'aile** comme le reste : la pointe bascule après le bras.
+
+    Mesuré sur l'aile du Poisson Volant — aire du polygone déformé, invariante
+    par rotation, donc elle ne dit que « de face ou sur la tranche » :
+
+    | `flip` | aire min | aire max | rapport |
+    |---|---|---|---|
+    | 0 (le premier jet) | 6 479 | 9 122 | **0,71** |
+    | 0,55 (défaut) | 3 202 | 7 673 | **0,42** |
+    | 1 (complet) | 1 494 | 7 195 | **0,21** |
+
+    À 0 la surface ne bouge presque pas — le peu qui reste vient de la courbure.
+    À 1 l'aile passe vraiment sur la tranche.
+
     Quatre espèces l'attendent — Pélican, Goéland, Cormoran, Fou Moustachu — et
     le Poisson Volant, dont les pectorales sont exactement ça.
   - **pince** — une **charnière** à l'ancre, et seule la mâchoire d'un côté de

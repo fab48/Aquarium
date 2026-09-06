@@ -1506,8 +1506,13 @@ Quatre règles :
   parcourt toute l'amplitude) `aile` (**l'angle croît le long de l'envergure** — l'épaule tient, le bout décrit
   tout l'arc, l'inverse exact de la nageoire dont le plein effet est sur l'ancre
   où le bras de levier est nul ; retardé vers le bout, donc l'aile se courbe ;
-  et battement **asymétrique**, 35 % de descente vive contre 65 % de remontée
-  molle — un oiseau porte son poids) ou `pince` (**une charnière et deux
+  battement **asymétrique**, 35 % de descente vive contre 65 % de remontée
+  molle — un oiseau porte son poids — et surtout elle se **retourne** : une aile
+  qui pivote en gardant sa largeur est un éventail rigide, elle monte et descend
+  mais ne vole pas. La corde est écrasée selon la position dans la course, donc
+  l'aile se présente de face aux extrêmes et sur la tranche au passage. Mesuré
+  sur le Poisson Volant, aire du polygone déformé : rapport min/max 0,71 sans, 
+  0,42 au défaut, 0,21 à fond) ou `pince` (**une charnière et deux
   mâchoires** :
   seule celle d'un côté de l'axe pivote — faire tourner les deux ferait tourner
   la pince au lieu de l'ouvrir). Le rythme d'une pince n'est pas un va-et-vient :

@@ -1775,7 +1775,16 @@ function sectionAppendices() {
     <label>Souplesse <span class="val" id="vFO">${(f.ondes != null ? f.ondes : 0.35).toFixed(2)}</span></label>
     <input type="range" id="sFO" min="0" max="1" step="0.05" value="${f.ondes != null ? f.ondes : 0.35}">`
     + A(`Le <b>retard</b> du bout sur le bras. À 0 l'aile est une planche rigide ; plus on
-        monte, plus elle se courbe et plus la plume du bout traîne derrière.`);
+        monte, plus elle se courbe et plus la plume du bout traîne derrière.`)
+    + `<label>Retournement <span class="val" id="vFFl">${(f.flip == null ? 0.55 : f.flip).toFixed(2)}</span></label>
+    <input type="range" id="sFFl" min="0" max="1" step="0.05" value="${f.flip == null ? 0.55 : f.flip}">`
+    + A(`Une aile qui pivote en gardant sa largeur est un <b>éventail rigide</b> : elle
+        monte et descend, elle ne vole pas. Vue de côté, une vraie aile se présente de face
+        aux extrêmes de la course et sur la <b>tranche</b> au passage du milieu.<br>
+        À <b>0</b> la largeur ne bouge pas ; à <b>0,5</b> l'aile s'affine jusqu'à
+        disparaître en haut ; à <b>1</b> elle se <b>retourne</b> complètement et montre son
+        autre face. Le retournement court le long de l'aile comme le reste : la pointe
+        bascule après le bras.`);
   if (tent) h += `
     <label>Ondes sur la longueur <span class="val" id="vFO">${(f.ondes != null ? f.ondes : 1).toFixed(2)}</span></label>
     <input type="range" id="sFO" min="0" max="2" step="0.05" value="${f.ondes != null ? f.ondes : 1}">`
@@ -3074,6 +3083,12 @@ function cabler() {
   refl('#sRefL', 'largeur', '#vRefL', 2);
   refl('#sRefE', 'epaisseur', '#vRefE', 3);
   refl('#sRefA', 'angle', '#vRefA', 0);
+  on('#sFFl', 'pointerdown', instantane);
+  on('#sFFl', 'input', e => {
+    doc.fins[finSel].flip = +e.target.value;
+    $('#vFFl').textContent = (+e.target.value).toFixed(2);
+    marquer();
+  });
   refl('#sRefC', 'courbe', '#vRefC', 2);
   document.querySelectorAll('[data-refang]').forEach(b => b.addEventListener('click', () => {
     instantane();
@@ -3927,6 +3942,7 @@ function aEnvoyer() {
   for (const f of d.fins) {
     f.x = a(f.x); f.y = a(f.y); f.r = Math.round(f.r);
     if (f.ang != null) f.ang = Math.round(f.ang);
+    if (f.flip != null) f.flip = a(f.flip);
     if (f.phase != null) f.phase = Math.round(f.phase);
     if (f.vitesse != null) f.vitesse = a(f.vitesse);
     if (f.ondes != null) f.ondes = a(f.ondes);

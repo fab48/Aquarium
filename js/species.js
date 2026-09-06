@@ -176,7 +176,7 @@ const SPECIES = {
     schooling: false, groupSize: [1, 2], popCap: 3, metabolism: 0.5,
     // Elle ne chasse personne : c'est une filtreuse de PLANCTON. Elle broute la
     // colonne d'eau bouche ouverte (grazes) et souffle en surface (breathes).
-    filterFeeder: true, grazes: true, breathes: true,
+    filterFeeder: true, grazes: true, breathes: true, souffle: true,
     colors: ['#5b7fa6'],
     bodyRatio: 0.5, tail: 'whale', sleeps: true, snores: true,
     lifespan: [2000, 3000],
@@ -282,7 +282,7 @@ const SPECIES = {
 
   dauphin: {
     name: 'Dauphin Farceur', realName: 'Dauphin', trophic: 3, movement: 'wideband',
-    breathes: true,   // remonte souffler en surface
+    breathes: true, souffle: true,   // remonte respirer, et souffle son panache (cétacé)
     nursery: 'shallow',
     depthBand: [200, 900], size: 42, speed: 100, sprintSpeed: 260,
     schooling: false, groupSize: [2, 3], popCap: 10,
@@ -422,7 +422,7 @@ const SPECIES = {
 
   orque: {
     name: 'Orque Echo', realName: 'Orque', trophic: 4, movement: 'wideband',
-    breathes: true,   // remonte souffler en surface
+    breathes: true, souffle: true,   // remonte respirer, et souffle son panache (cétacé)
     nursery: 'shallow',
     // Bande étendue à 2400 : à 1500 elle ne pouvait matériellement pas atteindre
     // le Calmar Violette qu'elle est censée chasser (1200–3400). Une proie hors
@@ -451,7 +451,7 @@ const SPECIES = {
 
   cachalot: {
     name: 'Cachalot Profond', realName: 'Cachalot', trophic: 3, movement: 'free',
-    breathes: true,   // remonte souffler en surface
+    breathes: true, souffle: true,   // remonte respirer, et souffle son panache (cétacé)
     nursery: 'shallow',
     depthBand: [450, 3400], size: 100, speed: 40, sprintSpeed: 210,
     // Sonar (GDD §12) : il repère ses proies de très loin, ce qui compense le

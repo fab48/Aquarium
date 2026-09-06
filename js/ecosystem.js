@@ -855,6 +855,7 @@ const Ecosystem = {
     // Capacité de charge par espèce (GDD §14) : la pyramide trophique impose
     // beaucoup de petits herbivores et très peu de grands prédateurs.
     if (this.countSpecies(parent.speciesId) >= this.popCap(parent.def)) return;
+    parent.jouerAnime('pond');      // le dessin peut avoir SA petite danse de ponte
     const egg = new Entity(parent.speciesId, ox, oy, { stage: 'egg', groupId: parent.groupId });
     egg.stage = 'egg'; egg.growth = 0.2; egg.stateTimer = 0;
 

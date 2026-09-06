@@ -84,6 +84,22 @@
   #humeurs canvas { width: 100%; flex: 1; min-height: 0; display: block; }
   #humeursBarre { display: flex; gap: 5px; padding: 5px 10px 0; }
   #humeursBarre button { padding: 2px 8px; font-size: 11.5px; }
+  #selScene { flex: 0 0 auto; max-width: 200px; }
+  /* Les poignées de la colonne (pose manuelle de la vue Scènes) */
+  #poseBox { position: fixed; left: 260px; bottom: 185px; z-index: 40;
+    background: var(--panneau); border: 1px solid var(--bord); border-radius: 8px;
+    padding: 8px 12px; display: flex; gap: 12px; font-size: 11.5px; }
+  #poseBox[hidden] { display: none; }   /* display:flex écrase l'attribut hidden */
+  #poseBox { align-items: center; flex-wrap: wrap; max-width: 640px; }
+  #poseBox .astuce, #timeBox .astuce { color: #8ba2b4; max-width: 240px; line-height: 1.25; }
+  #timeBox { position: fixed; left: 260px; bottom: 185px; z-index: 40;
+    background: var(--panneau); border: 1px solid var(--bord); border-radius: 8px;
+    padding: 8px 12px; display: flex; flex-direction: column; gap: 6px;
+    font-size: 11.5px; max-height: 42vh; overflow: auto; }
+  #timeBox[hidden] { display: none; }
+  #timeBox .cle, #timeBox .rangeeA { display: flex; gap: 6px; align-items: center; }
+  #poseBox label { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  #poseBox input[type=range] { width: 86px; }
 
   /* --- Panneau --- */
   #panneau { width: 322px; background: var(--panneau); border-left: 1px solid var(--bord);
@@ -224,6 +240,63 @@
     <button id="bRecadrer" title="Recentrer la vue sur le dessin">⛶ Recadrer</button>
     <button id="bFantome" title="Superposer en gris la silhouette procédurale remplacée">👻 Silhouette</button>
     <button id="bNuit" title="Forcer la nuit : c'est la seule façon de voir une luminescence">🌙 Nuit</button>
+    <select id="selScene" title="Jouer une scène cartoon du jeu sur l'aperçu — cabré, flèche, crash du Coyote…">
+      <option value="">🎬 Scène…</option>
+      <option value="pose">Pose manuelle (poignées)</option>
+      <option value="timeline">Timeline (poses clés)</option>
+      <option value="charge">Charge complète</option>
+      <option value="cabre">Cabré (ressort)</option>
+      <option value="fleche">Flèche + smear</option>
+      <option value="crash">Crash du Coyote</option>
+      <option value="choc">Choc gelée</option>
+      <option value="plat">Ventre à plat</option>
+    </select>
+  </div>
+
+  <!-- L'ÉDITEUR DE COLONNE. Pour un poisson, le « système de bones » tient en
+       une colonne vertébrale : CINQ POIGNÉES posées sur le dessin — on les
+       GLISSE (position), molette = épaisseur, Maj+molette = écraser en
+       accordéon — plus l'orientation de l'ensemble. La déformation passe par
+       les POINTS du dessin (même mécanisme que l'onde de nage : aucune
+       couture), et les poses se gardent PAR NOM dans le fichier du dessin
+       (`doc.poses`) : le jeu joue la pose « cabré » de l'espèce pour sa
+       charge, « crash » pour son accordéon — ou les poses par défaut si le
+       dessin n'en déclare pas. -->
+  <div id="poseBox" hidden>
+    <span class="astuce">glisse les points — LIBRES, en x et en y : tire le museau vers le corps pour l'accordéon, vers l'arrière-haut pour le C · molette&nbsp;=&nbsp;épaisseur</span>
+    <label>orientation<input type="range" id="pRot" min="-1.2" max="1.2" step="0.02" value="0"></label>
+    <label>durée&nbsp;(s)<input type="number" id="pDuree" min="0.2" max="6" step="0.1" value="0.8" style="width:54px"></label>
+    <label>lecture<select id="selVitesse"><option value="1">1×</option><option value="0.5">½×</option><option value="0.25">¼×</option></select></label>
+    <button id="pNeutre" title="Pose neutre">↺</button>
+    <select id="selPose" title="Charger une pose du dessin (ou une pose par défaut)"><option value="">charger…</option></select>
+    <input type="text" id="nomPose" placeholder="nom (cabre, crash, …)" style="width:110px"
+           title="Le nom de la pose. « cabre » et « crash » sont ceux que le jeu joue pour la charge et l'accordéon ; les autres servent aux timelines.">
+    <button id="pGarder" title="Garder la pose affichée sous ce nom dans le dessin (💾 Enregistrer ensuite)">💾 pose</button>
+  </div>
+
+  <!-- LA TIMELINE DE POSES CLÉS (mode « Timeline » de la vue Scènes). Une
+       animation = un ÉVÉNEMENT du jeu (mange, peur, dort, chasse, parade,
+       attaque, pond, saut, crash, charge) + des clés { temps, pose, visage }.
+       Le jeu la joue quand l'événement survient chez CETTE espèce — et sans
+       animation dessinée, le comportement générique (visage compris) reste la
+       règle. -->
+  <div id="timeBox" hidden>
+    <div class="rangeeA">
+      <select id="selAnime"><option value="">— animation —</option></select>
+      <select id="aCree" title="Créer l'animation d'un événement du jeu — elle se jouera quand il survient chez cette espèce">
+        <option value="">+ animation…</option>
+        <option>mange</option><option>peur</option><option>dort</option>
+        <option>chasse</option><option>parade</option><option>attaque</option>
+        <option>pond</option><option>saut</option><option>crash</option><option>charge</option>
+      </select>
+      <label><input type="checkbox" id="aBoucle"> boucle</label>
+      <button id="aSupprime" title="Supprimer cette animation">🗑</button>
+    </div>
+    <div id="cles"></div>
+    <div class="rangeeA">
+      <button id="aAjoutCle">+ clé</button>
+      <span class="astuce">une clé = temps (s) · pose (créées dans « Pose manuelle ») · visage — l'aperçu joue en boucle, règle la lecture en ½× pour juger</span>
+    </div>
   </div>
 
   <div id="barre2">
@@ -328,6 +401,18 @@ let imgFond = null;         // Image() de l'éventuel calque de repérage
 let REPERES = {};           // espèce -> { w, h, rang } : la planche découpée
 let vueT = { x: 0, y: 0, k: 1 };
 let anime = false;
+// LA VUE SCÈNES : jouer les canaux cartoon du jeu sur le grand aperçu, en
+// boucle — c'est ici qu'on règle une pose sans attendre qu'un thon veuille
+// bien charger en jeu. Les champs sont posés à la main à chaque frame (pas
+// d'écosystème ici, pas besoin) : ce sont de purs réglages de dessin, lus par
+// LES MÊMES déformations que le jeu (`FishBody.deformationScene` / `.smear`).
+let sceneJeu = '', sceneT0 = 0, vitesseScene = 1;   // ½× / ¼× pour juger un timing
+// L'éditeur de colonne (mode « pose ») : la pose en cours, la poignée active,
+// et les positions écran des poignées (posées par `dessinerColonne`).
+const colNeutre = () => ({ dx: [0, 0, 0, 0, 0], dy: [0, 0, 0, 0, 0],
+                           sy: [1, 1, 1, 1, 1], rot: 0, duree: 0.8 });
+let colEdit = null, colPoint = -1, colHandles = [];
+let animeSel = '';           // l'animation ouverte dans la timeline
 let fantome = false;    // superposition de la silhouette procédurale
 let nuit = false;       // force la nuit : sans ça une luminescence est invisible ici
 let attrape = null;     // ce que la souris tient en ce moment
@@ -757,6 +842,10 @@ function choisir(id) {
 
 function apres() {
   trace = null; coches.clear(); humeur = 'idle'; acteurs.clear();
+  sceneJeu = ''; animeSel = '';
+  { const s = $('#selScene'); if (s) s.value = '';
+    const p = $('#poseBox'); if (p) p.hidden = true;
+    const tb = $('#timeBox'); if (tb) tb.hidden = true; }
   // La planche se pose TOUTE SEULE : c'est le dessin de référence de l'espèce,
   // on ne travaille jamais sans. Elle ne remplace pas une image déjà choisie.
   if (doc && !doc.fond && aRepere(espece)) poserRepere(espece, true);
@@ -844,7 +933,131 @@ function poser(expr, t, ind = 0, joue = false) {
   // réutilisé, changer la palette dans le panneau n'aurait plus aucun effet.
   e._couleursForme = null;
   e.stealth = 0; e.strikeT = 0; e._repli = 0;
+  // Les canaux de SCÈNE sont remis à zéro pour tout le monde : les acteurs
+  // sont partagés avec le bandeau, et une flèche qui traîne raidirait la
+  // queue des vignettes (`FishBody.raideur` lit `_etire`). La vue Scènes les
+  // repose ensuite, sur le seul acteur du grand aperçu.
+  e._crispe = 0; e._etire = 0; e._smear = 0; e._chocT = null; e._ecraseT = 0;
+  e._poseMain = null; e._poseTete = null;
   return e;
+}
+
+// Les poignées de la colonne, dessinées sur le dessin plié : la colonne en
+// pointillé, cinq points à glisser. Les positions écran sont retenues pour le
+// hit-test des gestes (`colHandles`).
+function dessinerColonne(sp) {
+  colHandles = [];
+  const c = FishBody.colonne(sp, { dx: colEdit.dx, dy: colEdit.dy, sy: colEdit.sy, k: 1 });
+  const rot = colEdit.rot || 0, co = Math.cos(rot), si = Math.sin(rot);
+  const tourne = (x, y) => [sp.cx + (x - sp.cx) * co - (y - sp.cy) * si,
+                            sp.cy + (x - sp.cx) * si + (y - sp.cy) * co];
+  ctx.save();
+  ctx.strokeStyle = '#e8b84a'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+  ctx.beginPath();
+  for (let i = 0; i < c.n; i++) {
+    const [x, y] = versEcran(tourne(c.X[i], c.Y[i]));
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  }
+  ctx.stroke(); ctx.setLineDash([]);
+  for (let j = 0; j < 5; j++) {
+    const [x, y] = versEcran(tourne(c.X[j * 6], c.Y[j * 6]));
+    colHandles.push([x, y]);
+    ctx.beginPath(); ctx.arc(x, y, j === colPoint ? 9 : 6.5, 0, Math.PI * 2);
+    ctx.fillStyle = j === colPoint ? '#ffd75e' : 'rgba(255,215,94,0.75)';
+    ctx.fill(); ctx.strokeStyle = '#7a5b12'; ctx.lineWidth = 1.5; ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// Les rangées de la timeline : une clé = { temps, pose nommée, visage }. Tout
+// est reconstruit à chaque geste (comme le panneau), l'état vit dans doc.animes.
+function majCles() {
+  const boite = $('#cles'), sel = $('#selAnime');
+  if (!boite || !sel) return;
+  const noms = Object.keys((doc && doc.animes) || {});
+  sel.innerHTML = '<option value="">— animation —</option>'
+    + noms.map(n => `<option${n === animeSel ? ' selected' : ''}>${n}</option>`).join('');
+  const an = doc && doc.animes && doc.animes[animeSel];
+  if (!an) { boite.innerHTML = '<span class="astuce">crée une animation (+ animation…) ou choisis-en une</span>'; return; }
+  $('#aBoucle').checked = !!an.boucle;
+  const poseOpts = [...new Set([...Object.keys((doc && doc.poses) || {}), ...Object.keys(FishBody.POSES)])];
+  const visOpts = Object.keys(FishBody.EMOTIONS);
+  boite.innerHTML = an.cles.map((c, i) => `<div class="cle">
+    <input type="number" data-i="${i}" data-c="t" value="${c.t}" step="0.1" min="0" style="width:54px" title="temps (s)">
+    <select data-i="${i}" data-c="pose" title="pose de la colonne">
+      <option value=""${!c.pose ? ' selected' : ''}>(neutre)</option>
+      ${poseOpts.map(o => `<option${o === c.pose ? ' selected' : ''}>${o}</option>`).join('')}</select>
+    <select data-i="${i}" data-c="visage" title="le visage devient une clé, lui aussi">
+      <option value=""${!c.visage ? ' selected' : ''}>(visage libre)</option>
+      ${visOpts.map(o => `<option${o === c.visage ? ' selected' : ''}>${o}</option>`).join('')}</select>
+    <button data-i="${i}" data-c="x" title="supprimer la clé">×</button></div>`).join('');
+  boite.querySelectorAll('input,select').forEach(el => el.addEventListener('change', ev => {
+    const i = +ev.target.dataset.i, champ = ev.target.dataset.c;
+    instantane();
+    if (champ === 't') {
+      an.cles[i].t = Math.max(0, parseFloat(ev.target.value) || 0);
+      an.cles.sort((a, b) => a.t - b.t);
+    } else an.cles[i][champ] = ev.target.value || '';
+    sceneT0 = performance.now() / 1000;
+    majCles(); dessiner();
+  }));
+  boite.querySelectorAll('button').forEach(b => b.addEventListener('click', ev => {
+    instantane();
+    an.cles.splice(+ev.target.dataset.i, 1);
+    sceneT0 = performance.now() / 1000;
+    majCles(); dessiner();
+  }));
+}
+
+// Le scénario de chaque scène : à `u` secondes dans la boucle, quels canaux,
+// quelle tête. La « charge complète » enchaîne les quatre temps du numéro du
+// Thon — cabré fier, flèche smearée, accordéon du crash, plop les yeux KO —
+// avec un temps mort en fin de boucle pour voir d'où tout repart.
+function jouerScene(e, t) {
+  if (!sceneJeu) return;
+  // MODE POSE : la colonne en cours d'édition est posée telle quelle sur
+  // l'acteur — l'humeur choisie dans le bandeau reste la sienne.
+  if (sceneJeu === 'pose') {
+    if (colEdit) e._poseMain = colEdit;
+    return;
+  }
+  // MODE TIMELINE : l'animation ouverte est jouée par LE MÊME lecteur que le
+  // jeu (`FishBody.poseAt`), en boucle, à la vitesse de lecture choisie.
+  if (sceneJeu === 'timeline') {
+    const an = doc && doc.animes && doc.animes[animeSel];
+    const spA = Sprites.cache['__atelier__'];
+    if (an && an.cles && an.cles.length && spA) {
+      const fin = Math.max(0.1, an.cles[an.cles.length - 1].t || 0.1);
+      let u = (t - sceneT0) * vitesseScene;
+      u = an.boucle !== false ? u % fin : Math.min(u, fin);
+      const p = FishBody.poseAt(spA, an, doc.poses, u);
+      e._poseMain = { dx: p.dx, dy: p.dy, sy: p.sy, rot: p.rot };
+      if (p.visage) { e.expression = p.visage; e._held = true; e.exprTimer = 9; }
+    }
+    return;
+  }
+  const CYCLES = { charge: 7, cabre: 2.8, fleche: 2.6, crash: 3.8, choc: 1.8, plat: 1.8 };
+  const u = ((t - sceneT0) * vitesseScene) % CYCLES[sceneJeu];
+  const pose = (expr) => { e.expression = expr; e._held = true; e.exprTimer = 9; };
+  if (sceneJeu === 'cabre') {
+    e._crispe = u < 0.9 ? (u / 0.9) ** 2 : u < 2.2 ? 1 : Math.max(0, 1 - (u - 2.2) / 0.5);
+    pose('proud');
+  } else if (sceneJeu === 'fleche') {
+    if (u < 2.1) { e._etire = Math.max(0.6, 1 - u * 1.5); e._smear = e._etire; pose('angry'); }
+  } else if (sceneJeu === 'charge') {
+    if (u < 1.2) { e._crispe = (u / 1.2) ** 2; pose('proud'); }
+    else if (u < 2.8) { e._etire = Math.max(0.6, 1 - (u - 1.2) * 1.5); e._smear = e._etire; pose('angry'); }
+    else if (u < 4.6) { e._ecraseT = 1; pose('surprise'); }
+    else if (u < 5.5) { e._chocT = u - 4.6; e._chocAmp = -0.8; e._chocAxe = 'x'; pose('dizzy'); }
+  } else if (sceneJeu === 'crash') {
+    if (u < 1.8) { e._ecraseT = 1; pose('surprise'); }
+    else if (u < 2.7) { e._chocT = u - 1.8; e._chocAmp = -0.8; e._chocAxe = 'x'; pose('dizzy'); }
+  } else if (sceneJeu === 'choc' || sceneJeu === 'plat') {
+    if (u < 0.9) {
+      e._chocT = u; e._chocAmp = 1; e._chocAxe = sceneJeu === 'plat' ? 'y' : 'x';
+      pose('surprise');
+    }
+  }
 }
 
 // Le document en cours est injecté dans le cache de `Sprites` sous une clé
@@ -985,13 +1198,25 @@ function dessiner() {
   ctx.save();
   ctx.translate(sp.cx * vueT.k + vueT.x, sp.cy * vueT.k + vueT.y);
   ctx.scale(vueT.k / kJeu, vueT.k / kJeu);
-  try { FishBody.draw(ctx, poser(humeur, t, 0, anime), t); } catch (err) { /* dessin incomplet */ }
+  try {
+    const acteur = poser(humeur, t, 0, anime);
+    // La vue Scènes pose les canaux cartoon sur l'acteur, et l'aperçu
+    // applique les MÊMES déformations que le jeu — traînées du smear comprises.
+    jouerScene(acteur, t);
+    FishBody.deformationScene(ctx, acteur, t);
+    FishBody.smear(ctx, acteur, t);
+    FishBody.rendreScene(ctx, acteur, t);
+  } catch (err) { /* dessin incomplet */ }
   ctx.restore();
 
   if (doc.fond && doc.fond.dessus) tracerFond();
   debrancher();
 
-  poignees(sp);
+  // Pendant une scène, pas de poignées d'édition : le corps est déformé,
+  // elles ne tomberaient plus sur ce qu'elles prétendent saisir. Le mode
+  // POSE affiche à la place les poignées de la COLONNE.
+  if (!sceneJeu) poignees(sp);
+  else if (sceneJeu === 'pose' && colEdit) dessinerColonne(sp);
 
   // Aperçu de la forme simple pendant qu'on tire son rectangle : on montre la
   // FORME, pas le rectangle — c'est elle qu'on est en train de viser.
@@ -2069,7 +2294,148 @@ function barre(nom) {
 
 function cablerBarres() {
   const on = (sel, ev, fn) => { const e = $(sel); if (e) e.addEventListener(ev, fn); };
-  on('#bAnime', 'click', () => { anime = !anime; barre(); });
+  on('#bAnime', 'click', () => {
+    anime = !anime;
+    // Couper l'animation coupe la scène : un crash figé à mi-plop n'est pas
+    // une pose de repos, et le dessin doit redevenir saisissable.
+    if (!anime) {
+      sceneJeu = ''; const s = $('#selScene'); if (s) s.value = '';
+      $('#poseBox').hidden = true; $('#timeBox').hidden = true;
+    }
+    barre();
+  });
+  const chargerPose = (nom) => {
+    const src = (doc && doc.poses && doc.poses[nom]) || FishBody.POSES[nom];
+    if (!src) return colNeutre();
+    const p = JSON.parse(JSON.stringify({ dx: src.dx || [0, 0, 0, 0, 0], dy: src.dy,
+      sy: src.sy, rot: src.rot || 0, duree: src.duree || 0.8 }));
+    const d = $('#pDuree'); if (d) d.value = p.duree;
+    return p;
+  };
+  on('#pDuree', 'input', ev => { if (colEdit) colEdit.duree = parseFloat(ev.target.value) || 0.8; });
+  on('#selVitesse', 'change', ev => { vitesseScene = parseFloat(ev.target.value) || 1; sceneT0 = performance.now() / 1000; });
+  const majSelPose = () => {
+    const sel = $('#selPose'); if (!sel) return;
+    const noms = [...new Set([...Object.keys((doc && doc.poses) || {}), ...Object.keys(FishBody.POSES)])];
+    sel.innerHTML = '<option value="">charger…</option>' + noms.map(n => `<option>${n}</option>`).join('');
+  };
+  on('#selScene', 'change', ev => {
+    sceneJeu = ev.target.value;
+    sceneT0 = performance.now() / 1000;
+    if (sceneJeu && !anime) anime = true;      // une scène ne se joue qu'animée
+    $('#poseBox').hidden = sceneJeu !== 'pose';
+    $('#timeBox').hidden = sceneJeu !== 'timeline';
+    if (sceneJeu === 'pose') {
+      colEdit = chargerPose('cabre'); $('#pRot').value = colEdit.rot;
+      $('#nomPose').value = 'cabre'; majSelPose();
+    }
+    if (sceneJeu === 'timeline') majCles();
+    barre(); dessiner();
+  });
+  on('#pRot', 'input', ev => { if (colEdit) { colEdit.rot = parseFloat(ev.target.value); dessiner(); } });
+  on('#pNeutre', 'click', () => { colEdit = colNeutre(); $('#pRot').value = 0; colPoint = -1; dessiner(); });
+  on('#selPose', 'change', ev => {
+    if (!ev.target.value) return;
+    colEdit = chargerPose(ev.target.value);
+    $('#pRot').value = colEdit.rot; $('#nomPose').value = ev.target.value;
+    ev.target.value = '';
+    dessiner();
+  });
+  on('#pGarder', 'click', () => {
+    const nom = ($('#nomPose').value || '').trim();
+    if (!doc || !colEdit || !nom) { dire('donne un nom à la pose (champ à côté de 💾)'); return; }
+    instantane();                              // la pose s'annule au Ctrl+Z comme le reste
+    doc.poses = doc.poses || {};
+    doc.poses[nom] = JSON.parse(JSON.stringify(colEdit));
+    majSelPose();
+    dire(`pose « ${nom} » gardée dans le dessin — 💾 Enregistrer pour l'écrire dans Assets/`);
+  });
+
+  // --- La timeline (mode « Timeline ») ---
+  on('#selAnime', 'change', ev => { animeSel = ev.target.value; sceneT0 = performance.now() / 1000; majCles(); });
+  on('#aCree', 'change', ev => {
+    const nom = ev.target.value;
+    ev.target.value = '';
+    if (!doc || !nom) return;
+    instantane();
+    doc.animes = doc.animes || {};
+    doc.animes[nom] = doc.animes[nom] || { boucle: false, cles: [{ t: 0, pose: '', visage: '' }] };
+    animeSel = nom; sceneT0 = performance.now() / 1000;
+    majCles(); dessiner();
+  });
+  on('#aSupprime', 'click', () => {
+    const an = doc && doc.animes && doc.animes[animeSel];
+    if (!an) return;
+    instantane(); delete doc.animes[animeSel]; animeSel = '';
+    majCles(); dessiner();
+  });
+  on('#aBoucle', 'change', ev => {
+    const an = doc && doc.animes && doc.animes[animeSel];
+    if (an) { an.boucle = ev.target.checked; sceneT0 = performance.now() / 1000; }
+  });
+  on('#aAjoutCle', 'click', () => {
+    const an = doc && doc.animes && doc.animes[animeSel];
+    if (!an) { dire('crée ou choisis d\'abord une animation'); return; }
+    instantane();
+    const fin = an.cles.length ? an.cles[an.cles.length - 1].t : -0.5;
+    an.cles.push({ t: +(fin + 0.5).toFixed(1), pose: '', visage: '' });
+    sceneT0 = performance.now() / 1000;
+    majCles(); dessiner();
+  });
+
+  // Les GESTES de l'éditeur de colonne, interceptés AVANT les outils
+  // (capture) — mais seulement les siens : bouton gauche sur une poignée,
+  // molette au-dessus d'une poignée. Zoom et déplacement de vue continuent
+  // de marcher partout ailleurs.
+  const poigneeSous = (ev) => {
+    if (sceneJeu !== 'pose' || !colEdit) return -1;
+    const r = vue.getBoundingClientRect();
+    const sx = ev.clientX - r.left, sy = ev.clientY - r.top;
+    for (let j = 0; j < colHandles.length; j++) {
+      const h = colHandles[j];
+      if ((sx - h[0]) ** 2 + (sy - h[1]) ** 2 < 15 * 15) return j;
+    }
+    return -1;
+  };
+  vue.addEventListener('pointerdown', ev => {
+    if (ev.button !== 0) return;
+    const j = poigneeSous(ev);
+    if (j < 0) return;
+    ev.stopImmediatePropagation(); ev.preventDefault();
+    colPoint = j;
+    const spA = Sprites.cache['__atelier__'];
+    const bouge = (e2) => {
+      const r = vue.getBoundingClientRect();
+      const mx = (e2.clientX - r.left - vueT.x) / vueT.k;
+      const my = (e2.clientY - r.top - vueT.y) / vueT.k;
+      // On dé-tourne l'orientation : la position stockée est celle d'AVANT la
+      // rotation d'ensemble. La poignée est LIBRE en x ET en y — c'est ce qui
+      // permet le C (museau qui revient en arrière) et l'accordéon (museau
+      // tiré dans le corps), sans réglage à part.
+      const rot = colEdit.rot || 0, co = Math.cos(-rot), si = Math.sin(-rot);
+      const x0 = spA.cx + (mx - spA.cx) * co - (my - spA.cy) * si;
+      const y0 = spA.cy + (mx - spA.cx) * si + (my - spA.cy) * co;
+      const L = Math.max(1, spA.w);
+      const xNeutre = spA.minX + (j / 4) * L;
+      if (!colEdit.dx) colEdit.dx = [0, 0, 0, 0, 0];
+      colEdit.dx[j] = U.clamp((x0 - xNeutre) / L, -0.9, 0.9);
+      colEdit.dy[j] = U.clamp((y0 - spA.cy) / L, -0.7, 0.7);
+      dessiner();
+    };
+    const fin = () => { window.removeEventListener('pointermove', bouge);
+                        window.removeEventListener('pointerup', fin); };
+    window.addEventListener('pointermove', bouge);
+    window.addEventListener('pointerup', fin);
+  }, true);
+  vue.addEventListener('wheel', ev => {
+    const j = poigneeSous(ev);
+    if (j < 0) return;
+    ev.stopImmediatePropagation(); ev.preventDefault();
+    const pas = ev.deltaY < 0 ? 1.06 : 1 / 1.06;
+    colEdit.sy[j] = U.clamp(colEdit.sy[j] * pas, 0.15, 2.2);
+    colPoint = j;
+    dessiner();
+  }, { capture: true, passive: false });
   on('#bRecadrer', 'click', cadrer);
   on('#bFantome', 'click', () => { fantome = !fantome; barre(); dessiner(); });
   // Sans ce bouton, une luminescence ne se voit jamais dans l'atelier : le faux

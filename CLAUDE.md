@@ -224,16 +224,22 @@ les gags et lus par `Entity.draw` dans le repère du CORPS, à volume conservé
 (même leçon que le demi-tour : ce qui se perd en largeur se reprend en hauteur,
 vérifié à l'encre près) :
 
-- **`_crispe` (0→1)** — l'ANTICIPATION. Squash, arc (il se voûte) et frisson
-  **horizontal** qui monte avec la compression (jamais vertical : la tête en
-  bas). Mesuré sur l'Espadon : 110×41 → **82×76**, encre constante.
+- **`_crispe` (0→1)** — l'ANTICIPATION. Le CABRÉ (dessin de référence de
+  l'auteur) : il se dresse comme un **cheval qui cabre**, le corps plié en
+  vraie courbe par **LA COLONNE** (voir ci-dessous). Trois essais pour y
+  arriver, chacun jugé, à raison : une rotation de 12° (illisible), rotation +
+  cisaillement (« penche, ne courbe pas »), puis un pliage de PIXELS par
+  tranches — qui **déchirait les SVG aux coutures**. La leçon vaut pour tout :
+  **plier un dessin, c'est déformer sa GÉOMÉTRIE, jamais ses pixels.** Le
+  **ressort vibre** pendant la compression (boing-boing à ~2,4 Hz), plus le
+  frisson horizontal d'effort (jamais vertical : la tête en bas).
 - **`_etire` (0→1)** — la DÉTENTE. La flèche : 110×41 → **149×32**, et la nage
   se **raidit** (`FishBody.raideur`, −85 % d'amplitude de battement) — « droit
   comme un i », le corps ne bat plus, il fend l'eau.
 
 Trois scènes s'en servent : l'**Espadon** (phase `charge` de 1,15 s entre la
-montée et le run — arrêt net, grimace tenue `hold('angry')`, compression en k²,
-recul de quelques pixels, puis flèche à 1 qui se pose à 0,6 pendant le run) ;
+montée et le run — arrêt net, l'air fier tenu (`hold('proud')`), compression en
+k², recul de quelques pixels, puis flèche à 1 qui se pose à 0,6 pendant le run) ;
 le **Calamar Fusée** (le décompte est une compression — un calamar se propulse
 littéralement en se contractant — et le départ une détente de 0,7 s) ; le
 **jaillissement du Dauphin** (flèche de 0,8 qui s'efface en une demi-seconde).
@@ -243,10 +249,12 @@ charge 1,2 s (crispe max 0,97) → run 4,6 s (438 px/s, 1 150 px de ligne droite
 chaque phase doit remettre son canal à zéro en sortant, sinon la déformation
 reste gravée sur le poisson.
 
-S'y ajoute un **étirement de sprint générique** : toute nage au-delà de 1,3×
-la croisière allonge la silhouette jusqu'à 11 % (lissé — l'allure fluctue à
-chaque frame). Lui ne raidit **pas** la queue : un sprinteur ordinaire bat
-FORT, seule la flèche d'un gag glisse figée.
+**Les canaux appartiennent aux GAGS, jamais à la locomotion.** Une version
+« automatique au sprint » (étirement dès 1,3× la croisière, smear dès 1,5×) a
+été essayée puis RETIRÉE : elle décorait le déplacement ordinaire — 8 % de
+l'aquarium smearait en permanence, du calcul pour rien — et diluait exactement
+ce qu'un smear doit signaler : *cette course-ci est un événement*. La référence
+est **Bip Bip et Coyote** : le monde est calme, et c'est la SCÈNE qui explose.
 
 Deux autres codes du cartoon complètent la panoplie, tous deux mesurés :
 
@@ -254,32 +262,128 @@ Deux autres codes du cartoon complètent la panoplie, tous deux mesurés :
   s'ÉCRASE puis tremblote comme de la gelée (cosinus amorti : écrasement,
   rebond un peu étiré, calme en une demi-seconde). Axe `'x'` = choc frontal,
   `'y'` = à plat. Purement visuel, aucun effet de simulation. Branchée sur
-  `assomme()` (le Thon lancé qui percute un gros placide s'écrase enfin), le
-  contact franc des colosses, la retombée des sauteurs (le VENTRE À PLAT,
-  proportionnel à la vitesse de chute), le Bada-boum du Poisson-lune, le raté
-  du Mérou (le « patatras » ne se voyait jamais), le ballon crevé du Barracuda
-  (contrecoup + recul) et le freinage de l'Espadon en fin de run. Mesuré sur
-  50 s : ~134 chocs/min dont 97 sont les ventre-plats des sauteurs —
-  **silencieux et collés à un splash qui existait déjà**, donc dans la règle
-  « ce qui foisonne doit être silencieux » ; le reste est rare.
-- **Le smear** — le dessin animé étire un mouvement rapide en échos qui
-  traînent derrière : deux copies fantômes de la silhouette, décalées vers
-  l'arrière dans le repère du corps, alpha 0,25 puis 0,12, dessinées AVANT le
-  corps. Automatique au sprint franc (allure ≥ 1,5, lissée — une fuite en
-  pleine accélération tient vers 1,55, un seuil à 1,7 la ratait ; la croisière
-  est à ~1, marge large), ou forcé par une scène (`_smear` : jet du Calamar,
-  bond du Dauphin). Contrôle à l'encre : largeur 71 → 101 px sur un thon de 28.
-  Le coût est borné : ~42 sprinteurs au-dessus du seuil à tout instant sur 512
-  entités, mais seuls ceux À L'ÉCRAN redessinent (2 corps de plus chacun), et
-  le rendu des créatures est la partie déjà bon marché de la frame.
+  `assomme()`, le contact franc des colosses, la retombée des sauteurs (le
+  VENTRE À PLAT, proportionnel à la vitesse de chute), le Bada-boum du
+  Poisson-lune, le raté du Mérou (le « patatras » ne se voyait jamais) et le
+  ballon crevé du Barracuda (contrecoup + recul). Mesuré sur 50 s :
+  ~134 chocs/min dont 97 sont les ventre-plats des sauteurs — **silencieux et
+  collés à un splash qui existait déjà**, donc dans la règle « ce qui foisonne
+  doit être silencieux » ; le reste est rare.
+- **Le CRASH DU COYOTE** (`Entity.crash()`) — pour une collision à PLEINE
+  VITESSE, trois temps : **seule la TÊTE se froisse** (les tranches du museau
+  se compriment en accordéon jusqu'à 25 % de leur largeur, via
+  `FishBody.plier` — écraser tout le poisson d'un scale affine le rendait
+  méconnaissable au lieu de drôle), il **reste écrasé ~2 s** le temps de
+  comprendre (yeux ronds, tremblement de tension), puis « PLOP » — retour en
+  dépassement étiré (un `choc` à amplitude NÉGATIVE) et vrille, les yeux KO
+  (`assomme`).
+  C'est lui que déclenche la collision fonceur-contre-gros — mais **UNIQUEMENT
+  PENDANT UNE FLÈCHE** (`_etire > 0,2`, posé par les seules scènes de charge)
+  et sur la **vitesse VRAIE** : une première version branchée sur `speedNow`
+  seul faisait s'écrabouiller les espadons en permanence, hors de toute scène
+  — ils chassent à 460 px/s en temps normal, et `speedNow` est un EFFORT qui
+  dépasse le seuil sur place. Hors scène, la collision garde son ancien
+  réglage discret (un petit très rapide contre un gros placide est juste
+  assommé). Deux autres leçons en le branchant :
+  **les colosses ne sont pas à portée de la grille** (contact à ~187 px du
+  centre, `neighbors` porte à ~195 au mieux : un thon lancé traversait la
+  baleine sans la « voir » — le test balaie donc aussi `Ecosystem.colosses`,
+  une dizaine d'entrées, seulement quand quelqu'un dépasse 255 px/s) ; et **le
+  ressort doit CLAQUER** — un départ de charge qui monte en régime arrive sur
+  l'obstacle sous le seuil de crash, donc les scènes de charge posent leur
+  vitesse d'un coup au lancement (`e.vx = dir * speed * 2,3`), ce qui est de
+  toute façon plus drôle qu'une accélération.
+- **Le smear** (`_smear`, canal de gag) — des TRAÎNÉES, pas des copies : trois
+  échos dessinés AVANT le corps, chacun plus reculé, plus étiré, plus aplati
+  et plus transparent que le précédent — le corps fond en stries vers
+  l'arrière (dessin de référence de l'auteur). Allumé par : le grand run de
+  l'Espadon, les charges du Thon et du Barracuda, sa torpille sur un ballon,
+  le jet du Calamar, le bond du Dauphin.
 
-La passe « poisson par poisson, en commençant par les rapides » a aussi rendu
-chaque scène plus rigolote avec ces briques : le **Thon** s'étire comme une
-flèche le temps de son VROUUUM ; le **Calamar Fusée** affiche un VRAI décompte
-3-2-1 (la seule scène dont la bulle EST le gag : elle a droit à ses trois
-temps) ; le **Mérou** finit ses aspirations ratées en écrasement de gelée,
-sonné, nuage de sable s'il a labouré le fond ; le **Barracuda** encaisse le
-contrecoup du ballon qu'il crève ; l'**Espadon** pile en fin de run.
+Les déformations sont **factorisées dans `FishBody`** — `deformationScene`
+(l'affine : ressort, flèche, gelée, tremblements), `smear` (les traînées) et
+`rendreScene`/`plier` (le pliage par tranches : arc, tête froissée) —
+`Entity.draw` les applique en jeu, et l'atelier applique EXACTEMENT les mêmes
+dans sa **vue Scènes** (sélecteur 🎬 de la barre d'aperçu) : charge complète,
+cabré, flèche, crash, chocs, en boucle sur le dessin ouvert. C'est là qu'on
+règle une pose sans attendre qu'un thon veuille bien charger en jeu ; les
+poignées d'édition sont coupées pendant une scène (le corps est déformé,
+elles ne tomberaient plus juste), et couper ▶ Animer referme la scène.
+
+**LA COLONNE, et pas un rig de bones.** Un poisson est un corps 1D — son
+« système de bones », c'est **une colonne vertébrale à cinq poignées**,
+chacune `{dy` (position), `sy` (épaisseur), `sx` (compression accordéon)`}`,
+plus `rot` qui oriente l'ensemble. `FishBody.colonne` l'échantillonne en
+25 points et **chaque point du dessin y est reporté, sa section tournée selon
+la pente locale** — dans `deformer`, le même chemin de code que l'onde de
+queue et les appendices, donc la même qualité et **aucune couture** (le
+pliage de pixels par tranches, essayé avant, déchirait les SVG ; il ne reste
+qu'en repli pour les silhouettes procédurales, qui n'ont pas de points).
+L'œil et la bouche suivent la tête, tournés avec elle (`colPoint` sur leurs
+ancres).
+
+Les poses sont **des données du dessin** : `doc.poses = { cabre, crash, … }`,
+dessinées dans l'atelier (mode « Pose manuelle » de la vue Scènes — les cinq
+poignées se GLISSENT sur le dessin, molette = épaisseur, Maj+molette =
+écraser, un curseur pour l'orientation, → cabré/→ crash pour charger,
+💾 cabré/💾 crash pour garder dans le dessin, Ctrl+Z les annule comme tout).
+Le jeu joue la pose `cabre` de l'espèce pour sa charge et `crash` pour son
+accordéon — la tête SEULE se froisse, le corps ne bouge pas — avec des poses
+par défaut (`FishBody.POSES`) pour tout dessin qui n'en déclare pas. Des bones
+articulés n'apporteraient rien de plus : pattes, tentacules et nageoires ont
+déjà leurs pivots et leur onde progressive dans le système d'appendices.
+
+**LA TIMELINE DE POSES CLÉS, ET LES ÉVÉNEMENTS.** `doc.animes` = des
+animations PAR ÉVÉNEMENT : `{ mange: { boucle, cles: [{ t, pose, visage }] } }`
+— chaque clé référence une pose nommée (interpolée en douceur jusqu'à la
+suivante) et peut poser un VISAGE (tenu jusqu'à la clé suivante qui en
+déclare un ; sans clé de visage, le système d'émotions générique garde la
+main — c'est la règle : **le comportement générique est le défaut, une
+animation dessinée le remplace, et seulement elle**). UN SEUL lecteur,
+`FishBody.poseAt`, partagé par le jeu (`rendreScene`) et l'aperçu de
+l'atelier.
+
+Les événements câblés (`Entity.jouerAnime`) : les transitions d'ÉTAT via la
+table `ANIM_ETATS` (`flee→peur, sleep→dort, hunt→chasse, court→parade,
+migrate→voyage, strike→attaque`) — dessiner une animation de ce nom dans
+l'atelier SUFFIT, rien à câbler ; et les ponctuels à leur source : `mange`
+(mastication et graine), `crash`, `saut`, `pond`, `charge`. Exemple canon :
+« un animal bizarre quand il mange » = une animation `mange` de trois clés
+(surprise → crash+eating → cabré+happy), vérifiée en jeu sur une vraie
+graine. L'atelier édite tout ça : vue Scènes → **Timeline (poses clés)** —
+créer l'animation d'un événement, des rangées de clés (temps · pose ·
+visage), boucle, lecture ½×/¼×, aperçu joué par le même lecteur que le jeu,
+et les poses se fabriquent à côté (mode Pose manuelle, noms libres,
+💾 pose).
+
+Les scènes construites avec ces briques (passe « poisson par poisson, les
+rapides d'abord ») :
+
+- **Orque Echo** — elle ne faisait rien (un ♪ la nuit). Scène en trois temps :
+  elle s'arrête et se cambre en INSPIRANT, gueule grande ouverte (`_crispe`) ;
+  « ECHOOO » — l'onde VOYAGE devant elle (les cercles naissent sur le front,
+  560 px en 1,4 s) et chaque poisson réagit QUAND le front l'atteint : les
+  proches sont assommés (bornés à quatre, règle de la foule), les lointains
+  détalent, les dormeurs se réveillent en sursaut ; puis elle se trouve très
+  forte. Elle ne crie que si au moins trois spectateurs sont dans le cône.
+- **Thon Pressé et Barracuda** — la même charge, partagée (`GAGS._charge`) :
+  l'air le plus fier (`hold('proud')`), cabré de cheval en se comprimant, et
+  pfiouuu — départ instantané, flèche + smear à travers la foule, badauds
+  écartés en silence, crash du Coyote selon le parcours. Le Thon la crie
+  (VROUUUM, l'ancien réactif y est fondu), le Barracuda la joue en torpille
+  silencieuse (`CADENCE.torpille`) : c'est sa traînée qui parle.
+- **Espadon** — sa charge est FIÈRE (l'air de celui qui se sait beau), le
+  ressort claque au FIOUUU, smear sur tout le run.
+- **Calamar Fusée** — un VRAI décompte 3-2-1 pendant la compression (la seule
+  scène dont la bulle EST le gag : elle a droit à ses trois temps).
+- **Mérou** — l'aspiration ratée finit en écrasement de gelée, sonné, nuage de
+  sable s'il a labouré le fond.
+
+Une scène qui peut être interrompue par le crash doit **se refermer
+elle-même** (`if (e._ecraseT > 0 || e.state === 'dizzy')` en tête de ses
+phases) : sans ça le steering de figure continue de pousser un poisson
+ratatiné, et les canaux restent gravés. Vérifié après chaque scène : résidus
+`_crispe`/`_etire`/`_smear` à 0.
 
 Candidats relevés à l'audit mais volontairement pas faits : les embusqués
 (murène, rascasse, poisson-tapis) frappent sans détente préalable, mais leur
@@ -721,6 +825,41 @@ même règle :
 
 Ce qui est piloté par la simulation — embuscades, sauts, mastication, poursuite
 — n'a pas sa place dans la table : le régler reviendrait à régler l'écosystème.
+
+### Le public d'abord, et le peps
+
+Constat vécu : « j'ai surveillé des thons, je n'ai jamais vu l'animation ». La
+cadence divise par l'effectif — un thon donné chargeait toutes les ~30 min,
+presque toujours hors écran. Trois règles depuis, toutes dans les
+déclencheurs des grandes scènes (thon, espadon, orque, calamar, dauphin) :
+
+- **Le public d'abord** (`GAGS._enVue`) : un cooldown expiré se met en ATTENTE
+  et la scène ne part que quand son acteur est à l'écran. Design de parc à
+  thème — l'attraction joue quand les visiteurs sont devant. La cadence par
+  individu ne change pas (après sa scène, l'acteur repart pour son long
+  cooldown), donc camper la caméra ne fait pas un feu d'artifice. Et **un seul
+  congénère en scène à la fois**.
+- **Le peps du nourrissage** (`Entity.onAte` → `_peps` + `_pepsCoup`, lus par
+  `GAGS._tic`) : une graine du joueur (jamais une arête) met **ce poisson-là**
+  en forme — champs de l'individu, comme son cooldown de scène : on achète le
+  numéro du poisson qu'on nourrit, pas celui de l'espèce. Chaque graine fait
+  DEUX choses : une **coupe franche** de 240 s sur le cooldown de scène (480
+  pour la favorite), encaissée au tic suivant, et 90 s de peps qui le fait
+  défiler **10× plus vite**. Le multiplicateur seul ne suffisait pas —
+  mesuré : « le thon ne fait JAMAIS son sprint même gavé », un cooldown plein
+  demandait des minutes de nourrissage ininterrompu. Vérifié après : cooldown
+  de 1 700 s, **six graines, déclenchement immédiat** — deux clics bien placés
+  et le numéro part. L'aquarium sans joueur garde ses cadences d'équilibre, et
+  hors champ rien ne part.
+- **La piste doit être dégagée — mais PAS choisie pour éviter le crash**
+  (`GAGS._couloirLibre`) : un chargeur veut 350 px devant lui (colosses sur la
+  trajectoire + bords du monde), **préfère son cap**, se retourne si c'est
+  bouché, attend si tout l'est — il s'écrasait AU DÉCOLLAGE, avant sa course.
+  Une première version prenait le couloir LE PLUS dégagé des deux : il
+  esquivait délibérément tous les obstacles et ne crashait plus jamais. La
+  course est longue (4,2 s, ~1 250 px mesurés) : le crash du Coyote arrive
+  **selon la suite du parcours** (mesuré : à 2,4 s de course sur une baleine
+  posée à 700 px).
 
 ### Le ballon et les épines
 
@@ -1597,7 +1736,45 @@ Baleine, cachalot, orque demandent des règles à part, apprises en corrigeant l
 - Le sens de nage utilise une **hystérésis** (`_facing`, seuil `speed * 0.25`) et l'inclinaison est **bornée** (`maxTilt`) puis lissée : sinon la baleine clignote et part sur la tête.
 - Ils **ignorent l'anti-chevauchement** dans les deux sens : se faire bousculer par des dizaines de petits poissons les faisait tourner sur eux-mêmes, et un `filterFeeder` doit pouvoir chevaucher le banc qu'il avale.
 - Un **tirant d'eau** (`size * 2.2`) les repousse vers le large là où la colonne d'eau est trop basse : les baleines venaient s'échouer sur le haut-fond, attirées par leur frayère. Leur `depthBand` commence aussi sous l'eau claire (≥ 450) — un colosse en eau claire écrase toute la faune du récif.
-- `breathes: true` (baleine, cachalot, dauphin, orque) : ce sont des mammifères. `Entity.breathe` gère l'apnée, la remontée (via `_diveTargetY`, prioritaire sur les autres cibles verticales) et le **panache** `Particles.blow`. La contrainte de profondeur s'assouplit pendant la remontée.
+- `breathes: true` (baleine, cachalot, dauphin, orque, tortue) : ce sont des animaux à poumons. `Entity.breathe` gère l'apnée et la remontée (via `_diveTargetY`, prioritaire sur les autres cibles verticales). Le **panache** `Particles.blow` exige EN PLUS `souffle: true` — réservé aux cétacés : la Tortue respire mais n'a pas d'évent, elle sort juste la tête (une ride d'eau, pas un jet). L'évent est **aligné sur l'ancre d'œil du dessin** (`Entity.event`, via `FishBody.echelleSprite` — une seule formule d'échelle) : l'ancien évent à 12 % du centre plaçait le jet au milieu du dos d'une baleine dessinée, et comme c'est l'évent qui déclenche le souffle en crevant la surface, le jet partait aussi TROP TARD. Mesuré après : évent à +79/−25 px de la tête pour une baleine de 167, jet à l'instant où l'œil perce. La contrainte de profondeur s'assouplit pendant la remontée.
+
+### La remontée SE NAGE, et le retour aussi (2026-09-07)
+
+La remontée était un **ascenseur vertical** (le rappel proportionnel de
+`_diveTargetY` explose loin de la cible et n'a aucune composante horizontale),
+et sa fin une **téléportation** : dès le souffle terminé, le plafond dur de la
+surface reprenait la main et reclaquait le cétacé de « dos hors de l'eau » à
+« entièrement immergé » en UNE frame (~120 px pour une baleine). Cinq règles,
+toutes mesurées :
+
+- **La montée vise une VITESSE, pas une position** : croisière horizontale
+  (cap `_surfDir` choisi une fois au départ, jamais vers le rivage ni le bord
+  du monde) + verticale qui s'aplatit en approchant — un plan à ~45–50° qui se
+  couche à la surface, où la croisière continue pendant le souffle (elle longe
+  l'eau au lieu de faire du surplace). Le garde-fou de remontée est un budget
+  proportionnel à la profondeur de départ, plus les 25 s fixes qui coupaient un
+  cachalot parti de 2 000 px dès que sa montée n'était plus verticale.
+- **`_replonge` remplace le claquement** : exempté du plafond dur, tiré par une
+  cible posée sous lui à pleine vitesse de croisière, splash au moment où il
+  perce vraiment vers le bas. La phase ne se referme QUE sous le plafond,
+  **jamais au minuteur** — tout couperet rend la main au plafond, donc au bug.
+- **La PERCÉE est bornée** (centre jamais au-dessus de `SURFACE_Y − size·0,25`,
+  borne continue donc sans à-coup) : l'inertie d'un dauphin qui croise sa cible
+  à 130 px/s et la séparation de colosses envoyaient une baleine à **220 px
+  au-dessus de la ligne d'eau**, que l'ancien couperet reclaquait de 360 px.
+- **Respirer prime sur la sieste et sur `_freeze`, dans les DEUX phases.**
+  `breathe` réveillait déjà pendant la montée, mais `think` rendormait dans la
+  même frame et le frein du dormeur clouait tout : la Baleine réussissait
+  3 souffles pour 9 cycles lancés. Le sommeil ne s'installe plus pendant
+  `_surfacing`/`_replonge`, et un dormeur suspendu hors de l'eau n'existe plus.
+- **Un cétacé restauré dos hors de l'eau rentre par la même porte** : les
+  drapeaux ne sont pas sauvés, et une sauvegarde prise en pleine percée
+  reclaquait ~190 px au chargement. `breathe` détecte le cas et pose
+  `_replonge` — il tourne avant `move`, le plafond n'a jamais la main.
+
+Mesuré après : **0 téléportation sur 197 s** pour les 29 individus qui
+respirent (contre des claquements de 120 à 360 px), angles de montée 40–50°,
+dépassement max au-dessus de la percée 2,4 px (contre 220).
 - La **Baleine Gros Dodo n'est pas un prédateur** : `grazes: true` sans `prey`. Elle filtre le plancton, elle ne mange personne.
 
 ## Performance (mesurée, pas supposée)

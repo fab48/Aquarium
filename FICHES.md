@@ -105,7 +105,7 @@ la tortue.
 
 ### Thon Speedy — *Thon* — *Thunnus vroumvroum*
 - **Phrase** — « Poussez-vous, je suis pressé ! »
-- **Action** — il klaxonne un « VROUUUM » en passant à fond. Le seul texte justifié du jeu : c'est un bruit, pas une réplique.
+- **Action** — parfois il n'en peut plus d'attendre : il prend son air le plus fier, **se cambre en arrière en se comprimant comme un ressort**, et VROUUUM — il s'allonge et **fonce à travers tout le monde**, traînée de smear derrière lui, en écartant les badauds. S'il percute un gros sur sa route, c'est le **crash du Coyote** : ratatiné en accordéon, deux secondes de flottement, plop, les yeux en vrille. (Le VROUUUM reste le seul texte-bruitage justifié du jeu.)
 - **Mange** — Crevette Sauteuse · plancton · **Favori**** — Micro-crevettes
 - **Mangé par** — Requin Dents-Molles, Orque Echo
 - T3 prédateur moyen · taille 26 · zone **Rivage → Grand large** · frayère **haut-fond** · plafond 12, plancher 4
@@ -237,7 +237,7 @@ la tortue.
 
 ### Barracuda Perce-Ballon — *Barracuda* — *Sphyraena perceballon*
 - **Phrase** — « J’adore le bruit que ça fait. »
-- **Action** — il fonce droit sur un Fugu gonflé et **le fait exploser**. Le seul à pouvoir le manger sans se piquer.
+- **Action** — il fonce droit sur un Fugu gonflé et **le fait exploser** (en encaissant le contrecoup). Le seul à pouvoir le manger sans se piquer. Et il a sa **torpille de parade** : la même charge cabrée que le Thon, silencieuse — traînées de smear, badauds écartés, crash du Coyote si un gros traîne sur le parcours.
 - **Mange** — Fugu Gonflé, Dorade Dorée · plancton · **Favori**** — —
 - **Mangé par** — personne
 - T4 grand prédateur · taille 40 · zone **Rivage → Grand large** · frayère **haut-fond** · plafond 7, plancher 4
@@ -340,7 +340,7 @@ la tortue.
 
 ### Orque Echo — *Orque* — *Orcinus echoechoecho*
 - **Phrase** — « Attends, attends, j’en ai une bonne. »
-- **Action** — elle lance des échos la nuit, qui **réveillent les poissons des profondeurs**.
+- **Action** — elle fait son **ECHOOO** : elle s'arrête, se cambre en inspirant, gueule grande ouverte, et le cri part en **onde qui voyage devant elle** — les plus proches sont sonnés (quatre au plus), les autres détalent, les dormeurs se réveillent en sursaut. Elle ne crie que si au moins trois spectateurs sont dans le cône. Puis elle se trouve très forte.
 - **Mange** — Thon Speedy, Calmar Violette · plancton · **Favori**** — —
 - **Mangé par** — personne
 - T4 grand prédateur · taille 70 · zone **Mer → Grand large** · frayère **haut-fond** · plafond 5, plancher 3

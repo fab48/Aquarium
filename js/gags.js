@@ -37,6 +37,8 @@ const CADENCE = {
                      //   toutes les 3,4 s, l'exemple type de la saturation.
   prout:      0.4,
   vroum:      0.4,
+  torpille:   0.5,   // la charge silencieuse du Barracuda (même scène que le
+                     //   vroum, sans la bulle : la traînée parle pour lui)
   decharge:   0.5,   // était à 25,5/min : cinquante fois trop
   run:        0.4,
   echo:       0.4,
@@ -59,6 +61,50 @@ const CADENCE = {
 };
 
 const GAGS = {
+  // LE PUBLIC D'ABORD. Une scène rare que personne ne regarde est un budget
+  // gaspillé : mesuré, un thon donné charge une fois toutes les ~30 min
+  // (0,4/min ÷ effectif), presque toujours hors écran — « j'ai surveillé des
+  // thons, je n'ai jamais vu l'animation ». Le cooldown expiré se met donc en
+  // ATTENTE (il reste ≤ 0, le test se rejoue), et la scène part quand son
+  // acteur est À L'ÉCRAN. C'est du design de parc à thème : l'attraction joue
+  // quand les visiteurs sont devant. La cadence par individu reste la même —
+  // après sa scène, l'acteur repart pour son long cooldown — donc camper la
+  // caméra ne transforme pas l'aquarium en feu d'artifice : chaque espèce
+  // reste bornée par sa ligne de `CADENCE`. Le seul accélérateur est LE PEPS
+  // du nourrissage (`Entity.onAte`, propre à CHAQUE poisson) : les graines
+  // s'additionnent et font défiler SON cooldown de scène 10× plus vite
+  // (`GAGS._tic`) — le joueur achète le numéro du poisson qu'il nourrit,
+  // l'équilibre sans joueur ne bouge pas.
+  _tic(e, dt) {
+    let d = dt * (e._peps > 0 ? 10 : 1);
+    // La coupe franche du nourrissage (cf. Entity.onAte) : chaque graine
+    // avale d'un coup 240 s (480 pour la favorite) du cooldown de scène.
+    if (e._pepsCoup > 0) { d += e._pepsCoup; e._pepsCoup = 0; }
+    return d;
+  },
+  _enVue(e, marge = 100) {
+    return e.x > Camera.x - marge && e.x < Camera.x + Camera.w + marge
+        && e.y > Camera.y - marge && e.y < Camera.y + Camera.h + marge;
+  },
+
+  // LA PISTE EST-ELLE DÉGAGÉE ? Distance libre devant `e` dans le sens `dir`,
+  // bornée par les colosses posés sur le couloir et par les bords du monde.
+  // Un chargeur qui part sans regarder s'écrasait AU DÉCOLLAGE, avant même sa
+  // course : le crash doit arriver selon la suite du parcours, pas à la
+  // première seconde.
+  _couloirLibre(e, dir) {
+    let d = dir > 0 ? CONFIG.WORLD_WIDTH - 200 - e.x
+                    : e.x - (e.limiteLarge() + 200);
+    for (const o of (Ecosystem.colosses || [])) {
+      if (o === e || o.dead) continue;
+      const dx = (o.x - e.x) * dir;
+      if (dx < 0) continue;
+      if (Math.abs(o.y - e.y) > o.size * 1.1 + 60) continue;   // pas sur le couloir
+      d = Math.min(d, dx - o.size * 0.85);
+    }
+    return d;
+  },
+
   // Elle porte son nom : chapelet de bulles permanent, et gros glouglou joyeux
   bulle_fofolle(e, dt, t) {
     // 3,5 bulles/seconde et par sardine, c'était 5 550 particules/min pour la
@@ -213,11 +259,12 @@ const GAGS = {
 
   // 3. il se plie de rire sur place, en tournant sur lui-même
   dauphin(e, dt, t) {
-    e._farceCd = (e._farceCd ?? Ecosystem.cadence(e, CADENCE.bouh)) - dt;
+    e._farceCd = (e._farceCd ?? Ecosystem.cadence(e, CADENCE.bouh)) - GAGS._tic(e, dt);
     const ph = e._farcePh;
 
     if (!ph) {
       if (e._farceCd > 0 || e.state === 'hunt' || e.state === 'flee') return;
+      if (!GAGS._enVue(e)) return;               // le public d'abord
       // Il cherche une victime, et un DORMEUR vaut dix fois mieux qu'un banc
       // éveillé : réveiller quelqu'un en sursaut, c'est tout le sel de la farce.
       // (Le pondérer plutôt que l'exiger évite qu'il reste planté les nuits
@@ -431,25 +478,101 @@ const GAGS = {
     }
   },
 
-  // LE THON EST PRESSÉ. Un bruit de moteur quand il passe à fond — c'est le
-  // seul cas où du texte est justifié : c'est un BRUIT, pas une réplique.
-  // Émis une seule fois par accélération (`_vroum`), jamais par frame.
+  // LA CHARGE D'UN FONCEUR — partagée par le Thon et le Barracuda : il prend
+  // son air le plus fier, CABRE comme un cheval en se comprimant (ressort qui
+  // vibre), et pfiouuu — il s'allonge et fonce À TRAVERS TOUT LE MONDE,
+  // traînées de smear derrière lui, badauds écartés. S'il percute un gros sur
+  // le parcours, c'est le crash du Coyote (`Entity.crash`) : accordéon tenu,
+  // plop, les yeux en vrille. `o` : { cad, vitesse, shout, couleur }.
+  _charge(e, dt, t, o) {
+    if (e._chargePh) {
+      // Le crash a interrompu la course : on referme la scène là où elle est.
+      if (e._ecraseT > 0 || e.state === 'dizzy') {
+        e._chargePh = null; e._figX = null; e._figY = null; e._figSpeed = null;
+        e._etire = 0; e._smear = 0; e._crispe = 0; e.release();
+        e._chargeCd = Ecosystem.cadence(e, o.cad);
+        return;
+      }
+      e._chargeT -= dt;
+
+      if (e._chargePh === 'pose') {
+        e._freeze = 0.25;
+        // Il FIXE sa ligne — s'il doit se retourner d'abord, le demi-tour
+        // pendant la pose fait partie du numéro.
+        e._faceAt = { x: e.x + e._chargeDir * 300, y: e.y };
+        const k = 1 - Math.max(0, e._chargeT) / (e._chargeDuree || 0.8);
+        e._crispe = k * k;
+        e.x -= e._chargeDir * dt * 8;                 // le recul du ressort
+        if (e._chargeT <= 0) {
+          e._chargePh = 'fonce'; e._chargeT = 4.2;    // une VRAIE course
+          e._crispe = 0; e._etire = 1; e._faceAt = null; e.release();
+          // Le ressort CLAQUE : départ instantané, pas une montée en régime —
+          // c'est ce qui rend un crash possible dès les premiers mètres.
+          e.vx = e._chargeDir * e.def.speed * 2.3; e.vy = 0;
+          if (o.shout) Particles.shout(e.x, e.y - e.size * 1.2, o.shout, o.couleur, e.size * 1.4);
+        }
+        return;
+      }
+
+      // `fonce` : la flèche, plein gaz à travers la foule
+      e._figX = e.x + e._chargeDir * 1600; e._figY = e.y;
+      e._figSpeed = e.def.speed * o.vitesse;
+      e._etire = Math.max(0.55, (e._etire ?? 1) - dt * 1.5);
+      e._smear = e._etire;
+      if (Math.random() < dt * 8) Particles.wake(e.x - e._chargeDir * e.size, e.y);
+      // Il écarte tout le monde sur son passage — silencieux, c'est le
+      // mouvement qui raconte, pas des bulles.
+      for (const v of Ecosystem.neighbors(e.x, e.y)) {
+        if (v === e || v.dead || v.stage === 'egg') continue;
+        if (v.def.refuge || v.def.movement === 'fixed' || v.def.size >= 45) continue;
+        if (Math.abs(v.x - e.x) > 90 || Math.abs(v.y - e.y) > 70) continue;
+        v.vy += (Math.sign(v.y - e.y) || 1) * 950 * dt;
+        if (t - (v._pousseT ?? -9) > 3) { v._pousseT = t; v.emote('surprise', 1.1, false); }
+      }
+      // Le bord du monde ou le rivage arrêtent la course proprement.
+      const mur = e.x < e.limiteLarge() + 250 || e.x > CONFIG.WORLD_WIDTH - 250;
+      if (e._chargeT <= 0 || mur) {
+        e._chargePh = null; e._figX = null; e._figY = null; e._figSpeed = null;
+        e._etire = 0; e._smear = 0;
+        e.emote('proud', 1.8);
+        e._chargeCd = Ecosystem.cadence(e, o.cad);
+      }
+      return;
+    }
+
+    // Cadence d'équilibre — mais LE PEPS du nourrissage (cf. Entity.onAte)
+    // fait défiler le cooldown de CE poisson 10× plus vite.
+    e._chargeCd = (e._chargeCd ?? Ecosystem.cadence(e, o.cad)) - GAGS._tic(e, dt);
+    if (e._chargeCd > 0 || e.state === 'hunt' || e.state === 'flee' || e.state === 'sleep') return;
+    // Le public d'abord — et un seul congénère en scène à la fois.
+    if (!GAGS._enVue(e)) return;
+    if ((Ecosystem.bySpecies[e.speciesId] || []).some(c => c !== e && c._chargePh)) return;
+    // Il lui faut LA PLACE de lancer sa course (350 px), et c'est tout : il
+    // préfère son cap, se retourne si c'est bouché, attend si tout l'est.
+    // Une première version prenait le couloir LE PLUS dégagé des deux — donc
+    // il esquivait délibérément tous les obstacles, et ne crashait jamais.
+    // Le crash doit dépendre de la SUITE du parcours, pas être impossible.
+    const devant = e._facing >= 0 ? 1 : -1;
+    let dir = devant;
+    if (GAGS._couloirLibre(e, devant) < 350) {
+      if (GAGS._couloirLibre(e, -devant) < 350) return;   // coincé : il attend
+      dir = -devant;
+    }
+    e._chargeDir = dir;
+    // La MONTÉE du cabré dure ce que la pose `cabre` du dessin déclare
+    // (`duree`, réglée dans l'atelier) : le tempo comique appartient au dessin.
+    const spD = (e.def.sprite && typeof Sprites !== 'undefined') ? Sprites.get(e.def.sprite) : null;
+    e._chargeDuree = (spD && spD.poses && spD.poses.cabre && spD.poses.cabre.duree) || 0.8;
+    e._chargePh = 'pose'; e._chargeT = e._chargeDuree;
+    e.jouerAnime('charge');                     // le dessin peut avoir SA mise en jambes
+    e.hold('proud');                            // l'air de celui qui va faire un exploit
+  },
+
+  // LE THON EST PRESSÉ : sa charge crie VROUUUM — le seul texte-bruitage
+  // justifié du jeu. (L'ancien VROUUUM réactif, déclenché par la vitesse de
+  // chasse, est fondu dans la scène.)
   thon(e, dt, t) {
-    // Le coup d'accélérateur se VOIT : il s'étire comme une flèche le temps du
-    // VROUUUM, puis reprend sa forme (le smear automatique fait la traînée).
-    if (e._vroumT > 0) {
-      e._vroumT -= dt;
-      e._etire = Math.max(0, e._vroumT / 0.55) * 0.7;
-    }
-    e._vroumCd = (e._vroumCd ?? 0) - dt;
-    const vite = e.speedNow > e.def.speed * 1.6;
-    if (vite && !e._vroum && e._vroumCd <= 0) {
-      e._vroum = true; e._vroumCd = Ecosystem.cadence(e, CADENCE.vroum);
-      e._vroumT = 0.55;
-      Particles.shout(e.x, e.y - e.size * 1.2, 'VROUUUM', '#8fd8f5', e.size * 1.4);
-      Particles.wake(e.x - e.size, e.y);
-    }
-    if (!vite) e._vroum = false;
+    GAGS._charge(e, dt, t, { cad: CADENCE.vroum, vitesse: 2.6, shout: 'VROUUUM', couleur: '#8fd8f5' });
   },
 
   // LE COQUILLAGE FABRIQUE UNE PERLE. Il s'ouvre en grand, la perle brille, il
@@ -519,21 +642,94 @@ const GAGS = {
     Particles.comic(e.x, e.y - e.size, '❗');
   },
 
-  // L'ORQUE LANCE SES ÉCHOS LA NUIT, ET ÇA RÉVEILLE LES PROFONDEURS.
-  // Enfin une raison au nom « Echo ».
+  // L'ORQUE FAIT SON ECHOOO. L'ancien gag (un ♪ et un cercle, la nuit
+  // seulement) ne racontait rien — « l'orque Echo ne fait rien ». La scène se
+  // joue maintenant en trois temps, façon cartoon :
+  //   1. `inspire` — elle s'arrête, se cambre en arrière et GONFLE (`_crispe`),
+  //                  gueule grande ouverte ;
+  //   2. `onde`    — « ECHOOO » : une onde VOYAGE devant elle (les cercles
+  //                  naissent de plus en plus loin), et chaque poisson réagit
+  //                  QUAND l'onde l'atteint, l'un après l'autre — les proches
+  //                  sont assommés (bornés à quatre, règle de la foule), les
+  //                  lointains détalent, les dormeurs se réveillent en sursaut ;
+  //   3. `fiere`   — elle se trouve très forte.
+  // Elle ne crie que si au moins trois spectateurs sont dans le cône : un écho
+  // dans le vide n'est pas une scène.
   orque(e, dt, t) {
-    if (Main.nightAmount() < 0.5) return;
-    e._echoCd = (e._echoCd ?? Ecosystem.cadence(e, CADENCE.echo)) - dt;
-    if (e._echoCd > 0) return;
-    e._echoCd = Ecosystem.cadence(e, CADENCE.echo);
-    Particles.spin(e.x, e.y, e.size * 2.2);
-    Particles.comic(e.x, e.y - e.size * 1.2, '♪');
-    let reveilles = 0;
-    for (const o of Ecosystem.neighbors(e.x, e.y)) {
-      if (o === e || o.dead || o.state !== 'sleep') continue;
-      o.state = 'wander'; o.stateTimer = 4;
-      if (reveilles++ < 3) o.emote('surprise', 1.6);   // pas vingt bulles d'un coup
+    if (e._echoPh) {
+      e._echoT -= dt;
+
+      if (e._echoPh === 'inspire') {
+        e._freeze = 0.25;
+        const k = 1 - Math.max(0, e._echoT) / 1.1;
+        e._crispe = k * k * 0.7;                 // un colosse se cambre avec sobriété
+        if (e._echoT <= 0) {
+          e._echoPh = 'onde'; e._echoT = 1.4;
+          e._crispe = 0; e.release();
+          Particles.shout(e.x + e._echoDir * e.size, e.y - e.size * 0.9,
+                          'ECHOOO', '#bfe4ff', e.size * 1.1);
+          e.emote('eating', 1.6, false);         // la gueule reste grande ouverte
+        }
+        return;
+      }
+
+      if (e._echoPh === 'onde') {
+        e._freeze = 0.25;
+        // Le front de l'onde avance : 560 px en 1,4 s. Les cercles naissent
+        // SUR le front, pas autour d'elle — c'est ce qui fait voyager le son.
+        const front = (1.4 - Math.max(0, e._echoT)) / 1.4 * 560;
+        if (Math.random() < dt * 10) {
+          Particles.spin(e._echoX0 + e._echoDir * front,
+                         e._echoY0 + U.rand(-1, 1) * front * 0.18,
+                         30 + front * 0.14);
+        }
+        // Chacun encaisse quand le front le rattrape — pas tous en même temps.
+        e._echoVictimes = e._echoVictimes.filter(o => {
+          if (o.dead) return false;
+          if ((o.x - e._echoX0) * e._echoDir > front) return true;   // pas encore atteint
+          if (o.state === 'sleep') { o.release(); o._freeze = 0; }
+          const dx = Math.abs(o.x - e._echoX0);
+          if (dx < 260 && e._echoSonnes < 4) {
+            e._echoSonnes++;
+            o.assomme(null, e._echoSonnes <= 2);   // les plus proches : KO
+          } else {
+            o.state = 'flee'; o.target = e; o.stateTimer = 1.8;
+            o.emote('scared', 1.5, false);         // les autres : ils détalent
+          }
+          return false;
+        });
+        if (e._echoT <= 0) { e._echoPh = 'fiere'; e._echoT = 1.4; e.emote('proud', 2); }
+        return;
+      }
+
+      // `fiere` : elle savoure
+      if (e._echoT <= 0) { e._echoPh = null; e._echoCd = Ecosystem.cadence(e, CADENCE.echo); }
+      return;
     }
+
+    e._echoCd = (e._echoCd ?? Ecosystem.cadence(e, CADENCE.echo)) - GAGS._tic(e, dt);
+    if (e._echoCd > 0 || e.state === 'hunt' || e.state === 'flee' || e.state === 'sleep') return;
+    // Le public d'abord — et une seule orque en scène à la fois.
+    if (!GAGS._enVue(e)) return;
+    if ((Ecosystem.bySpecies.orque || []).some(o => o !== e && o._echoPh)) return;
+    // Le cône devant elle : assez de monde pour que le cri serve à quelque chose ?
+    const dir = e._facing >= 0 ? 1 : -1;
+    const x0 = e.x + dir * e.size * 0.9, y0 = e.y;
+    const victimes = [];
+    for (const o of Ecosystem.entities) {
+      if (o === e || o.dead || o.stage === 'egg') continue;
+      if (o.def.refuge || o.def.movement === 'fixed' || o.def.size >= 70) continue;
+      const dx = (o.x - x0) * dir;
+      if (dx < 40 || dx > 560) continue;
+      if (Math.abs(o.y - y0) > 60 + dx * 0.35) continue;   // le cône s'élargit
+      victimes.push(o);
+    }
+    if (victimes.length < 3) { e._echoCd = 8; return; }
+    e._echoPh = 'inspire'; e._echoT = 1.1;
+    e._echoDir = dir; e._echoX0 = x0; e._echoY0 = y0;
+    e._echoVictimes = victimes; e._echoSonnes = 0;
+    e.hold('eating');                          // elle ouvre grand et inspire
+    e._echoCd = 999;                           // réarmé à la fin de la scène
   },
 
   // LA BAUDROIE DISPARAÎT DANS LE NOIR : la nuit, on ne voit plus que sa
@@ -585,8 +781,9 @@ const GAGS = {
       }
       return;
     }
-    e._fuseeCd = (e._fuseeCd ?? Ecosystem.cadence(e, CADENCE.fusee)) - dt;
+    e._fuseeCd = (e._fuseeCd ?? Ecosystem.cadence(e, CADENCE.fusee)) - GAGS._tic(e, dt);
     if (e._fuseeCd > 0) return;
+    if (!GAGS._enVue(e)) return;                  // le public d'abord
     e._fuseeCd = Ecosystem.cadence(e, CADENCE.fusee);
     e._fusee = 0.9;                               // le décompte, affiché 3-2-1
     e._freeze = 0.9;
@@ -1165,6 +1362,15 @@ const GAGS = {
   espadon(e, dt, t) {
     const SURF = CONFIG.SURFACE_Y + 80;               // juste sous la ligne d'eau
     if (e._runPh) {
+      // Le crash du Coyote a coupé le run net : la scène s'arrête là, le
+      // ratatinage et le plop sont l'affaire d'`Entity.crash`.
+      if (e._ecraseT > 0 || (e.state === 'dizzy' && e._runPh !== 'montee')) {
+        e._runPh = null; e._figX = null; e._figY = null; e._figSpeed = null;
+        e._diveTargetY = null; e._etire = 0; e._smear = 0; e._crispe = 0;
+        e.release();
+        e._runCd = Ecosystem.cadence(e, CADENCE.run);
+        return;
+      }
       e._runT -= dt;
 
       if (e._runPh === 'montee') {
@@ -1175,7 +1381,7 @@ const GAGS = {
         if (enPlace || e._runT <= 0) {
           e._runPh = 'charge'; e._runT = 1.15;
           e._figX = null; e._figY = null; e._figSpeed = null;
-          e.hold('angry');                          // la grimace de concentration, TENUE
+          e.hold('proud');                          // l'air FIER, tenu : il se sait beau
         }
         return;
       }
@@ -1195,6 +1401,8 @@ const GAGS = {
           e._runPh = 'run'; e._runT = 4.6;
           e._crispe = 0; e._etire = 1;
           e._faceAt = null; e.release();
+          // Le ressort CLAQUE : il part déjà lancé, le steering fait le reste.
+          e.vx = e._runDir * e.def.speed * 2.5; e.vy = 0;
           Particles.shout(e.x, e.y - e.size, 'FIOUUU', '#cfe4f5', e.size * 1.5);
           Particles.burst(e.x - e._runDir * e.size, e.y, '#cfe4f5', 8);   // la détente
           e.emote('angry', 1.6, false);               // le regard de la charge
@@ -1212,8 +1420,10 @@ const GAGS = {
         e._diveTargetY = SURF;
         e._figSpeed = e.def.sprintSpeed;
         // Droit comme un i : la flèche part à fond (1) puis se pose à 0,6 —
-        // toujours étirée, toujours raide, mais plus une caricature.
+        // toujours étirée, toujours raide, mais plus une caricature. Et la
+        // traînée du smear l'accompagne tout du long.
         e._etire = Math.max(0.6, (e._etire ?? 0.6) - dt * 1.6);
+        e._smear = e._etire;
         if (Math.random() < dt * 9) Particles.wake(e.x - e._runDir * e.size, e.y);
         if (Math.random() < dt * 3) Particles.bubble(e.x - e._runDir * e.size, e.y, U.rand(2, 4));
         // Le rivage et le bord du monde arrêtent le run : mieux vaut le finir
@@ -1229,17 +1439,22 @@ const GAGS = {
       // `fin` : il lève le pied, se relâche, et il se sait beau
       e._figSpeed = e.def.speed;
       e._etire = Math.max(0, (e._etire ?? 0) - dt * 1.4);   // la détente se retire
+      e._smear = e._etire;
       if (e._runT <= 0) {
         e._runPh = null; e._figX = null; e._figY = null; e._figSpeed = null;
-        e._diveTargetY = null; e._etire = 0;
+        e._diveTargetY = null; e._etire = 0; e._smear = 0;
         e.emote('proud', 2.2);
         e._runCd = Ecosystem.cadence(e, CADENCE.run);
       }
       return;
     }
 
-    e._runCd = (e._runCd ?? Ecosystem.cadence(e, CADENCE.run)) - dt;
+    e._runCd = (e._runCd ?? Ecosystem.cadence(e, CADENCE.run)) - GAGS._tic(e, dt);
     if (e._runCd > 0 || e.state === 'hunt' || e.state === 'flee') return;
+    // Le public d'abord — la montée peut l'emmener loin, mais elle PART sous
+    // les yeux du joueur, et le FIOUUU au large reste une invitation à suivre.
+    if (!GAGS._enVue(e)) return;
+    if ((Ecosystem.bySpecies.espadon || []).some(o => o !== e && o._runPh)) return;
     e._runPh = 'montee'; e._runT = 11;
     // Toujours vers le large quand il en est loin, sinon dans son sens de nage.
     e._runDir = e.x < World.zonesX.hauteMer ? 1 : (e._facing >= 0 ? 1 : -1);
@@ -1345,7 +1560,17 @@ const GAGS = {
   // LE BARRACUDA FAIT EXPLOSER LES BALLONS. Il fonce droit sur un Fugu gonflé —
   // et le fugu éclate. C'est le seul à pouvoir le manger sans se piquer.
   barracuda(e, dt, t) {
-    if (e.state !== 'hunt' || !e.target || e.target.speciesId !== 'fugu') return;
+    // Sa torpille de parade : la même charge que le Thon, silencieuse — c'est
+    // la traînée qui parle, pas une bulle.
+    GAGS._charge(e, dt, t, { cad: CADENCE.torpille, vitesse: 3.2, shout: null });
+    // Et la traînée de smear pendant la charge sur un ballon, qui fond dès
+    // qu'elle s'arrête. Canal de gag — jamais sur la nage normale.
+    const charge = e.state === 'hunt' && e.target && e.target.speciesId === 'fugu';
+    if (charge || (e._smear > 0 && !e._chargePh)) {
+      e._smear = U.clamp(U.lerp(e._smear ?? 0, charge ? 0.8 : 0, Math.min(1, dt * 6)), 0, 1);
+      if (!charge && e._smear < 0.04) e._smear = 0;
+    }
+    if (!charge) return;
     const p = e.target;
     if (U.dist2(e.x, e.y, p.x, p.y) > (e.size + p.size) ** 2) return;
     if (p.dead) return;

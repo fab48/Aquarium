@@ -177,6 +177,16 @@ const Sprites = {
       // gardant en plus la sienne (`fins[].vitesse`).
       vitesse: d.vitesse || 1,
       vitesseQueue: d.vitesseQueue || 1,
+      // POSES DE SCÈNE dessinées dans l'atelier (éditeur de colonne) : par nom
+      // (`cabre`, `crash`…), chacune = les cinq poignées de la colonne
+      // vertébrale {dy, sy, sx}. Lues par FishBody.rendreScene, qui a des
+      // poses par défaut pour les dessins qui n'en déclarent pas.
+      poses: d.poses || null,
+      // ANIMATIONS PAR ÉVÉNEMENT (timeline de poses clés, dessinées dans
+      // l'atelier) : `{ mange: { boucle, cles: [{ t, pose, visage }] } }`.
+      // Jouées par `Entity.jouerAnime` quand l'événement du même nom survient ;
+      // sans animation déclarée, le comportement générique reste la règle.
+      animes: d.animes || null,
       queueCalques: vises(d.queueCalques),
       // CALQUES MASQUÉS. Réglage de travail de l'atelier — on éteint une pièce
       // le temps de voir ce qu'il y a dessous — jamais enregistré dans le

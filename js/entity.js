@@ -7,6 +7,16 @@ let ENTITY_ID = 0;
 // (la murène n'y est pas : seul SON ROCHER suit la pente, cf. drawEel)
 const GROUND_RENDERS = new Set(['worm', 'crab', 'shell', 'star', 'anemone', 'urchin', 'gardeneel']);
 
+// ÉTAT → ÉVÉNEMENT D'ANIMATION (cf. Entity.jouerAnime) : entrer dans un état
+// propose au dessin son animation dessinée du même nom. La table est le
+// CATALOGUE — dessiner une animation `peur` dans l'atelier suffit, rien à
+// câbler ici. Les événements ponctuels (mange, crash, saut, pond, charge)
+// sont déclenchés à leur source, pas par l'état.
+const ANIM_ETATS = {
+  flee: 'peur', sleep: 'dort', hunt: 'chasse',
+  court: 'parade', migrate: 'voyage', strike: 'attaque',
+};
+
 // Le modele du sable (background.js) dessine des bandes qui suivent le contour
 // du fond : une bande etroite au contact de l'eau (0-26 px), puis une plus
 // large (26-90 px). Ces DEUX premieres bandes forment la partie du sable qu'on
@@ -325,12 +335,41 @@ class Entity {
 
     if (this._vfxCd > 0) this._vfxCd -= dt;
     if (this._chew > 0) { this._chew -= dt; if (this._chew <= 0) this._chewPrey = null; }
+    // LES ÉVÉNEMENTS D'ANIMATION : chaque changement d'état propose au dessin
+    // son animation dessinée (`doc.animes` : peur, dort, chasse, parade…) —
+    // sans elle, rien ne change, le comportement générique reste la règle.
+    if (this.state !== this._etatVu) {
+      const evt = ANIM_ETATS[this.state];
+      if (this._anime && this._anime.deEtat) {
+        if (this._animeVisage) { this.release(); this._animeVisage = false; }
+        this._anime = null;
+      }
+      if (evt) this.jouerAnime(evt, true);
+      this._etatVu = this.state;
+    }
+    // Le repas aussi est un événement : première frame de mastication.
+    if (this._chew > 0 && !this._chewAnim) { this._chewAnim = true; this.jouerAnime('mange'); }
+    else if (this._chew <= 0) this._chewAnim = false;
     if (this._freeze > 0) this._freeze -= dt;
     // La gelée d'un choc se calme toute seule (cf. `choc()` et `draw`)
     if (this._chocT != null) { this._chocT += dt; if (this._chocT > 0.9) this._chocT = null; }
+    // L'accordéon du crash (cf. `crash()`) : il reste écrasé, puis PLOP.
+    if (this._ecraseT > 0) {
+      this._ecraseT -= dt;
+      this._freeze = 0.3;
+      this.vx *= 0.6; this.vy *= 0.6;
+      if (this._ecraseT <= 0) {
+        this.assomme(null, true);          // la vrille et les yeux KO
+        // Le PLOP : amplitude NÉGATIVE — le retour part en dépassement étiré
+        // puis tremblote, au lieu de rejouer un écrasement (celui qu'`assomme`
+        // vient de poser est écrasé par ces trois lignes, et c'est voulu).
+        this._chocT = 0; this._chocAmp = -0.8; this._chocAxe = 'x';
+      }
+    }
     if (this.exprTimer > 0) { this.exprTimer -= dt; if (this.exprTimer <= 0) this.expression = 'idle'; }
     if (this.wet > 0) this.wet = Math.max(0, this.wet - dt);
     if (this._lureT > 0) this._lureT -= dt;      // hypnotisée par une lampe (cf. pecheALaLampe)
+    if (this._peps > 0) this._peps -= dt;        // le peps du nourrissage (cf. onAte)
     this.stateTimer -= dt;
 
     this.updateEyeLook();
@@ -342,7 +381,8 @@ class Entity {
     // Tant qu'elle est dans sa scène de ponte (`_plage`), le sable ne la tue
     // pas — c'est le seul animal du jeu qui a le droit d'y être.
     if (!this.def.aerial && !this.def.jumps && this.jumpState !== 'air' && !this._plage
-        && !this._surfacing && this.def.movement !== 'crawl' && this.def.movement !== 'fixed') {
+        && !this._surfacing && !this._replonge
+        && this.def.movement !== 'crawl' && this.def.movement !== 'fixed') {
       if (World.isUnderwater(this.x, this.y)) this._sec = 0;
       else {
         this._sec = (this._sec ?? 0) + dt;
@@ -489,7 +529,12 @@ class Entity {
       if (this.stateTimer <= 0) { this.state = 'wander'; this.release(); }
       return;
     }
-    if (def.sleeps && this.state === 'wander' && Math.random() < dt * 0.01) {
+    // PAS de sieste ni de nuit en plein cycle de respiration : `breathe` a
+    // beau réveiller, `think` rendormait DANS LA MÊME FRAME et le frein du
+    // dormeur clouait la remontée sur place — mesuré : la Baleine réussissait
+    // 3 souffles pour 9 cycles lancés, le reste avortait au garde-fou.
+    const respire = this._surfacing || this._replonge;
+    if (def.sleeps && !respire && this.state === 'wander' && Math.random() < dt * 0.01) {
       this.state = 'sleep'; this.stateTimer = U.rand(12, 25); return;
     }
     // --- SOMMEIL DE BANC : la décision est prise une fois pour le groupe
@@ -515,7 +560,7 @@ class Entity {
     // 18 minutes, et le Fou Moustachu (45 % endormi) remontait son algue une
     // fois toutes les dix minutes. Un oiseau qui dort n'a plus de rôle.
     if (!def.schooling && !def.sleeps && !def.nocturnal && !def.ambush && !def.aerial
-        && Main.nightAmount() > 0.55 && Math.random() < dt * 0.06) {
+        && !respire && Main.nightAmount() > 0.55 && Math.random() < dt * 0.06) {
       this.state = 'sleep'; this.stateTimer = U.rand(12, 30); return;
     }
 
@@ -971,6 +1016,23 @@ class Entity {
     Ecosystem.feedBoost(this.speciesId, fav ? 0.035 : 0.01);
     this.emote(fav ? 'happy' : 'eating', fav ? 2.2 : 1.4);
     if (fav) Particles.sparkles(this.x, this.y - this.size, 6);
+    // LE PEPS DU NOURRISSAGE : une graine du joueur (jamais une arête — elles
+    // passent ici avec foodType null) met CE poisson-là en forme : ses
+    // cooldowns de SCÈNE défilent 10× plus vite (cf. GAGS._tic) tant qu'il a
+    // du peps. Les graines s'ADDITIONNENT (plafond 10 min) : c'est ce qui rend
+    // le lien lisible — je nourris celui-ci, c'est lui qui joue, bientôt.
+    // Un cooldown plein (~30 min pour un thon) se vide en ~3 min de peps.
+    // Sans joueur, l'aquarium garde ses cadences d'équilibre.
+    if (foodType) {
+      this._peps = Math.min(600, (this._peps ?? 0) + (fav ? 150 : 90));
+      // Et une COUPE FRANCHE, encaissée d'un coup par le prochain tic du
+      // cooldown de scène (`GAGS._tic`) : le multiplicateur seul ne suffisait
+      // pas — « le thon ne fait JAMAIS son sprint même gavé » — parce qu'un
+      // cooldown plein fait ~30 min et que le peps demande de rester nourri
+      // des minutes. Là, une poignée de graines suffit.
+      this._pepsCoup = (this._pepsCoup ?? 0) + (fav ? 480 : 240);
+    }
+    this.jouerAnime('mange');       // le dessin peut avoir SA façon de manger
     // FRAI ÉCLAIR (`fraiRapide`). Règle générale : la reproduction demande de
     // RENCONTRER un partenaire (cf. tryMate). Le bas de la chaîne y échappe —
     // crevettes, krill, méduses, calmars, sardines : ce sont eux qu'on mange,
@@ -1203,6 +1265,44 @@ class Entity {
     this._chocAxe = axe;
   }
 
+  // LE CRASH DU COYOTE — pour une collision à PLEINE VITESSE. Trois temps,
+  // comme quand Vil Coyote rencontre une falaise : il se ratatine EN ACCORDÉON
+  // et reste écrasé le temps de comprendre ce qui lui arrive (les yeux ronds),
+  // puis « PLOP » — il reprend sa forme d'un coup (dépassement étiré, posé par
+  // update()) et part en vrille, les yeux KO (`assomme`). La gelée de `choc()`
+  // est pour les impacts ordinaires ; le crash, pour les fonceurs.
+  // UNE ANIMATION DU DESSIN (timeline de poses clés, `doc.animes`, dessinée
+  // dans l'atelier) remplace le visuel générique de l'ÉVÉNEMENT du même nom —
+  // et SEULEMENT s'il en existe une : sans elle, poses et visage génériques
+  // restent la règle. `deEtat` marque les animations liées à un ÉTAT (peur,
+  // dort…), remplacées quand l'état change ; les autres (mange, crash, saut,
+  // pond, charge) se jouent une fois et rendent la main.
+  jouerAnime(nom, deEtat = false) {
+    const sp = (this.def.sprite && typeof Sprites !== 'undefined') ? Sprites.get(this.def.sprite) : null;
+    const an = sp && sp.animes && sp.animes[nom];
+    if (!an || !an.cles || !an.cles.length) return false;
+    if (this._anime && this._anime.nom === nom) return true;   // déjà en cours
+    this._anime = { nom, t0: null, deEtat };
+    return true;
+  }
+
+  crash(duree = null) {
+    if (this._ecraseT > 0 || this.state === 'dizzy') return;
+    this.jouerAnime('crash');       // le dessin peut avoir SA version du crash
+    // La TENUE de l'accordéon est un réglage de la pose `crash` du dessin
+    // (`duree`, posée dans l'atelier) — chaque espèce a son tempo comique.
+    if (duree == null) {
+      const sp = (this.def.sprite && typeof Sprites !== 'undefined')
+        ? Sprites.get(this.def.sprite) : null;
+      duree = (sp && sp.poses && sp.poses.crash && sp.poses.crash.duree) || 1.9;
+    }
+    this._ecraseT = duree;
+    this._chocT = null;                    // l'accordéon remplace la gelée
+    this.vx = 0; this.vy = 0;              // il s'arrête NET, collé à l'obstacle
+    this.emote('surprise', duree, false);  // le temps de flottement, yeux ronds
+    Particles.burst(this.x, this.y, '#ffe8a8', 8);
+  }
+
   // Choc : il part en vrille, voit des étoiles et reste sonné un moment.
   assomme(solY = null, vfx = true) {
     if (this.state === 'dizzy') return;
@@ -1247,12 +1347,23 @@ class Entity {
   // Les cétacés (baleine, cachalot, dauphin, orque) sont des mammifères : ils
   // remontent régulièrement respirer et soufflent un panache en crevant la
   // surface. C'est leur moment le plus spectaculaire.
-  // Position de l'évent : sur le dessus du corps, un peu EN ARRIÈRE des yeux.
+  // Position de l'évent, ALIGNÉE SUR LES YEUX : sur un dessin, l'ancre d'œil
+  // dit où est la tête — l'ancien évent à 12 % du centre plaçait le panache au
+  // milieu du dos d'une baleine dessinée, loin devant... du mauvais côté, et
+  // comme c'est lui qui déclenche le souffle en crevant la surface, le jet
+  // partait aussi TROP TARD (la tête était déjà sortie depuis longtemps).
   // Renvoie des coordonnées monde, en tenant compte du sens de nage.
   event() {
     const dir = this._facing < 0 ? -1 : 1;
+    const sp = (this.def.sprite && typeof Sprites !== 'undefined') ? Sprites.get(this.def.sprite) : null;
+    if (sp && sp.oeil) {
+      const k = FishBody.echelleSprite(sp, this);
+      return [this.x + dir * (sp.oeil.x - sp.cx) * k,
+              this.y + (sp.oeil.y - sp.cy) * k - this.size * 0.2];
+    }
+    // Silhouette procédurale : la tête est vers l'avant, pas au centre.
     const dorsal = this.size * (this.def.bodyRatio || 0.5);
-    return [this.x + dir * this.size * 0.12, this.y - dorsal * 0.95];
+    return [this.x + dir * this.size * 0.55, this.y - dorsal * 0.8];
   }
 
   breathe(dt) {
@@ -1267,9 +1378,58 @@ class Entity {
       Particles.bubble(bx, by, U.rand(2, 5));
     }
 
+    // Filet : un cétacé qui se retrouve au-dessus du plafond de surface SANS
+    // être en cycle de respiration replonge proprement au lieu d'être reclaqué
+    // sous l'eau d'un coup par le plafond dur. Le cas réel : la restauration
+    // d'une sauvegarde prise dos hors de l'eau — les drapeaux `_surfacing` et
+    // `_replonge` ne sont pas sauvés (mesuré : ~190 px de claquement au
+    // chargement pour une baleine sauvée en pleine percée).
+    if (!this._surfacing && !this._replonge && this.y < CONFIG.SURFACE_Y + this.size * 0.7) {
+      this._replonge = true;
+      this._diveTargetY = CONFIG.SURFACE_Y + this.size * 1.2;
+    }
+
+    // REPLONGÉE. La fin du souffle ne téléporte plus sous l'eau : le plafond
+    // dur de la surface (move) remettait le cétacé de « dos hors de l'eau » à
+    // « entièrement immergé » en UNE frame (~120 px pour une baleine).
+    // `_replonge` le laisse exempté du plafond le temps qu'il repasse dessous
+    // en nageant, tiré par une cible posée SOUS le plafond.
+    if (this._replonge) {
+      // Elle finit son plongeon AVANT la sieste et AVANT les gags : mesuré,
+      // une orque endormie en pleine replongée restait suspendue hors de l'eau
+      // (le sommeil coupe vitesse et accélération), et un `_freeze` de scène
+      // faisait pareil. Même règle que la remontée : respirer prime sur tout.
+      if (this.state === 'sleep') { this.state = 'wander'; this.release(); }
+      this._freeze = 0;
+      // PAS de minuteur-couperet ici : couper la phase pendant que le dos est
+      // encore hors de l'eau rend la main au plafond dur, qui téléporte (le
+      // bug qu'on corrige). La percée bornée (move) garantit qu'en attendant
+      // l'animal nage à fleur d'eau — un visuel parfaitement normal — et le
+      // rappel à pleine vitesse de croisière finit toujours par l'emporter.
+      const plafond = CONFIG.SURFACE_Y + this.size * 0.7;
+      if (this.y >= plafond) {
+        // Le splash part quand elle perce vraiment la surface vers le bas —
+        // pas au moment où elle DÉCIDE de replonger, le corps encore à l'air.
+        if (this.y < CONFIG.SURFACE_Y + this.size * 1.5) Particles.splash(this.x);
+        this._replonge = false;
+        this._diveTargetY = null;
+      }
+    }
+
     if (this._air <= 0 && !this._surfacing) {
       this._surfacing = true;
       this._blown = false;
+      // Le CAP de la remontée, choisi UNE fois : le sens de nage courant, sauf
+      // s'il mène droit au rivage (la barrière dure l'y clouerait) ou au bord
+      // du monde. C'est lui qui rend la montée oblique — cf. move().
+      let cap = this._facing < 0 ? -1 : 1;
+      if (this.x < this.limiteLarge() + 500) cap = 1;
+      else if (this.x > CONFIG.WORLD_WIDTH - 500) cap = -1;
+      this._surfDir = cap;
+      // Budget de remontée proportionnel à la profondeur de départ : le
+      // garde-fou fixe de 25 s coupait la montée d'un cachalot parti de
+      // 2 000 px de fond dès qu'elle n'est plus verticale.
+      this._surfBudget = 12 + (this.y - CONFIG.SURFACE_Y) / (this.def.speed * 1.1);
     }
     if (!this._surfacing) return;
 
@@ -1291,11 +1451,13 @@ class Entity {
       this._surfaceHold = (this._surfaceHold ?? 1.8) - dt;
       if (Math.random() < dt * 1.2) Particles.bubble(bx, CONFIG.SURFACE_Y, U.rand(2, 5));
       if (this._surfaceHold <= 0) {
-        Particles.splash(this.x);                 // elle replonge
         this._air = U.rand(20, 40) * (this.def.size >= 70 ? 1.5 : 1);
         this._surfacing = false; this._surfaceT = 0; this._surfaceHold = null;
         this._blown = false;
-        this._diveTargetY = null;
+        // Elle replonge EN NAGEANT (cf. `_replonge` en tête de méthode) : le
+        // splash partira quand elle recroisera la surface, pas maintenant.
+        this._replonge = true;
+        this._diveTargetY = CONFIG.SURFACE_Y + this.size * 1.2;
       }
       return;
     }
@@ -1309,17 +1471,27 @@ class Entity {
     if (by < CONFIG.SURFACE_Y && !this._blown) {
       this._blown = true;
       this._surfaceHold = U.rand(1.4, 2.6);
-      Particles.blow(bx, Math.min(by, CONFIG.SURFACE_Y), this.size);
-      Particles.splash(this.x);
-      Particles.splash(this.x + this.size * 0.5);
+      // LE PANACHE EST RÉSERVÉ AUX CÉTACÉS (`souffle: true`). La Tortue
+      // respire aussi (`breathes`) mais n'a pas d'évent : elle sort juste la
+      // tête, une petite ride d'eau suffit.
+      if (this.def.souffle) {
+        Particles.blow(bx, Math.min(by, CONFIG.SURFACE_Y), this.size);
+        Particles.splash(this.x);
+        Particles.splash(this.x + this.size * 0.5);
+      } else {
+        Particles.splash(bx);
+      }
       this.emote('happy', 2);
-    } else if (this._surfaceT > 25) {
+    } else if (this._surfaceT > (this._surfBudget ?? 25)) {
       // Sécurité : s'il n'y arrive vraiment pas (coincé, gêné), on relance le
       // cycle plutôt que de le laisser monter indéfiniment.
       this._surfacing = false; this._surfaceT = 0; this._surfaceHold = null;
       this._blown = false;
       this._air = U.rand(10, 20);
-      this._diveTargetY = null;
+      // S'il a été interrompu le dos hors de l'eau, il redescend proprement ;
+      // profond, `_replonge` se referme dès la frame suivante (y ≥ plafond).
+      this._replonge = true;
+      this._diveTargetY = CONFIG.SURFACE_Y + this.size * 1.2;
     }
   }
 
@@ -1523,6 +1695,7 @@ class Entity {
       }
       if (this.state === 'wander' && this.y < CONFIG.SURFACE_Y + def.depthBand[1] * 0.8 && Math.random() < dt * 0.1) {
         this.jumpState = 'air';
+        this.jouerAnime('saut');    // le dessin peut avoir SA cabriole
         this._airborne = false;
         this.vy = -U.rand(240, 330);
         // élan horizontal : un saut en cloche, pas une chandelle sur place.
@@ -1699,7 +1872,38 @@ class Entity {
     // (ex-boucle dédiée) et l'anti-chevauchement. Deux parcours de la même
     // liste coûtaient ~18 000 itérations de plus par frame.
     let crowd = 0;
-    let choc = this.speedNow > 280 && this.size < 45 && this.state !== 'dizzy';
+    // LE CRASH DU COYOTE NE SE JOUE QUE PENDANT UNE FLÈCHE. Une première
+    // version le branchait sur la seule vitesse : les espadons, qui chassent
+    // à 460 px/s en temps NORMAL, s'écrabouillaient en permanence — pour
+    // rien, sans scène. Deux verrous depuis :
+    //   1. il faut être EN FLÈCHE (`_etire`, posé uniquement par les scènes
+    //      de charge : run de l'Espadon, VROUUUM du Thon…) ;
+    //   2. sur la vitesse VRAIE — `speedNow` est un EFFORT, il dépasse 255
+    //      sur place (cf. la règle « speedNow est un effort »).
+    const enFleche = (this._etire ?? 0) > 0.2 && this.state !== 'dizzy'
+                  && !(this._ecraseT > 0)
+                  && Math.hypot(this.vx, this.vy) > 220;
+    // LES COLOSSES NE SONT PAS DANS LA PORTÉE DE LA GRILLE. Le contact avec
+    // une baleine se joue à `o.size * 0,85 + size` ≈ 187 px du CENTRE, or
+    // `neighbors` ne porte qu'à ~195 px dans le meilleur des cas : un thon
+    // lancé la traversait sans jamais la « voir ». Même leçon que la liste
+    // dédiée `Ecosystem.colosses` — on la balaie donc ici aussi (une dizaine
+    // d'entrées, et seulement pendant une flèche).
+    if (enFleche) {
+      for (const o of (Ecosystem.colosses || [])) {
+        if (o === this || o.dead) continue;
+        const contact = o.size * 0.85 + this.size;
+        if (U.dist2(this.x, this.y, o.x, o.y) < contact * contact) {
+          this.crash();
+          o.emote('surprise', 1.8);
+          break;
+        }
+      }
+    }
+    // Hors scène, la collision garde son ANCIEN réglage discret : un petit
+    // très rapide qui percute un gros placide est juste assommé.
+    let choc = enFleche || (this.speedNow > 280 && this.size < 45 && this.state !== 'dizzy'
+                            && !(this._ecraseT > 0));
     const poussable = !def.filterFeeder && def.size < 70;
     if (choc || poussable) {
     for (const o of Ecosystem.neighbors(this.x, this.y)) {
@@ -1707,7 +1911,8 @@ class Entity {
       if (choc && o.size >= 45) {
         const contact = o.size * 0.85 + this.size;
         if (U.dist2(this.x, this.y, o.x, o.y) < contact * contact) {
-          this.assomme();
+          if (enFleche) this.crash();       // en scène : l'accordéon du Coyote
+          else this.assomme();              // hors scène : la vrille d'avant
           o.emote('surprise', 1.8);
           choc = false;                     // un seul choc, comme l'ancien break
         }
@@ -1915,9 +2120,33 @@ class Entity {
     // Cible verticale ponctuelle générique (ex. cycle de plongée du Cachalot via
     // def.gag). Suspendue en chasse : sinon le Cachalot est tiré vers les abysses
     // pendant qu'il poursuit un poulpe et ne l'attrape jamais.
-    if (this._diveTargetY != null && this.state !== 'hunt') {
-      ay += (this._diveTargetY - this.y) * (this._surfacing ? 1.6 : 0.4);
-      if (this._surfacing) maxSpeed = Math.max(maxSpeed, def.speed * 1.6);
+    // La replongée garde son rappel MÊME en chasse : elle est courte, proche de
+    // la surface, et la proie est de toute façon plus bas — sans ça un
+    // prédateur qui repartait en chasse le dos hors de l'eau y restait pendu
+    // jusqu'au garde-fou, qui le claquait sous l'eau d'un coup.
+    if (this._diveTargetY != null && (this.state !== 'hunt' || this._replonge)) {
+      const dy = this._diveTargetY - this.y;                 // négatif en montée
+      if (this._surfacing) {
+        maxSpeed = Math.max(maxSpeed, def.speed * 1.6);
+        // Une remontée SE NAGE, en oblique. Le rappel proportionnel seul est
+        // un ascenseur : loin de la cible ay explose et la composante
+        // horizontale n'existe pas — le cétacé montait en ligne droite. On
+        // vise donc une VITESSE de croisière (~50° loin de la surface, qui
+        // s'aplatit en approchant), et la croisière horizontale reste pendant
+        // le souffle : elle longe la surface au lieu de faire du surplace.
+        const cap = this._surfDir ?? (this._facing < 0 ? -1 : 1);
+        ax += (cap * def.speed * 1.1 - this.vx) * 3;
+        const k = U.clamp(-dy / (this.size * 3), 0, 1);
+        if (k > 0.12) ay += (-def.speed * 1.3 * k - this.vy) * 3;
+        else ay += dy * 1.6;
+      } else {
+        // La replongée est tirée un peu plus fort que le rappel générique :
+        // c'est un plongeon, pas une dérive — et elle a droit à sa vitesse de
+        // croisière pleine (l'errance bride maxSpeed, et une baleine bridée ne
+        // couvrait pas la descente avant le garde-fou).
+        ay += dy * (this._replonge ? 1.0 : 0.4);
+        if (this._replonge) maxSpeed = Math.max(maxSpeed, def.speed);
+      }
     }
     // Tirant d'eau : une créature ne va pas là où la colonne d'eau est plus
     // basse qu'elle. Sans ça les baleines venaient s'échouer sur le haut-fond.
@@ -1939,11 +2168,22 @@ class Entity {
     // PLAFOND DUR de la surface. Le rappel de bande n'est qu'une accélération :
     // un banc qui prend peur la franchit et se retrouve EN L'AIR au-dessus de
     // l'eau (mesuré : 6,9 % du temps pour les sardines et les confettis).
-    // Les sauteurs (poisson volant, dauphin, orque) et les cétacés en train de
-    // respirer en sont évidemment exemptés.
-    if (!def.aerial && !def.jumps && !this._surfacing && this.jumpState !== 'air' && !this._plage) {
+    // Les sauteurs (poisson volant, sardine) et les cétacés en train de
+    // respirer en sont évidemment exemptés — et aussi pendant leur REPLONGÉE :
+    // réappliquer le plafond dès la fin du souffle les téléportait de « dos
+    // hors de l'eau » à « entièrement immergés » en une frame.
+    if (!def.aerial && !def.jumps && !this._surfacing && !this._replonge
+        && this.jumpState !== 'air' && !this._plage) {
       const plafond = CONFIG.SURFACE_Y + this.size * 0.7;
       if (this.y < plafond) { this.y = plafond; this.vy = Math.max(this.vy, 0); }
+    } else if ((this._surfacing || this._replonge) && !this._plage) {
+      // PERCÉE BORNÉE : le dos sort de l'eau, le corps ne DÉCOLLE jamais.
+      // L'exemption de plafond laissait s'accumuler l'inertie d'un rapide
+      // (le dauphin croise sa cible à 130 px/s) et les poussées extérieures
+      // (séparation de colosses) : mesuré, une baleine à 220 px AU-DESSUS de
+      // la ligne d'eau. Borne continue, donc jamais de claquement.
+      const percee = CONFIG.SURFACE_Y - this.size * 0.25;
+      if (this.y < percee) { this.y = percee; this.vy = Math.max(this.vy, 0); }
     }
 
     // bords du monde + rivage de la plage
@@ -2256,59 +2496,22 @@ class Entity {
     //     fait lire la détente qui suit : la vitesse ne se lit qu'au contraste.
     //   `_etire` (0→1) = la DÉTENTE. La flèche : étirement, et la nage se
     //     RAIDIT (`FishBody.raideur`) — « droit comme un i ».
-    const crispe = U.clamp(this._crispe ?? 0, 0, 1);
-    // L'étirement de SPRINT est générique : toute nage au-delà de ~1,3× la
-    // croisière allonge un peu la silhouette — c'est ce qui fait lire une
-    // charge ou une fuite partout, sans que chaque gag ait à le demander.
-    // Lissé (l'allure fluctue à chaque frame), et lui ne raidit PAS la queue :
-    // un sprinteur ordinaire bat FORT, seule la flèche d'un gag glisse figée.
-    const allure = FishBody.allure(this);
-    const cibleNage = U.clamp((allure - 1.3) / 0.7, 0, 1) * 0.11;
-    this._etireNage = U.lerp(this._etireNage ?? 0, cibleNage, 0.08);
-    // Le smear automatique suit la même logique, avec un seuil plus haut : il
-    // ne se déclenche qu'au sprint FRANC (fuite, chasse), jamais à la croisière
-    // (~1, marge large), et fond en douceur. Mesuré : une fuite en pleine
-    // accélération tient vers 1,55 — un seuil à 1,7 la ratait.
-    this._smearNage = U.lerp(this._smearNage ?? 0, U.clamp((allure - 1.5) / 0.45, 0, 1), 0.15);
-    const etire = Math.max(U.clamp(this._etire ?? 0, 0, 1), this._etireNage);
-    if (crispe > 0.01) {
-      ctx.translate(Math.sin(t * 44 + this.phase) * crispe * this.size * 0.05, 0);
-      ctx.transform(1, crispe * 0.4, 0, 1, 0, 0);       // l'arc : il se voûte
-      ctx.scale(1 - crispe * 0.26, 1 + crispe * 0.32);  // le ressort comprimé
-    }
-    if (etire > 0.01) ctx.scale(1 + etire * 0.4, 1 - etire * 0.24);
-    // La DISTORSION D'IMPACT (`choc()`) : l'écrasement élastique de la gelée.
-    // Il s'écrase au contact, rebondit un peu étiré, et l'oscillation s'amortit
-    // en une demi-seconde. Le cosinus amorti fait les deux temps d'un coup.
-    if (this._chocT != null) {
-      const k = (this._chocAmp ?? 1) * Math.exp(-5 * this._chocT) * Math.cos(11 * this._chocT);
-      if (this._chocAxe === 'y') ctx.scale(1 + k * 0.35, 1 - k * 0.42);
-      else ctx.scale(1 - k * 0.42, 1 + k * 0.35);
-    }
+    // Ces canaux sont réservés aux GAGS : la nage ordinaire, même en sprint,
+    // ne déforme rien et ne calcule rien — une version « automatique au
+    // sprint » a été essayée puis RETIRÉE (elle décorait la locomotion, pas
+    // les scènes, et 8 % de l'aquarium smearait en permanence pour rien).
+    // Le détail des canaux (cabré `_crispe`, flèche `_etire`, gelée d'un choc,
+    // accordéon du crash) et les traînées du smear sont FACTORISÉS dans
+    // `FishBody.deformationScene` et `FishBody.smear` : l'atelier (vue Scènes)
+    // applique exactement les mêmes — deux copies divergeraient au premier
+    // réglage.
+    FishBody.deformationScene(ctx, this, t);
     // Le dauphin se tord de rire : il roule sur lui-même
     if (this._farceRoll) ctx.rotate(Math.sin(this._farceRoll) * 0.5);
-
-    // LE SMEAR — le dessin animé étire un mouvement rapide en échos qui
-    // traînent derrière. Deux copies fantômes de la silhouette, décalées vers
-    // l'ARRIÈRE dans le repère du corps (donc le long du mouvement), de plus en
-    // plus transparentes, dessinées AVANT le corps. Seuls les vrais sprints en
-    // ont (allure ≥ 1,7, lissée — jamais à la croisière) ou une scène qui le
-    // demande (`_smear`). Redessiner la silhouette est bon marché : le coût du
-    // rendu est dans le décor, pas dans les créatures (PERFORMANCE.md §3), et
-    // il n'y a jamais qu'une poignée de sprinteurs à la fois.
-    const smear = Math.max(U.clamp(this._smear ?? 0, 0, 1), this._smearNage ?? 0);
-    if (smear > 0.06) {
-      const ga = ctx.globalAlpha;
-      for (const [recul, alpha] of [[1.05, 0.12], [0.55, 0.25]]) {
-        ctx.save();
-        ctx.translate(-this.size * recul * smear, 0);
-        ctx.globalAlpha = ga * alpha * smear;
-        FishBody.draw(ctx, this, t);
-        ctx.restore();
-      }
-      ctx.globalAlpha = ga;
-    }
-    FishBody.draw(ctx, this, t);
+    FishBody.smear(ctx, this, t);
+    // `rendreScene` plie le corps par tranches quand la pose le demande
+    // (cabré en arc de cercle, tête froissée du crash), sinon dessin direct.
+    FishBody.rendreScene(ctx, this, t);
     ctx.restore();
   }
 }

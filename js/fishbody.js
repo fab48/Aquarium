@@ -750,6 +750,15 @@ const FishBody = {
     return isFinite(x0) ? { x0, y0, x1, y1 } : { x0: 0, y0: 0, x1: 1, y1: 1 };
   },
 
+  // L'échelle dessin → monde, en un seul endroit (drawSprite, et l'évent des
+  // cétacés qui doit retrouver l'ancre d'œil en coordonnées monde).
+  echelleSprite(sp, e) {
+    const ajust = sp.spriteScale || e.def.spriteScale || 1;
+    return (sp.echelle && sp.tailleJeu)
+      ? sp.echelle * (e.size / sp.tailleJeu) * ajust
+      : (e.size * 2.5 * ajust) / sp.w;
+  },
+
   drawSprite(ctx, e, t) {
     const sp = Sprites.get(e.def.sprite);
     if (!sp) { this.drawFish(ctx, e, t); return; }   // pas encore chargé : on ne saute pas de frame
@@ -763,10 +772,7 @@ const FishBody = {
     //    règle suppose un poisson ALLONGÉ ; sur une créature verticale elle se
     //    trompe lourdement (hippocampe +83 %, poisson-lune +29 % au relevé).
     //    `spriteScale` est là pour ça.
-    const ajust = sp.spriteScale || e.def.spriteScale || 1;
-    const k = (sp.echelle && sp.tailleJeu)
-      ? sp.echelle * (s / sp.tailleJeu) * ajust
-      : (s * 2.5 * ajust) / sp.w;
+    const k = this.echelleSprite(sp, e);
 
     // Battement de queue : la fréquence suit l'allure RÉELLE, pas une constante.
     // Un requin qui charge doit visiblement forcer.
@@ -831,6 +837,10 @@ const FishBody = {
     const anim = { ph, rQueue: sp.vitesseQueue || 1, phase: e.phase || 0,
                    vigueur, repos,
                    qx: Math.cos(axe), qy: Math.sin(axe) };
+    // La COLONNE d'une pose de scène (cf. `colonne`) : échantillonnée une fois
+    // par frame, appliquée à chaque point dans `deformer`. `e._colonne` est
+    // posé par `rendreScene` (gags) ou par l'éditeur de colonne de l'atelier.
+    anim.col = (e._colonne && !repos) ? this.colonne(sp, e._colonne) : null;
     // Battement de nageoire : plus lent que celui de la queue, et déphasé.
     const battement = repos ? 0 : Math.sin(ph * 0.7 + e.phase + 1);
     // Les reflets à reporter par-dessus tous les calques (`reflet.dessus`).
@@ -946,7 +956,12 @@ const FishBody = {
       }
       for (const [a, taille] of yeux) {
         ctx.save();
-        ctx.translate((a.x - sp.cx) * k - taille * 0.55 + dx, (a.y - sp.cy) * k + taille * 0.18 + dy);
+        // Le visage SUIT LA COLONNE : sur un corps plié, l'œil part avec la
+        // tête et TOURNE avec elle — sans ça il flottait à l'ancienne place.
+        const pa = anim.col ? this.colPoint(anim.col, a.x, a.y) : [a.x, a.y, 0];
+        ctx.translate((pa[0] - sp.cx) * k, (pa[1] - sp.cy) * k);
+        if (pa[2]) ctx.rotate(pa[2]);
+        ctx.translate(-taille * 0.55 + dx, taille * 0.18 + dy);
         // `sansBouche` : elle est dessinée une seule fois, sur sa propre ancre.
         this.drawFace(ctx, taille, e.expression, t + (e.phase || 0),
                       e.emoteK ? e.emoteK() : 1, e._eyeLook, !!bo, vis.pal, vis.style);
@@ -959,6 +974,13 @@ const FishBody = {
         // d'avant, pour que les dessins déjà calés ne bougent pas.
         const fsB = sp.boucheR ? (sp.boucheR * k) / 0.2 : fs;
         ctx.save();
+        // La bouche suit la colonne comme l'œil : reportée ET tournée.
+        if (anim.col) {
+          const pb = this.colPoint(anim.col, bo.x, bo.y);
+          ctx.translate((pb[0] - sp.cx) * k, (pb[1] - sp.cy) * k);
+          ctx.rotate(pb[2]);
+          ctx.translate(-(bo.x - sp.cx) * k, -(bo.y - sp.cy) * k);
+        }
         this.bouche(ctx, (bo.x - sp.cx) * k + dx, (bo.y - sp.cy) * k + dy, fsB,
                     k2 > 0.35 ? em.mouth : this.EMOTIONS.idle.mouth, t + (e.phase || 0),
                     vis.pal, vis.style);
@@ -1014,6 +1036,65 @@ const FishBody = {
   },
 
   // Déformation d'UN point : queue puis appendices. `d` vient de `prepDeform`.
+  // LA COLONNE VERTÉBRALE — le squelette 1D d'une pose de scène. Cinq
+  // poignées le long du corps, chacune {dy: écart vertical en FRACTION de la
+  // longueur du dessin, sy: épaisseur, sx: compression locale}, échantillonnées
+  // en 25 points ; chaque point du dessin est reporté sur la colonne, sa
+  // section TOURNÉE selon la pente locale. C'est le même principe que l'onde
+  // de queue et le reflet découpé : on déforme la GÉOMÉTRIE, jamais des
+  // tranches de pixels — un dessin plié ainsi ne se déchire pas (le pliage
+  // par tranches, essayé avant, déchirait les SVG aux coutures).
+  colonne(sp, pose) {
+    const n = 25, x0 = sp.minX, L = Math.max(1, sp.w);
+    const k = U.clamp(pose.k ?? 1, 0, 1);
+    const m = (pose.dy && pose.dy.length) || 5;
+    const lit = (arr, u, neutre) => {
+      if (!arr) return neutre;
+      const t = u * (m - 1), i = Math.min(m - 2, Math.floor(t)), f = t - i;
+      const s = f * f * (3 - 2 * f);                 // lissé entre deux poignées
+      const a = arr[i] ?? neutre, b = arr[i + 1] ?? neutre;
+      return a + (b - a) * s;
+    };
+    // Les poignées sont LIBRES en x ET en y (`dx`/`dy`) : la colonne est une
+    // COURBE paramétrique, pas une fonction y(x). C'est ce qui permet le « C »
+    // — le museau peut revenir en arrière — et l'accordéon n'est plus un
+    // réglage à part : tirer une poignée vers le corps comprime ce qu'il y a
+    // entre les deux. (La première version bloquait les poignées à la
+    // verticale et forçait les tangentes vers l'avant : impossible de
+    // dessiner un C, et tout semblait « tourner » au lieu de se poser.)
+    const X = new Array(n), Y = new Array(n), A = new Array(n), S = new Array(n);
+    for (let i = 0; i < n; i++) {
+      const u = i / (n - 1);
+      X[i] = x0 + u * L + lit(pose.dx, u, 0) * L * k;
+      Y[i] = sp.cy + lit(pose.dy, u, 0) * L * k;
+      S[i] = 1 - (1 - lit(pose.sy, u, 1)) * k;
+    }
+    let prec = 0;
+    for (let i = 0; i < n; i++) {
+      const a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1);
+      const ex = X[b] - X[a], ey = Y[b] - Y[a];
+      // La tangente a le droit de se RETOURNER (le C) ; seul un segment
+      // dégénéré garde l'angle précédent.
+      A[i] = (ex * ex + ey * ey > 1e-6) ? Math.atan2(ey, ex) : prec;
+      prec = A[i];
+    }
+    return { n, x0, L, cy: sp.cy, X, Y, A, S };
+  },
+
+  // Où atterrit un point du dessin sur la colonne, et à quelle pente. Sert à
+  // `deformer` (tous les points des calques) ET aux ancres du visage — l'œil
+  // et la bouche suivent la tête, tournés avec elle.
+  colPoint(c, x, y) {
+    const t = U.clamp((x - c.x0) / c.L, 0, 1) * (c.n - 1);
+    const i = Math.min(c.n - 2, Math.floor(t)), f = t - i;
+    const X = c.X[i] + (c.X[i + 1] - c.X[i]) * f;
+    const Y = c.Y[i] + (c.Y[i + 1] - c.Y[i]) * f;
+    const A = c.A[i] + (c.A[i + 1] - c.A[i]) * f;
+    const S = c.S[i] + (c.S[i + 1] - c.S[i]) * f;
+    const dy = (y - c.cy) * S;
+    return [X - Math.sin(A) * dy, Y + Math.cos(A) * dy, A];
+  },
+
   deformer(x, y, sp, anim, apps, d) {
     if (anim.repos) return [x, y];
     const lissage = (v) => { const c = U.clamp(v, 0, 1); return c * c * (3 - 2 * c); };
@@ -1107,6 +1188,12 @@ const FishBody = {
           }
         }
       }
+    }
+    // La colonne passe EN DERNIER : elle plie le corps déjà animé (onde de
+    // queue et appendices compris), comme un squelette porte la chair.
+    if (anim.col) {
+      const p = this.colPoint(anim.col, x, y);
+      x = p[0]; y = p[1];
     }
     return [x, y];
   },
@@ -1583,10 +1670,220 @@ const FishBody = {
 
   // LA FLÈCHE EST RAIDE. Pendant l'étirement d'un gag (`_etire`, posé par une
   // scène : le grand run de l'Espadon), la nage se FIGE : un corps lancé
-  // « droit comme un i » ne bat pas, il fend l'eau. L'étirement de sprint
-  // générique (`Entity.draw`) ne passe PAS par ici — un sprinteur ordinaire
-  // bat fort, c'est sa vigueur qui le dit ; seule la flèche d'un gag glisse.
+  // « droit comme un i » ne bat pas, il fend l'eau. Seule la flèche d'un gag
+  // glisse — la nage ordinaire, même en sprint, ne passe pas par là.
   raideur(e) { return 1 - 0.85 * U.clamp(e._etire ?? 0, 0, 1); },
+
+  // LES DÉFORMATIONS DE SCÈNE — les canaux cartoon posés par les gags, en
+  // pures transformations du contexte courant (repère du CORPS, volume
+  // conservé). Factorisées ici pour que l'ATELIER (vue Scènes) applique
+  // EXACTEMENT ce que `Entity.draw` applique — deux copies divergeraient au
+  // premier réglage :
+  //   `_crispe`  (0→1)  le CABRÉ : dressé comme un cheval qui cabre (~50° au
+  //                     plus fort), corps courbé, ressort qui vibre ;
+  //   `_etire`   (0→1)  la FLÈCHE : étiré, aplati (et raide, cf. `raideur`) ;
+  //   `_chocT`          la GELÉE d'un impact (cosinus amorti, cf. Entity.choc) ;
+  //   `_ecraseT` (>0)   l'ACCORDÉON tenu du crash du Coyote (cf. Entity.crash).
+  deformationScene(ctx, e, t) {
+    const crispe = U.clamp(e._crispe ?? 0, 0, 1);
+    const etire = U.clamp(e._etire ?? 0, 0, 1);
+    if (crispe > 0.01) {
+      // Le gros du cabré (l'ARC) est plié par tranches dans `rendreScene` —
+      // ici seulement ce qui reste affine : le frisson d'effort et la
+      // compression du ressort, qui VIBRE (boing-boing à ~2,4 Hz).
+      ctx.translate(Math.sin(t * 44 + e.phase) * crispe * e.size * 0.04, 0);
+      const ressort = 1 + Math.sin(t * 15 + e.phase) * 0.06 * crispe;
+      ctx.scale((1 - crispe * 0.16) / ressort, (1 + crispe * 0.1) * ressort);
+    }
+    if (etire > 0.01) ctx.scale(1 + etire * 0.4, 1 - etire * 0.24);
+    if (e._chocT != null) {
+      const k = (e._chocAmp ?? 1) * Math.exp(-5 * e._chocT) * Math.cos(11 * e._chocT);
+      if (e._chocAxe === 'y') ctx.scale(1 + k * 0.35, 1 - k * 0.42);
+      else ctx.scale(1 - k * 0.42, 1 + k * 0.35);
+    }
+    // L'accordéon du crash n'écrase plus tout le corps : `rendreScene` ne
+    // froisse que la TÊTE. Ici, juste le tremblement de tension.
+    if (e._ecraseT > 0) ctx.translate(Math.sin(t * 40 + e.phase) * e.size * 0.02, 0);
+  },
+
+  // LE PLIAGE PAR TRANCHES — la seule façon de courber un dessin le long d'un
+  // ARC DE CERCLE : une matrice affine ne sait pas plier (le cabré-cisaillement
+  // « penchait » au lieu de courber, jugé « complètement nul », à raison). Le
+  // poisson est rendu une fois hors écran, puis redessiné en douze tranches
+  // verticales dont chacune tourne un peu plus que la précédente — l'ANCRE est
+  // au tiers arrière : la queue reste posée, le corps se dresse. `tete` (0→1)
+  // froisse EN PLUS les tranches du museau en accordéon (le crash du Coyote
+  // n'aplatit que la tête, pas tout le poisson). Marche pour toute silhouette,
+  // procédurale ou dessinée, et ne coûte que pendant une scène (un rendu hors
+  // écran sur-résolu ×2 + douze drawImage, pour un ou deux acteurs à la fois).
+  plier(ctx, e, t, arc, tete) {
+    const s = Math.max(8, e.size);
+    const R = 2;                                   // sur-résolution (zoom, atelier)
+    const W = Math.ceil(s * 4.6 * R), H = Math.ceil(s * 3.2 * R);
+    let cv = this._plieCv;
+    if (!cv) cv = this._plieCv = (typeof OffscreenCanvas !== 'undefined'
+      ? new OffscreenCanvas(W, H) : document.createElement('canvas'));
+    if (cv.width < W) cv.width = W;
+    if (cv.height < H) cv.height = H;
+    const oc = cv.getContext('2d');
+    oc.setTransform(1, 0, 0, 1, 0, 0);
+    oc.clearRect(0, 0, W, H);
+    oc.setTransform(R, 0, 0, R, W / 2, H / 2);
+    this.draw(oc, e, t);
+
+    const N = 12, iAncre = 4;                      // ancre au tiers arrière
+    const wSrc = W / N, wMonde = wSrc / R;
+    const hMonde = H / R;
+    const chev = 1.6;                              // recouvrement anti-couture
+    const dAng = arc / (N - iAncre);               // la courbure, par tranche
+    let px = -W / (2 * R) + iAncre * wMonde, py = 0, ang = 0;
+    for (let i = iAncre; i < N; i++) {
+      // Le froissement de tête : les 4 tranches du museau se compriment de
+      // plus en plus fort (jusqu'à 25 % de leur largeur), et regonflent un
+      // peu en hauteur — l'accordéon est LOCAL, le corps derrière ne bouge pas.
+      const uTete = U.clamp((i - (N - 5)) / 4, 0, 1);
+      const kx = 1 - tete * uTete * 0.75;
+      const ky = 1 + tete * uTete * 0.3;
+      ctx.save();
+      ctx.translate(px, py); ctx.rotate(ang); ctx.scale(kx, ky);
+      ctx.drawImage(cv, i * wSrc, 0, wSrc + chev * R, H,
+                    0, -hMonde / 2, wMonde + chev, hMonde);
+      ctx.restore();
+      px += Math.cos(ang) * wMonde * kx; py += Math.sin(ang) * wMonde * kx;
+      ang += dAng;
+    }
+    // Derrière l'ancre, la queue reste droite et posée.
+    px = -W / (2 * R) + iAncre * wMonde;
+    for (let i = iAncre - 1; i >= 0; i--) {
+      px -= wMonde;
+      ctx.drawImage(cv, i * wSrc, 0, wSrc + chev * R, H,
+                    px, -hMonde / 2, wMonde + chev, hMonde);
+    }
+  },
+
+  // POSES PAR DÉFAUT de la colonne, en fractions de la longueur du dessin :
+  // tout sprite les joue sans réglage, et un dessin peut les remplacer par les
+  // siennes (`doc.poses`, dessinées dans l'éditeur de colonne de l'atelier).
+  // `rot` oriente L'ENSEMBLE (radians, négatif = nez vers le haut).
+  POSES: {
+    // Le cabré tire le museau en ARRIÈRE et en haut : c'est le repli en C.
+    cabre: { dx: [0, 0, -0.02, -0.09, -0.2], dy: [0, -0.01, -0.1, -0.27, -0.46],
+             sy: [1, 1, 1.05, 1.08, 1.02], rot: -0.3, duree: 0.8 },
+    // Le crash ramène le museau DANS le corps (accordéon) et le regonfle.
+    crash: { dx: [0, 0, 0, -0.05, -0.16], dy: [0, 0, 0, 0, 0],
+             sy: [1, 1, 1, 1.3, 1.7], rot: 0, duree: 1.9 },
+  },
+
+  // LA TIMELINE DE POSES CLÉS — l'état de la colonne à l'instant `u` d'une
+  // animation (`doc.animes`). Chaque clé référence une POSE NOMMÉE (du dessin,
+  // sinon des défauts, sinon le neutre) et peut poser un VISAGE ; entre deux
+  // clés, les poignées sont interpolées en douceur. Le visage retenu est celui
+  // de la dernière clé passée qui en déclare un — pas d'interpolation : une
+  // expression se joue, elle ne se fond pas. UN SEUL lecteur, partagé par le
+  // jeu (`rendreScene`) et l'aperçu de l'atelier : deux copies divergeraient.
+  poseAt(sp, an, poses, u) {
+    const cles = an.cles;
+    const res = (nom) => (nom && ((poses && poses[nom]) || this.POSES[nom])) || null;
+    let a = cles[0], b = cles[cles.length - 1];
+    for (const c of cles) {
+      if (c.t <= u) a = c;
+      if (c.t >= u) { b = c; break; }
+    }
+    const f0 = res(a.pose), f1 = res(b.pose);
+    const f = (a === b) ? 1 : U.clamp((u - a.t) / Math.max(1e-3, b.t - a.t), 0, 1);
+    const s = f * f * (3 - 2 * f);
+    const ZERO = [0, 0, 0, 0, 0], UN = [1, 1, 1, 1, 1];
+    const mix = (A, B, neutre, i) => {
+      const va = (A && A[i] != null) ? A[i] : neutre[i];
+      const vb = (B && B[i] != null) ? B[i] : neutre[i];
+      return va + (vb - va) * s;
+    };
+    const dx = [], dy = [], sy = [];
+    for (let i = 0; i < 5; i++) {
+      dx.push(mix(f0 && f0.dx, f1 && f1.dx, ZERO, i));
+      dy.push(mix(f0 && f0.dy, f1 && f1.dy, ZERO, i));
+      sy.push(mix(f0 && f0.sy, f1 && f1.sy, UN, i));
+    }
+    const r0 = (f0 && f0.rot) || 0, r1 = (f1 && f1.rot) || 0;
+    let visage = null;
+    for (const c of cles) if (c.t <= u && c.visage) visage = c.visage;
+    return { dx, dy, sy, rot: r0 + (r1 - r0) * s, visage };
+  },
+
+  // Le corps d'une scène. Un SPRITE se plie par sa COLONNE (déformation des
+  // POINTS — même chemin de code que l'onde de queue, donc même qualité,
+  // aucune couture) ; une silhouette procédurale, qui n'a pas de points, garde
+  // le pliage par tranches. Les gags passent par `_crispe` (→ pose `cabre`) et
+  // `_ecraseT` (→ pose `crash`) ; l'atelier pose `_poseMain` directement.
+  rendreScene(ctx, e, t) {
+    const sp = (e.def.sprite && typeof Sprites !== 'undefined') ? Sprites.get(e.def.sprite) : null;
+    if (e._poseMain && sp) {                       // l'éditeur de l'atelier
+      if (e._poseMain.rot) ctx.rotate(e._poseMain.rot * (e._poseMain.k ?? 1));
+      e._colonne = e._poseMain;
+      this.draw(ctx, e, t);
+      e._colonne = null;
+      return;
+    }
+    // UNE ANIMATION DU DESSIN EN COURS (timeline `doc.animes`, lancée par
+    // `Entity.jouerAnime` sur un événement) : elle prime sur les poses
+    // génériques de scène — c'est tout son sens : « un animal bizarre quand
+    // il mange s'anime autrement que la bouche générique ».
+    if (e._anime && sp && sp.animes && sp.animes[e._anime.nom]) {
+      const an = sp.animes[e._anime.nom];
+      if (an.cles && an.cles.length) {
+        if (e._anime.t0 == null) e._anime.t0 = t;
+        let u = t - e._anime.t0;
+        const fin = an.cles[an.cles.length - 1].t || 0;
+        if (an.boucle && fin > 0.05) u = u % fin;
+        if (!an.boucle && u > fin + 0.2) {
+          if (e._animeVisage) { e.release(); e._animeVisage = false; }
+          e._anime = null;                         // finie : retour au générique
+        } else {
+          const p = this.poseAt(sp, an, sp.poses, u);
+          if (p.visage) { e.hold(p.visage); e._animeVisage = true; }
+          else if (e._animeVisage) { e.release(); e._animeVisage = false; }
+          if (p.rot) ctx.rotate(p.rot);
+          e._colonne = { dx: p.dx, dy: p.dy, sy: p.sy, k: 1 };
+          this.draw(ctx, e, t);
+          e._colonne = null;
+          return;
+        }
+      }
+    }
+    const crispe = U.clamp(e._crispe ?? 0, 0, 1);
+    const tete = U.clamp(e._poseTete ?? (e._ecraseT > 0 ? 1 : 0), 0, 1);
+    if (crispe < 0.02 && tete < 0.02) { this.draw(ctx, e, t); return; }
+    if (sp) {
+      const nom = tete >= crispe ? 'crash' : 'cabre';
+      const k = Math.max(crispe, tete);
+      const pose = (sp.poses && sp.poses[nom]) || this.POSES[nom];
+      if (pose.rot) ctx.rotate(pose.rot * k);
+      e._colonne = { dx: pose.dx, dy: pose.dy, sy: pose.sy, k };
+      this.draw(ctx, e, t);
+      e._colonne = null;
+      return;
+    }
+    this.plier(ctx, e, t, -1.05 * crispe, tete);
+  },
+
+  // LE SMEAR — des TRAÎNÉES, pas des copies : chaque écho est plus reculé,
+  // plus étiré, plus aplati et plus transparent que le précédent, dessiné
+  // AVANT le corps (le corps fond en stries vers l'arrière — dessin de
+  // référence de l'auteur). Réservé aux scènes (`_smear`), jamais à la nage.
+  smear(ctx, e, t) {
+    const k = U.clamp(e._smear ?? 0, 0, 1);
+    if (k <= 0.06) return;
+    const ga = ctx.globalAlpha;
+    for (const [recul, etirX, alpha] of [[1.5, 1.55, 0.08], [0.95, 1.3, 0.16], [0.45, 1.12, 0.3]]) {
+      ctx.save();
+      ctx.translate(-e.size * recul * k, 0);
+      ctx.scale(1 + (etirX - 1) * k, 1 - 0.25 * k);
+      ctx.globalAlpha = ga * alpha * k;
+      this.draw(ctx, e, t);
+      ctx.restore();
+    }
+    ctx.globalAlpha = ga;
+  },
 
   // Fréquence de battement, en rad/s. Un gros animal bat lentement : c'est la
   // première chose qu'on lit dans une nage.

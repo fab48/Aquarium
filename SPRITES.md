@@ -849,6 +849,24 @@ le bouton se lisait comme mort. La pastille capture donc le pointeur à l'appui 
 ouvre au relâchement, avec **24 px de tolérance**. Mesuré : clic net → ouvre ;
 clic tremblé de 9 px → ouvre ; glissé de 72 px → n'ouvre pas.
 
+**Et surtout : la colonne ne se reconstruit pas pendant qu'une fenêtre de couleur
+est ouverte.** C'était le vrai défaut, celui qui restait après les deux
+précédents : le gestionnaire du remplissage appelait `panneau()` à **chaque**
+événement `input`, donc à chaque teinte survolée. Le panneau est reconstruit,
+le champ qui possède la fenêtre native est **remplacé**, et Chrome referme la
+fenêtre avec lui. On ne pouvait pas promener la souris sur les teintes pour voir
+ce que ça donne : le premier survol fermait tout.
+
+`panneau()` refuse donc de s'exécuter tant qu'un champ de couleur est ouvert, et
+rejoue le rendu mis en attente à la fermeture (`change`, qui marque la fermeture
+de la fenêtre). Mesuré, cinq teintes survolées d'affilée : le champ reste vivant
+à chaque fois, le dessin suit en direct, et la colonne n'est refaite qu'à la
+fermeture — sur le remplissage comme sur les couleurs du visage.
+
+C'est la règle générale, pas un rustine sur un champ : **aucun rendu de la
+colonne pendant une saisie qui vit dans un élément de la colonne**. Le nom de
+calque avait déjà le même problème, réglé de la même façon.
+
 Au-delà de la tolérance, c'est un **glisser-déposer** : on tire une pastille sur
 une autre pour y copier sa couleur — reprendre la teinte du corps pour le
 contour, ou celle du reflet pour un dégradé, se faisait en relevant le code

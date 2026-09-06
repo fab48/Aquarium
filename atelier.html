@@ -2126,7 +2126,15 @@ function cablerBarres() {
 // d'onglet, rien ne bouge, et le réglage qu'on cherche paraît avoir disparu —
 // c'est exactement ce qu'a donné une variable oubliée dans l'outil Appendices.
 // L'erreur s'affiche donc là où on regarde, pas seulement dans la barre d'état.
+// Le champ de couleur dont la fenêtre native est OUVERTE, s'il y en a un. Tant
+// qu'elle l'est, la colonne ne doit pas être reconstruite : le champ serait
+// remplacé et la fenêtre se refermerait au premier survol d'une teinte. Le rendu
+// est donc mis en attente et rejoué à la fermeture.
+let couleurOuverte = null, panneauEnAttente = false;
+
 function panneau() {
+  if (couleurOuverte && document.contains(couleurOuverte)) { panneauEnAttente = true; return; }
+  couleurOuverte = null;
   try { panneauInterne(); }
   catch (err) {
     $('#panneau').innerHTML = `<h2>Panneau en erreur</h2>
@@ -2361,7 +2369,19 @@ function cabler() {
   on('#sAmp', 'pointerdown', instantane);
   // La course se relit au relâchement, comme celle d'un appendice.
   ['#sAmp', '#sTB'].forEach(sel => on(sel, 'change', () => panneau()));
-  on('#cFill', 'input', e => { if (doc.shapes[formeSel]) { doc.shapes[formeSel].fill = e.target.value; marquer(); panneau(); } });
+  on('#cFill', 'input', e => {
+    if (!doc.shapes[formeSel]) return;
+    doc.shapes[formeSel].fill = e.target.value;
+    // PAS de `panneau()` ici : il reconstruirait la colonne, donc DÉTRUIRAIT le
+    // champ qui possède la fenêtre native ouverte — et Chrome la referme avec
+    // lui. C'était ça, « je clique une couleur et le sélecteur se ferme » : on
+    // ne pouvait pas promener la souris sur les teintes pour voir ce que ça
+    // donne. La pastille de la liste des formes est retouchée à la main.
+    const ligne = document.querySelector(`.forme[data-i="${formeSel}"] .pastel`);
+    if (ligne) ligne.style.background = e.target.value;
+    marquer();
+  });
+  on('#cFill', 'change', () => panneau());
   on('#bPlusPetit', 'click', () => echelleForme(0.95));
   on('#bPlusGrand', 'click', () => echelleForme(1 / 0.95));
   on('#bTourneG', 'click', () => tournerForme(-3));
@@ -2470,8 +2490,16 @@ function cabler() {
   const sh = () => doc.shapes[formeSel];
   // La pastille ouvre l'input caché. L'instantané est pris ICI plutôt qu'au
   // `pointerdown` de l'input : le geste commence à l'ouverture, pas à l'appui.
-  document.querySelectorAll('.couleur > input[type=color]').forEach(inp =>
-    inp.addEventListener('input', () => { inp.previousElementSibling.style.background = inp.value; }));
+  document.querySelectorAll('.couleur > input[type=color]').forEach(inp => {
+    inp.addEventListener('input', () => { inp.previousElementSibling.style.background = inp.value; });
+    // `change` marque la fermeture de la fenêtre native : c'est là, et seulement
+    // là, qu'un rendu mis en attente peut repartir.
+    inp.addEventListener('change', () => {
+      if (couleurOuverte !== inp) return;
+      couleurOuverte = null;
+      if (panneauEnAttente) { panneauEnAttente = false; panneau(); }
+    });
+  });
   // OUVRIR AU RELÂCHEMENT, MAIS SANS EXIGER UN CLIC PARFAIT. Passer par `click`
   // ne déclenchait rien dès que le curseur bougeait un peu entre l'appui et le
   // relâchement — c'est-à-dire la moitié des clics réels, et ça se lisait comme
@@ -2490,7 +2518,8 @@ function cabler() {
       pressee = null;
       if (bouge > 24) return;
       instantane();
-      b.nextElementSibling.click();
+      couleurOuverte = b.nextElementSibling;
+      couleurOuverte.click();
     });
     b.addEventListener('pointercancel', () => { pressee = null; });
 

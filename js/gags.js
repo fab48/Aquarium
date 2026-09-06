@@ -258,6 +258,7 @@ const GAGS = {
       // une flèche le temps du bond, c'est ce qui le fait lire comme un BOND.
       e._farceX = c.x; e._farceY = c.y;
       e._etire = Math.max(0, 0.8 - e._farceT * 1.6);
+      e._smear = e._etire;                        // le bond laisse sa traînée
       if (e._farceT < dt * 2) {
         Particles.shout(e.x + e.size * 0.5, e.y - e.size * 0.7, 'BOUH !', '#fff', e.size);
         Particles.burst(e.x, e.y, '#cfe9ff', 14);
@@ -434,10 +435,17 @@ const GAGS = {
   // seul cas où du texte est justifié : c'est un BRUIT, pas une réplique.
   // Émis une seule fois par accélération (`_vroum`), jamais par frame.
   thon(e, dt, t) {
+    // Le coup d'accélérateur se VOIT : il s'étire comme une flèche le temps du
+    // VROUUUM, puis reprend sa forme (le smear automatique fait la traînée).
+    if (e._vroumT > 0) {
+      e._vroumT -= dt;
+      e._etire = Math.max(0, e._vroumT / 0.55) * 0.7;
+    }
     e._vroumCd = (e._vroumCd ?? 0) - dt;
     const vite = e.speedNow > e.def.speed * 1.6;
     if (vite && !e._vroum && e._vroumCd <= 0) {
       e._vroum = true; e._vroumCd = Ecosystem.cadence(e, CADENCE.vroum);
+      e._vroumT = 0.55;
       Particles.shout(e.x, e.y - e.size * 1.2, 'VROUUUM', '#8fd8f5', e.size * 1.4);
       Particles.wake(e.x - e.size, e.y);
     }
@@ -505,6 +513,7 @@ const GAGS = {
     e.y = sol;
     e._coule = false; e._diveTargetY = null;
     e.state = 'wander'; e.stateTimer = 6;
+    e.choc(1, 'y');                              // BADA-BOUM : il s'aplatit en gelée
     e.emote('surprise', 2.4);
     Particles.sandCloud(e.x, sol + e.size * 0.4, true);
     Particles.comic(e.x, e.y - e.size, '❗');
@@ -552,12 +561,21 @@ const GAGS = {
     if (e._fuseeJet > 0) {
       e._fuseeJet -= dt;
       e._etire = Math.max(0, e._fuseeJet / 0.7) * 0.9;
+      e._smear = e._etire;                        // la traînée du décollage
     }
     if (e._fusee > 0) {
       e._fusee -= dt;
       const k = 1 - Math.max(0, e._fusee) / 0.9;    // 0 → 1 sur le décompte
       e._crispe = k * k;
+      // Le VRAI décompte : 3, 2, 1 — un chiffre tous les 0,3 s. C'est la seule
+      // scène du jeu dont la bulle EST le gag, elle a droit à ses trois temps.
+      const chiffre = Math.ceil(Math.max(0.01, e._fusee) / 0.3);
+      if (chiffre !== e._fuseeChiffre && chiffre >= 1 && chiffre <= 3) {
+        e._fuseeChiffre = chiffre;
+        Particles.comic(e.x, e.y - e.size * 1.2, String(chiffre));
+      }
       if (e._fusee <= 0) {
+        e._fuseeChiffre = null;
         e._crispe = 0; e._fuseeJet = 0.7;
         const dir = e._facing >= 0 ? -1 : 1;      // il part À RECULONS
         e.vx += dir * 260; e.vy -= 90;
@@ -570,9 +588,8 @@ const GAGS = {
     e._fuseeCd = (e._fuseeCd ?? Ecosystem.cadence(e, CADENCE.fusee)) - dt;
     if (e._fuseeCd > 0) return;
     e._fuseeCd = Ecosystem.cadence(e, CADENCE.fusee);
-    e._fusee = 0.9;                               // le décompte
+    e._fusee = 0.9;                               // le décompte, affiché 3-2-1
     e._freeze = 0.9;
-    if (Math.random() < 0.4) Particles.comic(e.x, e.y - e.size * 1.2, '3');
   },
 
   // LA MURÈNE BÂILLE. Un jaillissement pour rien, qui fait détaler tout le
@@ -985,7 +1002,9 @@ const GAGS = {
   },
 
   // LE MÉROU ASPIRE au lieu de mordre : il ouvre une bouche énorme et la proie
-  // est happée. Le « patatras », c'est qu'il se cogne partout en fonçant.
+  // est happée. Le « patatras », c'est qu'il se cogne partout en fonçant — et
+  // maintenant ça se VOIT : un coup d'aspirateur raté finit en écrasement de
+  // gelée, sonné une seconde, avec le nuage de sable s'il a labouré le fond.
   merou(e, dt, t) {
     e._aspire = U.lerp(e._aspire ?? 0, e.state === 'strike' ? 1 : 0, Math.min(1, dt * 10));
     if (e.state === 'strike' && !e._slurp) {
@@ -993,7 +1012,15 @@ const GAGS = {
       e.emote('eating', 1.4, false);
       Particles.bubble(e.x + e.size * 0.8, e.y, 5);
     }
-    if (e.state !== 'strike') e._slurp = false;
+    if (e.state !== 'strike' && e._slurp) {
+      e._slurp = false;
+      if (!(e._chew > 0)) {                        // raté : PATATRAS
+        e.choc(0.9);
+        e.emote('dizzy', 1.4, false);
+        const fy = World.floorY(e.x);
+        if (fy - e.y < e.size * 2.5) Particles.sandCloud(e.x, fy - 4, true);
+      }
+    }
   },
 
   // LES PAPILLONS VONT PAR DEUX. Chacun se choisit un compagnon et le suit
@@ -1192,7 +1219,10 @@ const GAGS = {
         // Le rivage et le bord du monde arrêtent le run : mieux vaut le finir
         // tôt que le finir dans le sable.
         const mur = e.x < e.limiteLarge() + 300 || e.x > CONFIG.WORLD_WIDTH - 300;
-        if (e._runT <= 0 || mur) { e._runPh = 'fin'; e._runT = 1.8; }
+        if (e._runT <= 0 || mur) {
+          e._runPh = 'fin'; e._runT = 1.8;
+          e.choc(0.45);                    // il pile — le freinage s'écrase aussi
+        }
         return;
       }
 
@@ -1319,9 +1349,13 @@ const GAGS = {
     const p = e.target;
     if (U.dist2(e.x, e.y, p.x, p.y) > (e.size + p.size) ** 2) return;
     if (p.dead) return;
-    // BOUM : le ballon crève. Le barracuda ne prend pas le malaise (perceBallon).
+    // BOUM : le ballon crève. Le barracuda ne prend pas le malaise (perceBallon)
+    // — mais il encaisse le CONTRECOUP : on ne crève pas un ballon à pleine
+    // vitesse sans s'écraser un peu le nez dessus.
     Particles.boom(p.x, p.y, p.size * 2);
     Particles.burst(p.x, p.y, '#ffe08a', 12);
+    e.choc(0.7);
+    e.vx *= -0.3; e.vy *= 0.5;                     // le souffle le repousse
     e.emote('smug', 2);
     p.dead = true;
     e._chew = 0.55; e._chewPrey = p.def;

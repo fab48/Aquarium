@@ -326,6 +326,8 @@ class Entity {
     if (this._vfxCd > 0) this._vfxCd -= dt;
     if (this._chew > 0) { this._chew -= dt; if (this._chew <= 0) this._chewPrey = null; }
     if (this._freeze > 0) this._freeze -= dt;
+    // La gelée d'un choc se calme toute seule (cf. `choc()` et `draw`)
+    if (this._chocT != null) { this._chocT += dt; if (this._chocT > 0.9) this._chocT = null; }
     if (this.exprTimer > 0) { this.exprTimer -= dt; if (this.exprTimer <= 0) this.expression = 'idle'; }
     if (this.wet > 0) this.wet = Math.max(0, this.wet - dt);
     if (this._lureT > 0) this._lureT -= dt;      // hypnotisée par une lampe (cf. pecheALaLampe)
@@ -1190,11 +1192,23 @@ class Entity {
     }
   }
 
+  // DISTORSION D'IMPACT — le code du cartoon : ce qui se cogne s'ÉCRASE, puis
+  // tremblote comme de la gelée en reprenant sa forme (écrasement, rebond
+  // légèrement étiré, oscillation amortie en une demi-seconde — cf. draw()).
+  // `axe` : 'x' = choc frontal (il se tasse en longueur), 'y' = à plat
+  // (chute sur le sable : il s'aplatit). Purement visuel, aucun effet de sim.
+  choc(force = 1, axe = 'x') {
+    this._chocT = 0;
+    this._chocAmp = U.clamp(force, 0, 1);
+    this._chocAxe = axe;
+  }
+
   // Choc : il part en vrille, voit des étoiles et reste sonné un moment.
   assomme(solY = null, vfx = true) {
     if (this.state === 'dizzy') return;
     this.state = 'dizzy'; this.stateTimer = U.rand(2.5, 4);
     this.target = null; this._faceAt = null;
+    this.choc(1, solY !== null ? 'y' : 'x');
     this.emote('dizzy', 3, vfx);
     this.vx *= -0.25; this.vy = -Math.abs(this.vy) * 0.3;
     // La gerbe suit le drapeau `vfx`, comme l'étoile de l'émotion. Elle partait
@@ -1500,6 +1514,9 @@ class Entity {
           this._airborne = false;
           this.jumpState = 'water';
           Particles.splash(this.x);
+          // Le VENTRE À PLAT : il s'aplatit en gelée à l'impact, d'autant plus
+          // fort qu'il retombe vite. Silencieux, donc à chaque fois.
+          this.choc(U.clamp(this.vy / 380, 0.4, 1), 'y');
           if (Math.random() < 1 / 3) this.setExpression('dizzy', 1); // plat retentissant, un coup sur trois
         }
         return;
@@ -1670,6 +1687,7 @@ class Entity {
         // Contact franc : le choc se voit et s'entend (une fois, pas à chaque frame)
         if (push > 0.55 && (this._bumpCd ?? 0) <= 0) {
           this._bumpCd = 3;
+          this.choc(0.7);                     // l'écrasement de gelée (chacun le sien)
           this.emote('surprise', 1.6);
           Particles.burst((this.x + o.x) / 2, (this.y + o.y) / 2, '#dff0ff', 8);
         }
@@ -2244,8 +2262,14 @@ class Entity {
     // charge ou une fuite partout, sans que chaque gag ait à le demander.
     // Lissé (l'allure fluctue à chaque frame), et lui ne raidit PAS la queue :
     // un sprinteur ordinaire bat FORT, seule la flèche d'un gag glisse figée.
-    const cibleNage = U.clamp((FishBody.allure(this) - 1.3) / 0.7, 0, 1) * 0.11;
+    const allure = FishBody.allure(this);
+    const cibleNage = U.clamp((allure - 1.3) / 0.7, 0, 1) * 0.11;
     this._etireNage = U.lerp(this._etireNage ?? 0, cibleNage, 0.08);
+    // Le smear automatique suit la même logique, avec un seuil plus haut : il
+    // ne se déclenche qu'au sprint FRANC (fuite, chasse), jamais à la croisière
+    // (~1, marge large), et fond en douceur. Mesuré : une fuite en pleine
+    // accélération tient vers 1,55 — un seuil à 1,7 la ratait.
+    this._smearNage = U.lerp(this._smearNage ?? 0, U.clamp((allure - 1.5) / 0.45, 0, 1), 0.15);
     const etire = Math.max(U.clamp(this._etire ?? 0, 0, 1), this._etireNage);
     if (crispe > 0.01) {
       ctx.translate(Math.sin(t * 44 + this.phase) * crispe * this.size * 0.05, 0);
@@ -2253,9 +2277,37 @@ class Entity {
       ctx.scale(1 - crispe * 0.26, 1 + crispe * 0.32);  // le ressort comprimé
     }
     if (etire > 0.01) ctx.scale(1 + etire * 0.4, 1 - etire * 0.24);
+    // La DISTORSION D'IMPACT (`choc()`) : l'écrasement élastique de la gelée.
+    // Il s'écrase au contact, rebondit un peu étiré, et l'oscillation s'amortit
+    // en une demi-seconde. Le cosinus amorti fait les deux temps d'un coup.
+    if (this._chocT != null) {
+      const k = (this._chocAmp ?? 1) * Math.exp(-5 * this._chocT) * Math.cos(11 * this._chocT);
+      if (this._chocAxe === 'y') ctx.scale(1 + k * 0.35, 1 - k * 0.42);
+      else ctx.scale(1 - k * 0.42, 1 + k * 0.35);
+    }
     // Le dauphin se tord de rire : il roule sur lui-même
     if (this._farceRoll) ctx.rotate(Math.sin(this._farceRoll) * 0.5);
 
+    // LE SMEAR — le dessin animé étire un mouvement rapide en échos qui
+    // traînent derrière. Deux copies fantômes de la silhouette, décalées vers
+    // l'ARRIÈRE dans le repère du corps (donc le long du mouvement), de plus en
+    // plus transparentes, dessinées AVANT le corps. Seuls les vrais sprints en
+    // ont (allure ≥ 1,7, lissée — jamais à la croisière) ou une scène qui le
+    // demande (`_smear`). Redessiner la silhouette est bon marché : le coût du
+    // rendu est dans le décor, pas dans les créatures (PERFORMANCE.md §3), et
+    // il n'y a jamais qu'une poignée de sprinteurs à la fois.
+    const smear = Math.max(U.clamp(this._smear ?? 0, 0, 1), this._smearNage ?? 0);
+    if (smear > 0.06) {
+      const ga = ctx.globalAlpha;
+      for (const [recul, alpha] of [[1.05, 0.12], [0.55, 0.25]]) {
+        ctx.save();
+        ctx.translate(-this.size * recul * smear, 0);
+        ctx.globalAlpha = ga * alpha * smear;
+        FishBody.draw(ctx, this, t);
+        ctx.restore();
+      }
+      ctx.globalAlpha = ga;
+    }
     FishBody.draw(ctx, this, t);
     ctx.restore();
   }

@@ -383,7 +383,13 @@ function calquesDe(f) {
   if (f.calques && f.calques.length) return f.calques;
   return f.layerIndex != null ? [f.layerIndex] : [];
 }
-function TYPE(f) { return f.type === 'tentacule' ? 'tentacule' : 'nageoire'; }
+// Le type d'un appendice, normalisé. Tout ce qui n'est pas reconnu retombe sur
+// `nageoire` : un fichier écrit par une version plus récente ne doit pas casser
+// l'affichage. Ajouter un type se fait ICI — l'oublier laisse le panneau croire
+// à une nageoire alors que le rendu, lui, obéit déjà.
+function TYPE(f) {
+  return (f.type === 'tentacule' || f.type === 'pince') ? f.type : 'nageoire';
+}
 
 // NOM D'UN CALQUE. « forme 7 » ne dit rien : sur un dessin à vingt pièces —
 // c'est le cas du Poisson Confetti — on cherche la bonne en les allumant une par
@@ -1498,7 +1504,7 @@ function sectionAppendices() {
   let h = A(`Nageoire, patte, antenne, bras de poulpe. <kbd>clic</kbd> dans le vide en
       pose un sur le calque sélectionné.`);
   if (!doc.fins.length) return h + '<p class="aide"><i>aucun appendice</i></p>';
-  const f = doc.fins[finSel], tent = TYPE(f) === 'tentacule';
+  const f = doc.fins[finSel], t = TYPE(f), tent = t === 'tentacule', axe = t !== 'nageoire';
   h += `<select id="selFin">${doc.fins.map((o, i) => {
       const cl = calquesDe(o);
       return `<option value="${i}" ${i === finSel ? 'selected' : ''}>${i + 1}. ${TYPE(o)}`
@@ -2112,7 +2118,25 @@ function cablerBarres() {
   });
 }
 
+// UNE ERREUR DANS UNE SECTION NE DOIT PAS FIGER LA COLONNE. `panneau()` construit
+// tout son HTML avant de l'écrire : si une section lève, l'écriture n'a jamais
+// lieu et la colonne garde SILENCIEUSEMENT son contenu précédent. On change
+// d'onglet, rien ne bouge, et le réglage qu'on cherche paraît avoir disparu —
+// c'est exactement ce qu'a donné une variable oubliée dans l'outil Appendices.
+// L'erreur s'affiche donc là où on regarde, pas seulement dans la barre d'état.
 function panneau() {
+  try { panneauInterne(); }
+  catch (err) {
+    $('#panneau').innerHTML = `<h2>Panneau en erreur</h2>
+      <p class="aide">L'outil <b>${(OUTILS[outil] || {}).nom || outil}</b> n'a pas pu
+      s'afficher. Les autres outils fonctionnent toujours.</p>
+      <pre style="white-space:pre-wrap;font:11px monospace;color:#b3261e">${
+        String(err && err.stack || err).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</pre>`;
+    dire('panneau en erreur : ' + (err && err.message || err), 'ko');
+  }
+}
+
+function panneauInterne() {
   const p = $('#panneau');
   if (!espece) { p.innerHTML = '<p class="aide">Choisis une espèce dans la liste.</p>'; barre(); return; }
   // Un document rechargé peut avoir moins de formes : une case cochée sur un
@@ -2254,9 +2278,14 @@ function cabler() {
     // de longueur, degrés d'ouverture) : garder l'ancienne valeur donnait une
     // patte qui décollait du corps au changement de type.
     f.amp = f.type === 'tentacule' ? 25 : (f.type === 'pince' ? 45 : 20);
-    if (f.type === 'tentacule' && f.ang == null) f.ang = 180;
-    // Une pince s'ouvre vers l'AVANT par défaut : c'est là que regarde la bête.
-    if (f.type === 'pince' && f.ang == null) f.ang = 0;
+    // L'ANGLE aussi change de sens d'un type à l'autre : pour un tentacule c'est
+    // l'axe le long duquel l'onde court (vers la queue par défaut), pour une
+    // pince l'axe de la charnière (vers l'avant, là où regarde la bête). Garder
+    // la valeur précédente donnait une pince qui s'ouvre à l'envers, héritée du
+    // tentacule qu'elle venait de remplacer.
+    if (f.type === 'tentacule') f.ang = 180;
+    else if (f.type === 'pince') f.ang = 0;
+    else delete f.ang;
     marquer(); panneau();
   }));
   document.querySelectorAll('[data-cal]').forEach(c => c.addEventListener('change', () => {

@@ -833,15 +833,28 @@ remplace (le repère pour juger d'une taille — surtout sur un dessin importé 
 qui force `Main.nightAmount()` à 1 : le faux `Main` de la page répond « plein
 jour », donc sans lui une luminescence ne se voit **jamais** dans l'atelier.
 
-### Un sélecteur de couleur s'ouvre au RELÂCHEMENT
+### Un sélecteur de couleur s'ouvre au RELÂCHEMENT — mais sans exiger un clic parfait
 
 La fenêtre native d'un `<input type=color>` s'ouvre dès l'**enfoncement** du
 bouton : un clic parti de travers ne peut plus être annulé, et ça se paye vingt
 fois par séance. Chaque champ de couleur est donc une **pastille** — un vrai
-bouton, dont le `click` n'arrive qu'au relâchement — qui déclenche l'input natif,
-resté dans le DOM mais invisible. Les identifiants et les gestionnaires ne
-changent pas ; seul ce qui déclenche l'ouverture change. L'instantané
-d'annulation est pris à l'ouverture, plus à l'appui.
+bouton — qui déclenche l'input natif, resté dans le DOM mais invisible. Les
+identifiants et les gestionnaires ne changent pas ; seul ce qui déclenche
+l'ouverture change, et l'instantané d'annulation est pris à l'ouverture.
+
+Premier essai raté, à ne pas refaire : passer par `click`. Un `click` n'existe
+que si l'appui **et** le relâchement tombent sur le bouton — donc un clic un peu
+tremblé, c'est-à-dire la moitié des clics réels, ne déclenchait plus **rien**, et
+le bouton se lisait comme mort. La pastille capture donc le pointeur à l'appui et
+ouvre au relâchement, avec **24 px de tolérance**. Mesuré : clic net → ouvre ;
+clic tremblé de 9 px → ouvre ; glissé de 72 px → n'ouvre pas.
+
+Au-delà de la tolérance, c'est un **glisser-déposer** : on tire une pastille sur
+une autre pour y copier sa couleur — reprendre la teinte du corps pour le
+contour, ou celle du reflet pour un dégradé, se faisait en relevant le code
+hexadécimal à la main. La cible se souligne en pointillés pendant le survol, et
+le dépôt rejoue les événements `input`/`change` du champ visé plutôt que de
+dupliquer la logique de chacun : vérifié, `shapes[0].fill` suit le dépôt.
 
 ### Le panneau, rangé
 

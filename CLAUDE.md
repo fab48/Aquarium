@@ -248,6 +248,39 @@ la croisière allonge la silhouette jusqu'à 11 % (lissé — l'allure fluctue �
 chaque frame). Lui ne raidit **pas** la queue : un sprinteur ordinaire bat
 FORT, seule la flèche d'un gag glisse figée.
 
+Deux autres codes du cartoon complètent la panoplie, tous deux mesurés :
+
+- **La distorsion d'impact** (`Entity.choc(force, axe)`) — ce qui se cogne
+  s'ÉCRASE puis tremblote comme de la gelée (cosinus amorti : écrasement,
+  rebond un peu étiré, calme en une demi-seconde). Axe `'x'` = choc frontal,
+  `'y'` = à plat. Purement visuel, aucun effet de simulation. Branchée sur
+  `assomme()` (le Thon lancé qui percute un gros placide s'écrase enfin), le
+  contact franc des colosses, la retombée des sauteurs (le VENTRE À PLAT,
+  proportionnel à la vitesse de chute), le Bada-boum du Poisson-lune, le raté
+  du Mérou (le « patatras » ne se voyait jamais), le ballon crevé du Barracuda
+  (contrecoup + recul) et le freinage de l'Espadon en fin de run. Mesuré sur
+  50 s : ~134 chocs/min dont 97 sont les ventre-plats des sauteurs —
+  **silencieux et collés à un splash qui existait déjà**, donc dans la règle
+  « ce qui foisonne doit être silencieux » ; le reste est rare.
+- **Le smear** — le dessin animé étire un mouvement rapide en échos qui
+  traînent derrière : deux copies fantômes de la silhouette, décalées vers
+  l'arrière dans le repère du corps, alpha 0,25 puis 0,12, dessinées AVANT le
+  corps. Automatique au sprint franc (allure ≥ 1,5, lissée — une fuite en
+  pleine accélération tient vers 1,55, un seuil à 1,7 la ratait ; la croisière
+  est à ~1, marge large), ou forcé par une scène (`_smear` : jet du Calamar,
+  bond du Dauphin). Contrôle à l'encre : largeur 71 → 101 px sur un thon de 28.
+  Le coût est borné : ~42 sprinteurs au-dessus du seuil à tout instant sur 512
+  entités, mais seuls ceux À L'ÉCRAN redessinent (2 corps de plus chacun), et
+  le rendu des créatures est la partie déjà bon marché de la frame.
+
+La passe « poisson par poisson, en commençant par les rapides » a aussi rendu
+chaque scène plus rigolote avec ces briques : le **Thon** s'étire comme une
+flèche le temps de son VROUUUM ; le **Calamar Fusée** affiche un VRAI décompte
+3-2-1 (la seule scène dont la bulle EST le gag : elle a droit à ses trois
+temps) ; le **Mérou** finit ses aspirations ratées en écrasement de gelée,
+sonné, nuage de sable s'il a labouré le fond ; le **Barracuda** encaisse le
+contrecoup du ballon qu'il crève ; l'**Espadon** pile en fin de run.
+
 Candidats relevés à l'audit mais volontairement pas faits : les embusqués
 (murène, rascasse, poisson-tapis) frappent sans détente préalable, mais leur
 strike est piloté par la simulation — y insérer un délai d'anticipation, c'est
@@ -260,7 +293,10 @@ capture déterministe : pousser `Main.fpsCap` à ~0 (toutes les frames rAF sont
 sautées, la boucle ne fait que se replanifier), avancer et RENDRE à la main
 (sim + `Background/Ecosystem/Particles.draw`, sans replanifier de rAF — en
 appeler un soi-même démultiplie les boucles pour toujours), photographier, puis
-restaurer `fpsCap`.
+restaurer `fpsCap`. Second piège du même tonneau : **fronter le panneau peut
+redimensionner le canvas, ce qui l'EFFACE** — la photo montre alors le fond de
+page nuit, pas le rendu, et on cherche un bug de nuit qui n'existe pas. Prendre
+une première capture à blanc, re-rendre à la main, capturer ensuite.
 
 Garde-fou : le total de bulles était monté à ~930/min et saturait l'écran. Cible : **~250/min** pour tout l'aquarium.
 

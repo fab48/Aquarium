@@ -592,7 +592,8 @@ const Ecosystem = {
     const yMax = def.aerial ? Infinity : CONFIG.SURFACE_Y + def.depthBand[1] + M;
     // Espèces devenues trop rares : on les laisse tranquilles le temps qu'elles
     // remontent (report de prédation, cf. refugeFloor).
-    const huntable = def.prey.filter(p => (this.counts[p] || 0) > this.refugeFloor(p));
+    const huntable = def.prey.filter(p =>
+      (this.counts[p] || 0) > this.refugeFloor(p) && !this.harcelee(p));
     if (!huntable.length) return null;
 
     // Report sur l'espèce ABONDANTE : une proie qui prolifère (parce que le
@@ -954,10 +955,12 @@ const Ecosystem = {
     // proie doit repérer un gros prédateur lancé sur elle. Ils sont une
     // poignée, un balayage complet coûte moins qu'une recherche de voisinage.
     this.chasseurs = [];
+    this._enFuite = {};
     const cs = this.GRID;
     for (const e of this.entities) {
       if (e.dead) continue;
       this.counts[e.speciesId] = (this.counts[e.speciesId] || 0) + 1;
+      if (e.state === 'flee') this._enFuite[e.speciesId] = (this._enFuite[e.speciesId] || 0) + 1;
       // Hors champ ET loin : elle passera au pas grossier (cf. `update`). Les
       // colosses et les chasseurs lancés gardent le pas fin.
       e._loin = !Camera.isVisible(e.x, e.y, 900)
@@ -999,6 +1002,45 @@ const Ecosystem = {
     return Math.min(Math.max(4, Math.round(cap * 0.35)), Math.max(1, cap - 2));
   },
 
+  // ON NE HARCÈLE PAS UNE ESPÈCE QUI PASSE SA VIE À FUIR.
+  //
+  // Le plancher de population (`refugeFloor`) protège une espèce qui s'effondre
+  // en NOMBRE. Il ne dit rien d'une espèce nombreuse mais épuisée : mesuré, le
+  // Maquereau Métronome passait **61 % de son temps en fuite** — contre 15 % à
+  // errer — et déclenchait `scared` 254 fois par heure. Suivaient la Dorade
+  // (31 %), le Poisson Volant (31 %), la Crevette Sauteuse (24 %). Un poisson
+  // qui fuit ne fait rien d'autre : il ne mange pas, ne se reproduit pas, et
+  // n'a plus d'autre expression que la peur.
+  //
+  // La part de fuite est donc relevée par espèce à chaque frame (`buildGrid`),
+  // lissée pour ne pas clignoter, et au-delà du seuil l'espèce est retirée des
+  // menus le temps qu'elle souffle. C'est le pendant « stress » du plancher de
+  // population, et le même mécanisme : le prédateur se reporte ailleurs.
+  // Hystérésis : on lâche l'espèce à 50 % de fuite, on ne la rechasse qu'une
+  // fois retombée à 35 %. Sans elle, le répit la fait cesser de fuir, donc la
+  // remet aussitôt au menu, donc elle refuit — et les prédateurs changent de
+  // cible en boucle.
+  HARCELEMENT: 0.5, REPIT: 0.35,
+  fuyards: {}, _repit: {},
+  harcelee(speciesId) {
+    const f = this.fuyards[speciesId] ?? 0;
+    if (this._repit[speciesId]) { if (f < this.REPIT) this._repit[speciesId] = false; }
+    else if (f > this.HARCELEMENT) this._repit[speciesId] = true;
+    return !!this._repit[speciesId];
+  },
+
+  // Part de l'espèce en fuite, lissée sur ~4 s. Sans lissage, un banc qui
+  // détale une seconde suffirait à faire disparaître l'espèce des menus, et les
+  // prédateurs changeraient de cible à chaque frame.
+  mesureFuite(dt) {
+    const k = Math.min(1, dt * 0.25);
+    for (const id in this.counts) {
+      const n = this.counts[id] || 0;
+      const part = n ? (this._enFuite[id] || 0) / n : 0;
+      this.fuyards[id] = U.lerp(this.fuyards[id] ?? part, part, k);
+    }
+  },
+
   // Toutes ses proies sont-elles sous leur plancher ? Alors il n'a RIEN à
   // chasser. Le report de prédation, censé éviter les extinctions en cascade,
   // provoque alors exactement l'inverse en haut de la chaîne : mesuré sur
@@ -1006,14 +1048,29 @@ const Ecosystem = {
   // avec 10 000 recherches de proie infructueuses.
   disette(def) {
     if (!def.prey || !def.prey.length) return false;
-    return def.prey.every(p => (this.counts[p] || 0) <= this.refugeFloor(p));
+    return def.prey.every(p => (this.counts[p] || 0) <= this.refugeFloor(p) || this.harcelee(p));
   },
 
   // Une espèce migre-t-elle vers sa frayère ? Les lentes et les immobiles non :
   // une méduse qui dérive à 12 px/s n'atteindrait jamais une frayère lointaine.
   // Lu par `nurseryPoint` ET par la ponte en diffusion (`Entity.tryMate`), pour
   // que les deux ne puissent pas diverger.
+  // Qui se déplace vers sa frayère pour pondre — et qui pond sur place.
+  //
+  // Les LENTS en étaient déjà exclus : une méduse à 12 px/s n'atteindrait jamais
+  // une frayère lointaine et cesserait de se reproduire.
+  //
+  // Les AÉRIENS et les COLOSSES le sont désormais aussi, et pour la raison
+  // inverse : ils y arrivent trop bien. Mesuré, part du temps passée en
+  // migration de ponte et en parade — **Baleine Gros Dodo 95 %** (54 % de
+  // parade, 41 % de migration, 3 % à errer seulement), Pélican 56 %, Goéland
+  // 48 %, Cormoran 43 %, Fou Moustachu 41 %. Leur frayère est à l'autre bout du
+  // monde de leur zone de vie — les oiseaux frayent sur la plage et chassent au
+  // large — donc ils font l'aller-retour en permanence et on ne les voit jamais
+  // faire ce pour quoi ils existent. Ils pondent maintenant en diffusion, là où
+  // ils sont, comme les lents.
   migre(def) {
+    if (def.aerial || def.size >= 70) return false;
     return def.speed >= 45 && !['drift', 'anchored', 'crawl', 'fixed'].includes(def.movement);
   },
 
@@ -1114,6 +1171,7 @@ const Ecosystem = {
   _tick: 0,
   update(dt, t) {
     this.buildGrid();
+    this.mesureFuite(dt);         // qui est harcelé, avant qu'on choisisse les proies
     this.humeurBancs(dt, t);      // le banc décide AVANT que ses membres pensent
     this._tick = (this._tick + 1) % 3;
     const tick = this._tick;

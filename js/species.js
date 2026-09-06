@@ -162,7 +162,13 @@ const SPECIES = {
   gros_dodo: {
     name: 'Baleine Gros Dodo', realName: 'Baleine à fanons', trophic: 3, movement: 'free',
     nursery: 'shallow',
-    depthBand: [750, 2600], size: 190, speed: 45, sprintSpeed: 110,   // vraie masse de baleine
+    // ELLE VA PARTOUT — sauf près de la plage. Sa bande disait [750, 2600] et
+    // elle vivait mesurée entre 69 et 1 045 px de profondeur : la contrainte ne
+    // servait à rien qu'à la mettre en faute. Ce qui compte pour un colosse
+    // n'est pas sa strate, c'est le RIVAGE : le tirant d'eau (`size * 2.2`), la
+    // barrière dure de `limiteLarge()` et les 900 px d'eau exigés d'un colosse
+    // l'en tiennent à l'écart. La bande couvre donc toute la colonne d'eau.
+    depthBand: [140, 3200], size: 190, speed: 45, sprintSpeed: 110,   // vraie masse de baleine
     schooling: false, groupSize: [1, 2], popCap: 3, metabolism: 0.5,
     // Elle ne chasse personne : c'est une filtreuse de PLANCTON. Elle broute la
     // colonne d'eau bouche ouverte (grazes) et souffle en surface (breathes).

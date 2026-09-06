@@ -1334,7 +1334,7 @@ class Entity {
         // récif fixe s'y met), un cœur à chaque fois noyait l'écran.
         Particles.sparkles(this.x, this.y - this.size, 3);
         Ecosystem.layEgg(this, this.x + U.rand(-15, 15), this.y - 6);
-        this.wellFed = 0; this._mateCd = this.def.fertile ? 12 : 30; this._broadcastTried = false;
+        this.wellFed = 0; this._mateCd = this.repos(); this._broadcastTried = false;
         return;
       }
     }
@@ -1386,9 +1386,21 @@ class Entity {
     }
   }
 
+  // Délai entre deux pontes. Un ANIMAL RARE ET QUI VIT LONGTEMPS n'a pas besoin
+  // de se reproduire souvent : la Baleine vit 2 000 à 3 000 s et son plafond est
+  // de trois individus, les oiseaux vivent 550 à 850 s à quatre ou six. Avec le
+  // délai commun ils passaient leur vie en parade — 54 % du temps pour la
+  // Baleine — au lieu de nager, de chasser et de plonger. Le repos suit donc la
+  // longévité : plus on vit vieux, plus on espace.
+  repos() {
+    const base = this.def.fertile ? 10 : 24;
+    const vieux = U.clamp(this.maxAge / 420, 1, 7);   // 1 pour un confetti, 6 pour une baleine
+    return base * vieux * U.rand(0.8, 1.25);
+  }
+
   endMating() {
     this.wellFed = 0;
-    this._mateCd = this.def.fertile ? 8 : 18;          // pas de ponte en rafale
+    this._mateCd = this.repos() * 0.6;                 // pas de ponte en rafale
     this._matingWith = null;
     this._faceAt = null;
   }

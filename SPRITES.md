@@ -131,11 +131,15 @@ du design, elle, est **référencée par son chemin** (§1 bis).
 
 ---
 
-## 1 bis. La planche du design, posée toute seule
+## 1 bis. Les planches du design, posées toutes seules
 
-`Assets/Concepts/Design Final.png` réunit les **30 créatures dessinées** du
-projet, en cinq colonnes de six, chacune avec sa légende. `decoupe_planche.py`
-en tire **une image par espèce** :
+Deux planches couvrent maintenant **les 51 espèces** — `Design Final.png`, cinq
+colonnes de six pour les 30 premières, et `Design Final page2.png`, cinq colonnes
+de cinq pour les 21 qui n'avaient encore aucun dessin de référence. Chacune
+déclare dans `decoupe_planche.py` sa grille, l'ordre de ses cases et le sens de
+ses dessins (`PLANCHES`) ; les deux alimentent le même dossier et le même index,
+car l'atelier ne connaît que `Assets/Reperes/<espèce>.png` et n'a pas à savoir de
+quelle planche elle sort. `decoupe_planche.py` en tire **une image par espèce** :
 
 ```bash
 python decoupe_planche.py          # -> Assets/Reperes/<espèce>.png + index.json
@@ -159,16 +163,13 @@ vignette :
 | encre totale | 398 572 | 412 378 (+3,5 %) |
 
 Les plus grosses reprises : perroquet **+21 %**, orque **+18 %**, raie +13 %,
-pélican +9 %, calamar géant +10 %. Les deux qui restent sont la **murène** et la
-**raie**, voisines de case et qui se chevauchent sur la planche : chacune s'arrête
-là où l'autre commence. C'est une limite du dessin d'origine, pas du découpage —
-élargir davantage ne fait qu'empirer (mesuré : 71 px à 25 %, 78 à 30 %, 114 à
-35 %).
+pélican +9 %, calamar géant +10 %. Sur les 21 vignettes de la seconde planche,
+**0 pixel au bord** : aucune n'est coupée.
 
 Ce n'est pas non plus une grille aveugle. Dans chaque case, on garde la **plus
 grosse composante connexe** et ce qui la touche : ça écarte d'un coup la légende et le
 bout de dessin de la case d'à côté, qui débordent tous les deux des lignes de la
-grille. Trois règles s'y sont ajoutées, chacune pour un cas rencontré :
+grille. Quatre règles s'y sont ajoutées, chacune pour un cas rencontré :
 
 - **Les glyphes se retirent en premier.** La légende de l'étoile touchait un de
   ses bras : dilatée, elle entrait dans la composante du dessin et plus aucun
@@ -177,13 +178,31 @@ grille. Trois règles s'y sont ajoutées, chacune pour un cas rencontré :
 - **Un ventre blanc n'est pas du fond.** Le détourage part du blanc de la
   planche ; le pélican et la baleine, presque blancs, ressortaient troués. Le
   masque est rebouché par l'intérieur du contour.
+- **Une VOISINE n'est pas un accessoire.** La marge de 25 % fait que chaque case
+  voit le corps de sa voisine, et la règle « ce qui touche le corps, on le
+  garde » l'attrapait : le Poisson Dentiste emportait le Poisson Police, la Raie
+  emportait la tête de la Murène. Aucun seuil d'aire ne tranche — un vrai
+  morceau de dessin détaché pèse jusqu'à **12,9 %** du corps, une voisine
+  commençait à **15,8 %**. Le critère exact est ailleurs : une composante qui
+  **recouvre le corps CHOISI par une autre case EST cette créature-là**. Le
+  découpage se fait donc en deux passes — d'abord le corps de chaque case, puis
+  une carte « quel pixel appartient à qui ». Mesuré sur les deux planches :
+  **100,0 %** de recouvrement pour les quatre intruses, **0,0 %** pour les
+  quinze vrais accessoires (bulles, notes de musique, étincelles, cœurs). C'est
+  ce qui a réparé la murène et la raie, longtemps données pour une limite du
+  dessin d'origine : elles ne se chevauchent pas, elles se voyaient.
 - **Le sens du dessin vient d'une table, pas d'une détection.** Le jeu dessine
   tout vers la **droite** (`Entity.orientation` s'occupe du demi-tour), or 17 des
   30 vignettes regardent à gauche : elles servaient de patron à l'envers. Lire le
   sens sur la position de l'œil se trompait **8 fois sur 30** — un ventre blanc
-  passe pour un œil, une créature vue de face n'a pas de sens. Sur un asset figé
-  de trente images, la table (`VERS_LA_GAUCHE`) est plus sûre et se vérifie d'un
-  coup d'œil. Le retournement est **cuit dans le PNG**, pas laissé à l'outil.
+  passe pour un œil, une créature vue de face n'a pas de sens. Sur un asset figé,
+  la table (`gauche`, une par planche) est plus sûre et se vérifie d'un coup
+  d'œil : **32 des 51** vignettes sont retournées. Le retournement est **cuit
+  dans le PNG**, pas laissé à l'outil. Se relisent sur une planche-contact des
+  vignettes découpées, pas sur la planche d'origine — six créatures de la
+  seconde page regardent déjà à droite (corail, cormoran, anguille-jardinière,
+  bernard-l'ermite, oursin, krill) et les retourner les aurait mises à
+  l'envers.
 
 Dans l'atelier, la planche **se pose toute seule** : à l'ouverture d'une espèce,
 sur « Nouveau dessin », sur « Partir de la silhouette » et sur un import. Sur un
@@ -219,8 +238,16 @@ l'enregistre.
 
 | Barre | Ce qu'on y trouve |
 |---|---|
-| 1 · outil | les sept outils · 💡 aide · **▶ Animer · ⛶ Recadrer · 👻 Silhouette · 🌙 Nuit** |
+| 1 · outil | les sept outils · 💡 aide · **▶ Animer · ⛶ Recadrer** · 🎬 les vues |
 | 2 · document | 🐠 le jeu · Nouveau / silhouette du jeu / import SVG / import JSON · **le calque de repérage** (🖼 · dessous‑dessus · opacité) · nom du fichier · **💾 Enregistrer · Activer · Procédural** |
+
+Deux boutons en sont partis. **🌙 Nuit** ne servait qu'aux six espèces
+luminescentes et la luminescence s'affiche maintenant en permanence.
+**👻 Silhouette** superposait en gris la silhouette procédurale que le dessin
+remplace, pour juger de sa taille d'un coup d'œil : c'était le seul étalon
+disponible tant que les espèces n'avaient pas toutes leur dessin de référence.
+Elles l'ont, et il fait le travail bien mieux — il se pose tout seul, il est
+déjà à l'échelle, et c'est lui qu'on décalque.
 
 *Animer*, *Recadrer* et *Enregistrer* étaient enterrés dans des sections
 repliables du panneau, entre deux réglages de calque. Ils ne concernent pourtant

@@ -3,8 +3,9 @@
 Écosystème aquatique scrollable, contemplatif et comique. Le design complet est
 dans `aquarium_vivant_game_design.docx` (chaîne alimentaire, scroll bi-axial,
 cycle de vie, nourriture favorite). Le roster en compte aujourd'hui **51**, le
-GDD en décrivait 24 et la planche de design **30** (`Assets/Concepts/Design
-Final.png`, découpée en repères par `decoupe_planche.py`).
+GDD en décrivait 24, et les **deux planches de design** les couvrent toutes les
+51 (`Assets/Concepts/Design Final.png` puis `… page2.png`, découpées en repères
+par `decoupe_planche.py`).
 
 ## Stack
 
@@ -1661,17 +1662,33 @@ sable 12 % → 4,3 %.
   doit passer par `decalerCalques()` comme toute autre liste d'indices ; et le
   rail range les 51 espèces **par état** d'avancement, pas dans l'ordre de
   `SPECIES`, avec un filtre — la rubrique « sans dessin de référence » est la
-  liste, tenue à jour toute seule, de ce qu'il reste à dessiner.
-- `decoupe_planche.py` — découpe `Assets/Concepts/Design Final.png` (les 30
-  créatures dessinées) en **un repère par espèce** dans `Assets/Reperes/`.
+  liste, tenue à jour toute seule, de ce qu'il reste à dessiner (elle est vide
+  depuis la seconde planche : les 51 en ont un).
+- `decoupe_planche.py` — découpe les **deux planches** (`Assets/Concepts/Design
+  Final.png`, 5×6, puis `… page2.png`, 5×5) en **un repère par espèce** dans
+  `Assets/Reperes/`. Les **51 espèces** en ont un ; la rubrique « sans dessin de
+  référence » du rail de l'atelier est donc vide. Chaque planche déclare sa
+  grille, l'ordre de ses cases et le sens de ses dessins (`PLANCHES`) — l'atelier
+  ne connaît que `Assets/Reperes/<espèce>.png`.
   La grille est un **repérage, pas une frontière** : les créatures débordent de
   leur case, et découper au ras en coupait 17 sur 30 (le perroquet perdait 96 px
   de bec). Chaque vignette est taillée dans une case **élargie de 25 %**, le
-  choix de la bonne composante restant jugé sur la case nominale — sinon on
-  attrape la voisine. Mesuré : 17/30 coupées → **2/30**, 621 px au bord → 71.
-  L'atelier les pose tout seuls en calque de repérage. Les 17 vignettes qui
-  regardent à gauche sont **retournées à la découpe** : le jeu dessine tout
-  vers la droite, une planche à l'envers est un patron à l'envers.
+  choix de la bonne composante restant jugé sur la case nominale. Mesuré :
+  17/30 coupées → **2/30**, 621 px au bord → 71, et **0 px au bord** sur les 21
+  de la seconde planche.
+  **Mais alors chaque case VOIT sa voisine**, et « ce qui touche le corps, on le
+  garde » l'attrapait — le Dentiste emportait le Police, la Raie la tête de la
+  Murène. Aucun seuil d'aire ne tranche (un vrai morceau détaché pèse jusqu'à
+  12,9 % du corps, une voisine commençait à 15,8 %) : le critère exact est
+  qu'une composante qui **recouvre le corps choisi par une AUTRE case est cette
+  créature-là**. D'où un découpage en deux passes et une carte « quel pixel
+  appartient à qui » — 100,0 % de recouvrement pour les quatre intruses, 0,0 %
+  pour les quinze vrais accessoires.
+  L'atelier les pose tout seuls en calque de repérage. Les **32 vignettes sur
+  51** qui regardent à gauche sont **retournées à la découpe** : le jeu dessine
+  tout vers la droite, une planche à l'envers est un patron à l'envers. Le sens
+  se relit sur une planche-contact des vignettes DÉCOUPÉES — six créatures de la
+  seconde page regardent déjà à droite, les retourner les mettrait à l'envers.
 - `background.js` — dégradé d'eau par profondeur, god rays, crêtes d'arrière-plan, rochers, végétation, cheminées volcaniques, plancton, jour/nuit.
 
 ### Décor posé au sol

@@ -11,6 +11,18 @@
 "retourne": true,
 "w": 176
 },
+"barracuda": {
+"h": 141,
+"rang": 20,
+"retourne": true,
+"w": 205
+},
+"bernard": {
+"h": 174,
+"rang": 16,
+"retourne": false,
+"w": 182
+},
 "bulle_fofolle": {
 "h": 106,
 "rang": 1,
@@ -41,6 +53,18 @@
 "retourne": true,
 "w": 155
 },
+"coffre": {
+"h": 149,
+"rang": 6,
+"retourne": true,
+"w": 176
+},
+"concombre": {
+"h": 165,
+"rang": 17,
+"retourne": true,
+"w": 198
+},
 "confetti": {
 "h": 130,
 "rang": 5,
@@ -52,6 +76,18 @@
 "rang": 11,
 "retourne": false,
 "w": 174
+},
+"corail": {
+"h": 200,
+"rang": 8,
+"retourne": false,
+"w": 168
+},
+"cormoran": {
+"h": 189,
+"rang": 14,
+"retourne": false,
+"w": 175
 },
 "crabe": {
 "h": 160,
@@ -65,17 +101,53 @@
 "retourne": true,
 "w": 162
 },
+"crevette_claire": {
+"h": 180,
+"rang": 12,
+"retourne": true,
+"w": 185
+},
 "dauphin": {
 "h": 147,
 "rang": 10,
 "retourne": true,
 "w": 192
 },
+"dentiste": {
+"h": 116,
+"rang": 2,
+"retourne": true,
+"w": 190
+},
+"dorade": {
+"h": 150,
+"rang": 5,
+"retourne": true,
+"w": 190
+},
+"espadon": {
+"h": 185,
+"rang": 10,
+"retourne": true,
+"w": 220
+},
 "etoile": {
 "h": 160,
 "rang": 12,
 "retourne": false,
 "w": 192
+},
+"fugu": {
+"h": 175,
+"rang": 1,
+"retourne": true,
+"w": 190
+},
+"goeland": {
+"h": 190,
+"rang": 13,
+"retourne": true,
+"w": 181
 },
 "gros_dodo": {
 "h": 146,
@@ -89,11 +161,29 @@
 "retourne": true,
 "w": 110
 },
+"jardiniere": {
+"h": 203,
+"rang": 15,
+"retourne": false,
+"w": 148
+},
+"krill": {
+"h": 167,
+"rang": 21,
+"retourne": false,
+"w": 201
+},
 "lanterne": {
 "h": 146,
 "rang": 20,
 "retourne": true,
 "w": 213
+},
+"maquereau": {
+"h": 116,
+"rang": 11,
+"retourne": true,
+"w": 207
 },
 "meduse": {
 "h": 165,
@@ -117,13 +207,31 @@
 "h": 152,
 "rang": 16,
 "retourne": false,
-"w": 235
+"w": 170
+},
+"nudibranche": {
+"h": 143,
+"rang": 7,
+"retourne": true,
+"w": 195
 },
 "orque": {
 "h": 144,
 "rang": 19,
 "retourne": false,
 "w": 214
+},
+"oursin": {
+"h": 166,
+"rang": 19,
+"retourne": false,
+"w": 174
+},
+"papillon": {
+"h": 164,
+"rang": 4,
+"retourne": true,
+"w": 175
 },
 "pelican": {
 "h": 147,
@@ -149,6 +257,12 @@
 "retourne": true,
 "w": 216
 },
+"police": {
+"h": 161,
+"rang": 3,
+"retourne": true,
+"w": 186
+},
 "poulpe": {
 "h": 146,
 "rang": 25,
@@ -159,7 +273,13 @@
 "h": 170,
 "rang": 17,
 "retourne": false,
-"w": 229
+"w": 188
+},
+"rascasse": {
+"h": 209,
+"rang": 18,
+"retourne": true,
+"w": 193
 },
 "requin": {
 "h": 125,
@@ -172,6 +292,12 @@
 "rang": 6,
 "retourne": true,
 "w": 178
+},
+"tortue": {
+"h": 174,
+"rang": 9,
+"retourne": true,
+"w": 200
 },
 "volant": {
 "h": 146,

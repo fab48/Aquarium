@@ -108,6 +108,12 @@ const FishBody = {
     dent:    '#ffffff',
     bec:     '#f0a83c',
     joue:    '255,110,135',      // en r,g,b : la rougeur est peinte en alpha
+    // ÉPAISSEUR DU TRAIT, en multiples de l'épaisseur d'origine. La couleur du
+    // trait se réglait déjà, pas son poids : un dessin au trait fin se
+    // retrouvait avec un visage au gros feutre, et l'inverse sur un dessin
+    // épais. Tous les traits du visage la suivent — bouche, sourcil, œil fermé,
+    // contour du bec.
+    trait:   1,
   },
   _palCache: new WeakMap(),
   // Palette effective. Mise en cache sur l'objet source : `drawFace` tourne
@@ -128,12 +134,24 @@ const FishBody = {
   // Objet de travail réutilisé : `visageDe` est appelée pour chaque créature de
   // chaque frame (~690 à 51 espèces), et son résultat est consommé sur place.
   _vis: { pal: null, style: 'standard' },
+  _stylesCache: new WeakMap(),
   visageDe(e) {
     const def = e.def;
     const sp = (def.sprite && typeof Sprites !== 'undefined') ? Sprites.get(def.sprite) : null;
     const v = (sp && sp.visage) || def.visage || null;
     this._vis.pal = this.palette(v);
-    this._vis.style = (sp && sp.boucheStyle) || def.boucheStyle || 'standard';
+    const nom = (sp && sp.boucheStyle) || def.boucheStyle || 'standard';
+    // Les réglages FINS d'une bouche (les mandibules d'un bec) viennent du
+    // dessin et se mélangent à son style. On renvoie donc un style RÉSOLU plutôt
+    // qu'un nom : `bouche()` accepte les deux, les dessins d'avant ne bougent pas.
+    const bec = (sp && sp.bec) || def.bec || null;
+    if (!bec) { this._vis.style = nom; return this._vis; }
+    let st = this._stylesCache.get(bec);
+    if (!st || st._nom !== nom) {
+      st = Object.assign({ _nom: nom }, this.BOUCHES[nom] || this.BOUCHES.standard, bec);
+      this._stylesCache.set(bec, st);
+    }
+    this._vis.style = st;
     return this._vis;
   },
 
@@ -201,7 +219,8 @@ const FishBody = {
 
     if (lid > 0.85 || clignote) {                    // œil fermé
       const joyeux = e.expression === 'laughing' || e.expression === 'kiss';
-      ctx.strokeStyle = P.encre; ctx.lineWidth = Math.max(1.2, r * 0.42);
+      ctx.strokeStyle = P.encre;
+      ctx.lineWidth = Math.max(0.5, r * 0.42 * (P.trait == null ? 1 : P.trait));
       ctx.beginPath();
       if (joyeux) ctx.arc(x, y + r * 0.4, r * 0.95, 1.15 * Math.PI, 1.85 * Math.PI);
       else ctx.arc(x, y, r * 0.9, 0.12 * Math.PI, 0.88 * Math.PI);
@@ -241,7 +260,8 @@ const FishBody = {
   // qu'elle EXPRIME. Les deux sont indépendants : un bec sait sourire.
   bouche(ctx, mx, my, size, mouth, t, pal, style) {
     const P = pal || this.VISAGE;
-    const st = this.BOUCHES[style] || this.BOUCHES.standard;
+    const st = (style && typeof style === 'object') ? style
+             : (this.BOUCHES[style] || this.BOUCHES.standard);
     if (st.forme === 'bec') return this.boucheBec(ctx, mx, my, size, mouth, t, P, st);
     if (st.forme === 'ventouse') return this.boucheVentouse(ctx, mx, my, size, mouth, t, P, st);
     const w = st.w || 1, h = st.h || 1;
@@ -256,7 +276,9 @@ const FishBody = {
 
   boucheStandard(ctx, mx, my, size, mouth, t, P) {
     const INK = P.encre;
-    const lw = Math.max(1.4, size * 0.055);
+    // `trait` : le poids du trait du visage, réglable. Un dessin fin héritait
+    // d'une bouche au gros feutre, un dessin épais d'un fil.
+    const lw = Math.max(0.5, size * 0.055 * (P.trait == null ? 1 : P.trait));
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     ctx.strokeStyle = INK; ctx.lineWidth = lw;
     ctx.beginPath();
@@ -396,11 +418,25 @@ const FishBody = {
   // sans qu'on redessine quoi que ce soit.
   boucheBec(ctx, mx, my, size, mouth, t, P, st) {
     const g = this.geste(mouth, t);
-    const L = size * 0.6 * (st.w || 1), H = size * 0.17 * (st.h || 1);
+    // LES DEUX MANDIBULES SE RÈGLENT À PART. Un bec n'est presque jamais
+    // symétrique : le pélican a une mandibule inférieure énorme et une
+    // supérieure fine, le goéland l'inverse, un bec de canard est plat des deux
+    // côtés. Un seul réglage de « hauteur » les forçait à se ressembler.
+    //   `haut` / `bas` — l'épaisseur de chaque mandibule, séparément
+    //   `angle`        — l'orientation du bec sur le visage
+    //   `ecart`        — le jour qui reste entre les deux, bec fermé
+    //   `w` / `long`   — la longueur
+    const L = size * 0.6 * (st.long || st.w || 1);
+    const H = size * 0.17 * (st.h || 1);
+    const hHaut = H * (st.haut == null ? 1 : st.haut);
+    const hBas = H * (st.bas == null ? 1 : st.bas);
+    const ecart = size * 0.02 * (st.ecart == null ? 1 : st.ecart);
+    const trait = Math.max(0.4, size * 0.035 * (P.trait == null ? 1 : P.trait));
     const a = g.o * 0.5;                       // demi-angle d'ouverture
     ctx.save();
     ctx.translate(mx - L * 0.3, my);
-    ctx.rotate(-g.c * 0.14);                   // un bec qui sourit se relève
+    // L'orientation propre du bec, puis le relèvement du sourire.
+    ctx.rotate((st.angle || 0) * Math.PI / 180 - g.c * 0.14);
     // La gorge, entre les deux mandibules : sans elle, un bec grand ouvert
     // laisse voir le corps au travers.
     if (g.o > 0.12) {
@@ -409,21 +445,29 @@ const FishBody = {
       ctx.moveTo(0, 0); ctx.lineTo(L * 0.96, -Math.sin(a) * L * 0.9);
       ctx.lineTo(L * 0.96, Math.sin(a) * L * 0.9); ctx.closePath(); ctx.fill();
     }
+    // s = -1 : mandibule SUPÉRIEURE (vers le haut) ; +1 : inférieure.
     for (const s of [-1, 1]) {
-      ctx.save(); ctx.rotate(s * a);
+      const ep = s < 0 ? hHaut : hBas;
+      if (ep <= 0.01) continue;                // mandibule supprimée : un cure-dent
+      ctx.save();
+      ctx.translate(0, s * ecart);             // l'écartement au repos
+      ctx.rotate(s * a);
       ctx.fillStyle = s < 0 ? P.bec : this.sombre(P.bec, 0.18);
       ctx.beginPath();
-      ctx.moveTo(0, s * H * 0.1);
-      ctx.quadraticCurveTo(L * 0.55, s * H * 1.25, L, 0);
-      ctx.quadraticCurveTo(L * 0.5, s * H * 0.25, 0, s * H * 0.1);
+      ctx.moveTo(0, s * ep * 0.1);
+      ctx.quadraticCurveTo(L * 0.55, s * ep * 1.25, L, 0);
+      ctx.quadraticCurveTo(L * 0.5, s * ep * 0.25, 0, s * ep * 0.1);
       ctx.closePath(); ctx.fill();
-      ctx.strokeStyle = P.encre; ctx.lineWidth = Math.max(1, size * 0.035);
-      ctx.stroke();
+      if (trait > 0.05) {
+        ctx.strokeStyle = P.encre; ctx.lineWidth = trait;
+        ctx.stroke();
+      }
       ctx.restore();
     }
     ctx.fillStyle = P.encre;                   // narine
     ctx.beginPath();
-    ctx.arc(L * 0.22, -H * 0.45 - a * L * 0.2, Math.max(0.6, size * 0.035), 0, Math.PI * 2);
+    ctx.arc(L * 0.22, -hHaut * 0.45 - ecart - a * L * 0.2,
+            Math.max(0.6, size * 0.035), 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   },
@@ -452,7 +496,8 @@ const FishBody = {
       ctx.lineTo(Math.cos(A) * R, Math.sin(A) * R);
       ctx.stroke();
     }
-    ctx.strokeStyle = P.encre; ctx.lineWidth = Math.max(1, size * 0.03);
+    ctx.strokeStyle = P.encre;
+    ctx.lineWidth = Math.max(0.4, size * 0.03 * (P.trait == null ? 1 : P.trait));
     ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
   },
@@ -480,7 +525,7 @@ const FishBody = {
     const INK = V.encre;
     const ex = size * 0.55, ey = -size * 0.18;
     const er = Math.max(2.5, size * 0.22);
-    const lw = Math.max(1.4, size * 0.055);
+    const lw = Math.max(0.5, size * 0.055 * (V.trait == null ? 1 : V.trait));
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
 
     // --- Teint verdâtre (nausée) : DERRIÈRE le visage, sinon il masque la bouche
@@ -538,7 +583,7 @@ const FishBody = {
 
     // --- SOURCIL : c'est lui qui porte l'essentiel de l'émotion ---
     ctx.strokeStyle = V.sourcil;
-    ctx.lineWidth = Math.max(1.6, size * 0.075);
+    ctx.lineWidth = Math.max(0.6, size * 0.075 * (V.trait == null ? 1 : V.trait));
     ctx.save();
     ctx.translate(ex, ey - er * (1.05 + P.bl));
     ctx.rotate(P.ba);
@@ -836,7 +881,12 @@ const FishBody = {
     const axe = (sp.tailAxe == null ? 90 : sp.tailAxe) * Math.PI / 180;
     const anim = { ph, rQueue: sp.vitesseQueue || 1, phase: e.phase || 0,
                    vigueur, repos,
-                   qx: Math.cos(axe), qy: Math.sin(axe) };
+                   qx: Math.cos(axe), qy: Math.sin(axe),
+                   // Les SOURCES autres que la nage, calculées une fois par
+                   // créature et par frame. Un appendice peut s'y brancher au
+                   // lieu de battre au rythme du corps : c'est ce qui rend à un
+                   // coquillage dessiné l'animation de sa silhouette.
+                   coquille: repos ? 0 : this.ouvertureCoquille(e, t) };
     // La COLONNE d'une pose de scène (cf. `colonne`) : échantillonnée une fois
     // par frame, appliquée à chaque point dans `deformer`. `e._colonne` est
     // posé par `rendreScene` (gags) ou par l'éditeur de colonne de l'atelier.
@@ -1201,8 +1251,16 @@ const FishBody = {
             // Plus on s'éloigne de la charnière, plus on s'ouvre : c'est un
             // pivot, pas une translation.
             const poids = U.clamp(along / L, 0, 1);
-            const u = ((anim.ph * 0.7 * vit + dph) / (Math.PI * 2)) % 1;
-            const ouv = this.claquement(u < 0 ? u + 1 : u);
+            // `source` dit CE QUI pilote l'ouverture. Par défaut le claquement
+            // libre ; « coquille » la branche sur l'état de la créature, donc
+            // sur son sommeil, ses repas et ses perles.
+            let ouv;
+            if (f.source === 'coquille') {
+              ouv = U.clamp(anim.coquille, 0, 1);
+            } else {
+              const u = ((anim.ph * 0.7 * vit + dph) / (Math.PI * 2)) % 1;
+              ouv = this.claquement(u < 0 ? u + 1 : u);
+            }
             const a = sens * ouv * poids * anim.vigueur * A * Math.PI / 180;
             const cos = Math.cos(a), sin = Math.sin(a);
             x = fx + px * cos - py * sin;
@@ -1887,12 +1945,36 @@ const FishBody = {
       e._colonne = null;
       return;
     }
+    // LA PISTE VISAGE : une animation de visage seul (aucune clé de pose) se
+    // combine PAR-DESSUS tout le reste — corps animé ou pas (décision
+    // d'auteur : « une animation à la fois, mais combinée à des animations de
+    // visage »). Si la piste CORPS pose aussi un visage sur la même frame,
+    // c'est elle qui gagne (appliquée après) — cas rare et sans enjeu.
+    const af = (e._animeFace && sp) ? Sprites.clipDe(sp, e._animeFace.nom) : null;
+    if (af) {
+      if (af.cles && af.cles.length) {
+        if (e._animeFace.t0 == null) e._animeFace.t0 = t;
+        let uf = t - e._animeFace.t0;
+        const finF = af.cles[af.cles.length - 1].t || 0;
+        if (af.boucle && finF > 0.05) uf = uf % finF;
+        if (!af.boucle && uf > finF + 0.2) {
+          if (e._animeFaceV) { e.release(); e._animeFaceV = false; }
+          e._animeFace = null;
+        } else {
+          let vis = null;
+          for (const c of af.cles) if (c.t <= uf && c.visage) vis = c.visage;
+          if (vis) { e.hold(vis); e._animeFaceV = true; }
+          else if (e._animeFaceV) { e.release(); e._animeFaceV = false; }
+        }
+      }
+    }
     // UNE ANIMATION DU DESSIN EN COURS (timeline `doc.animes`, lancée par
     // `Entity.jouerAnime` sur un événement) : elle prime sur les poses
     // génériques de scène — c'est tout son sens : « un animal bizarre quand
     // il mange s'anime autrement que la bouche générique ».
-    if (e._anime && sp && sp.animes && sp.animes[e._anime.nom]) {
-      const an = sp.animes[e._anime.nom];
+    const anC = (e._anime && sp) ? Sprites.clipDe(sp, e._anime.nom) : null;
+    if (anC) {
+      const an = anC;
       if (an.cles && an.cles.length) {
         if (e._anime.t0 == null) e._anime.t0 = t;
         let u = t - e._anime.t0;
@@ -2808,18 +2890,27 @@ const FishBody = {
     ctx.stroke();
   },
 
-  drawShell(ctx, e, t) {
-    const s = e.size;
-    // ouverture rythmique ; "glousse" quand il mange
-    // Endormi, il reste ENTROUVERT : referme, on ne verrait pas ses yeux clos
-    // et le sommeil ne se lirait pas du tout sur lui.
+  // L'OUVERTURE D'UN COQUILLAGE, extraite pour être réutilisable.
+  //
+  // Elle n'est pas pilotée par la nage mais par l'ÉTAT : il glousse quand il
+  // mange, reste entrouvert quand il dort — refermé, on ne verrait pas ses yeux
+  // clos et le sommeil ne se lirait pas du tout sur lui — et s'ouvre en grand
+  // quand il fabrique une perle. Un appendice ordinaire, cadencé sur le
+  // battement de nage, ne sait rien de tout ça : c'est pour ça qu'un coquillage
+  // DESSINÉ ne pouvait pas retrouver l'animation de sa silhouette.
+  // `fins[].source: 'coquille'` branche un appendice là-dessus.
+  ouvertureCoquille(e, t) {
     const dort = e.expression === 'sleeping' && (e.emoteK ? e.emoteK() : 1) > 0.5;
-    // LA PERLE : quand il en fabrique une, il s'ouvre en GRAND et elle brille.
     const perle = e._perle || 0;
-    const open = perle > 0.1 ? 0.55 + perle * 0.35 : e.expression === 'eating'
+    return perle > 0.1 ? 0.55 + perle * 0.35 : e.expression === 'eating'
       ? Math.abs(Math.sin(t * 10)) * 0.7 + 0.2
       : (dort ? 0.32 + Math.sin(t * 1.5 + e.phase) * 0.05
               : Math.max(0, Math.sin(t * 1.2 + e.phase)) * 0.35);
+  },
+
+  drawShell(ctx, e, t) {
+    const s = e.size;
+    const open = this.ouvertureCoquille(e, t);
     ctx.fillStyle = e.colorDark;
     ctx.beginPath(); ctx.ellipse(0, s * 0.15, s, s * 0.45, 0, 0, Math.PI); ctx.fill();
     // valve supérieure

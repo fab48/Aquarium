@@ -274,6 +274,11 @@ def main():
     css = lire(RACINE / "css" / "style.css")
     html = lire(RACINE / "index.html")
     manifeste, dessins = sprites_utilises()
+    # La BIBLIOTHÈQUE DE CLIPS partagée (timelines de poses jouées par les
+    # scènes) : un troisième fichier consommé par `Sprites.init`, au même
+    # titre que le manifeste.
+    clips_f = RACINE / "Assets" / "clips.json"
+    clips = json.loads(lire(clips_f)) if clips_f.exists() else {}
 
     if DIST.exists():
         shutil.rmtree(DIST)
@@ -285,7 +290,7 @@ def main():
         # double-clic perdrait tous ses sprites, en silence. Pas de PWA ici :
         # un service worker n'a pas de sens sur un fichier local.
         charge = json.dumps(
-            {"manifeste": manifeste, "dessins": dessins},
+            {"manifeste": manifeste, "dessins": dessins, "clips": clips},
             ensure_ascii=False, separators=(",", ":"),
         )
         # `</script>` dans une chaîne JSON fermerait la balise qui la contient.
@@ -313,11 +318,13 @@ def main():
     (DIST / "css" / nom_css).write_text(css, encoding="utf-8")
     (DIST / "Assets" / "sprites.json").write_text(
         json.dumps(manifeste, ensure_ascii=False), encoding="utf-8")
+    (DIST / "Assets" / "clips.json").write_text(
+        json.dumps(clips, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     for nom, d in dessins.items():
         (DIST / "Assets" / f"{nom}.json").write_text(
             json.dumps(d, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
-    caches = [f"js/{nom_js}", f"css/{nom_css}", "Assets/sprites.json"]
+    caches = [f"js/{nom_js}", f"css/{nom_css}", "Assets/sprites.json", "Assets/clips.json"]
     caches += [f"Assets/{nom}.json" for nom in dessins]
     balises_pwa, enregistrement = pwa(caches, empreinte)
 

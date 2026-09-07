@@ -690,6 +690,17 @@ const Ecosystem = {
   },
 
   eat(pred, prey) {
+    // LA GRANDE SCÈNE DE LA MORT, version gueule ouverte (décision d'auteur :
+    // même mangée). Si la proie a un clip « mort », le prédateur SE FIGE et
+    // la regarde jouer sa grande scène, les yeux dessus — puis il revient
+    // l'avaler pour de bon (cf. `_attendRepas` dans Entity.update). La durée
+    // est bornée à 2,5 s : le différé ne change rien d'autre à la prise.
+    if (prey._agonie == null && prey.agonise(true)) {
+      pred._attendRepas = { proie: prey, reste: prey._agonie + 0.1 };
+      pred._faceAt = prey;
+      pred._freeze = 0.3;
+      return;
+    }
     if (pred.def.filterFeeder) {
       // Le Gros Dodo filtre : la proie est "avalée" sans violence visuelle
       pred.setExpression('eating', 2);
@@ -855,7 +866,7 @@ const Ecosystem = {
     // Capacité de charge par espèce (GDD §14) : la pyramide trophique impose
     // beaucoup de petits herbivores et très peu de grands prédateurs.
     if (this.countSpecies(parent.speciesId) >= this.popCap(parent.def)) return;
-    parent.jouerAnime('pond');      // le dessin peut avoir SA petite danse de ponte
+    parent.evenement('pond');       // le dessin peut avoir SA petite danse de ponte
     const egg = new Entity(parent.speciesId, ox, oy, { stage: 'egg', groupId: parent.groupId });
     egg.stage = 'egg'; egg.growth = 0.2; egg.stateTimer = 0;
 

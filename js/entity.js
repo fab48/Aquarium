@@ -344,12 +344,38 @@ class Entity {
         if (this._animeVisage) { this.release(); this._animeVisage = false; }
         this._anime = null;
       }
-      if (evt) this.jouerAnime(evt, true);
+      if (this._animeFace && this._animeFace.deEtat) {
+        if (this._animeFaceV) { this.release(); this._animeFaceV = false; }
+        this._animeFace = null;
+      }
+      if (evt) this.evenement(evt, {}, true);
       this._etatVu = this.state;
     }
     // Le repas aussi est un événement : première frame de mastication.
-    if (this._chew > 0 && !this._chewAnim) { this._chewAnim = true; this.jouerAnime('mange'); }
+    if (this._chew > 0 && !this._chewAnim) { this._chewAnim = true; this.evenement('mange'); }
     else if (this._chew <= 0) this._chewAnim = false;
+    // LA GRANDE SCÈNE DE LA MORT en cours : le corps se fige et joue son clip,
+    // plus de pensée, plus de faim — puis il meurt pour de bon (ou son
+    // prédateur l'avale, cf. `_attendRepas`).
+    if (this._agonie != null) {
+      this._agonie -= dt;
+      this._freeze = 0.3;
+      this.vx *= 0.9; this.vy *= 0.9;
+      if (this._agonie <= 0 && !this._agonieMangee) { this._mortJouee = true; this.die(); }
+      // Mangée : le prédateur conclut — sauf s'il a disparu entre-temps.
+      if (this._agonie < -2 && this._agonieMangee) this.dead = true;
+      return;
+    }
+    // Il attend la fin de la grande scène de sa proie, les yeux dessus…
+    if (this._attendRepas) {
+      const a = this._attendRepas;
+      a.reste -= dt;
+      if (a.proie.dead) { this._attendRepas = null; this._faceAt = null; }
+      else if (a.reste <= 0) {
+        this._attendRepas = null; this._faceAt = null;
+        Ecosystem.eat(this, a.proie);          // …et maintenant il avale
+      } else { this._freeze = 0.3; this._faceAt = a.proie; }
+    }
     if (this._freeze > 0) this._freeze -= dt;
     // La gelée d'un choc se calme toute seule (cf. `choc()` et `draw`)
     if (this._chocT != null) { this._chocT += dt; if (this._chocT > 0.9) this._chocT = null; }
@@ -1032,7 +1058,8 @@ class Entity {
       // des minutes. Là, une poignée de graines suffit.
       this._pepsCoup = (this._pepsCoup ?? 0) + (fav ? 480 : 240);
     }
-    this.jouerAnime('mange');       // le dessin peut avoir SA façon de manger
+    if (foodType) this.evenement('graine');   // une scène peut spécialiser la graine…
+    this.evenement('mange');        // …sinon la façon de manger, du dessin ou partagée
     // FRAI ÉCLAIR (`fraiRapide`). Règle générale : la reproduction demande de
     // RENCONTRER un partenaire (cf. tryMate). Le bas de la chaîne y échappe —
     // crevettes, krill, méduses, calmars, sardines : ce sont eux qu'on mange,
@@ -1279,16 +1306,69 @@ class Entity {
   // pond, charge) se jouent une fois et rendent la main.
   jouerAnime(nom, deEtat = false) {
     const sp = (this.def.sprite && typeof Sprites !== 'undefined') ? Sprites.get(this.def.sprite) : null;
-    const an = sp && sp.animes && sp.animes[nom];
+    // Un CLIP se résout : ceux du dessin d'abord, puis la BIBLIOTHÈQUE
+    // partagée (`Assets/clips.json`) — la chorégraphie est commune, mais les
+    // clés référencent des POSES, que chaque animal redéfinit : le poulpe ne
+    // singera pas le thon.
+    const an = sp && Sprites.clipDe(sp, nom);
     if (!an || !an.cles || !an.cles.length) return false;
-    if (this._anime && this._anime.nom === nom) return true;   // déjà en cours
+    // DEUX PISTES, décision d'auteur : une seule animation de CORPS à la fois
+    // (un événement pendant une scène est PERDU — pas de file, le cooldown de
+    // la règle gate la suite), mais une animation de VISAGE SEUL (aucune clé
+    // de pose) vit sur sa propre piste et se combine par-dessus.
+    if (an.cles.every(c => !c.pose)) {
+      if (this._animeFace) return this._animeFace.nom === nom;
+      this._animeFace = { nom, t0: null, deEtat };
+      return true;
+    }
+    if (this._anime) return this._anime.nom === nom;   // occupé : perdu
     this._anime = { nom, t0: null, deEtat };
     return true;
   }
 
+  // LE BUS DES RÈGLES (`doc.regles`, posées dans l'atelier) : quand un
+  // événement du jeu survient, chaque règle du dessin est filtrée — type,
+  // `avec`, conditions `si` (vocabulaire FERMÉ : vitesse, profondeur, nuit,
+  // faim — pas de code dans le JSON), cooldown par règle — et la première qui
+  // matche joue son animation. Une règle HABILLE, elle ne touche jamais la
+  // simulation : ce qui doit agir sur l'écosystème reste un gag dans gags.js.
+  evenement(type, p = {}, deEtat = false) {
+    const spr = (this.def.sprite && typeof Sprites !== 'undefined') ? Sprites.get(this.def.sprite) : null;
+    if (!spr) return;
+    const regles = spr.scenes || [];
+    const t = (typeof Main !== 'undefined' && Main.time) || 0;
+    for (let i = 0; i < regles.length; i++) {
+      const r = regles[i];
+      // Deux générations de format : les SCÈNES (`si` = type d'événement,
+      // `cond` = conditions) et les anciennes règles (`quand` = type, `si` =
+      // conditions). Le typeof départage sans ambiguïté.
+      const typeR = typeof r.si === 'string' ? r.si : r.quand;
+      if (typeR !== type || !r.jouer) continue;
+      if (r.avec && r.avec !== p.avec) continue;
+      const si = r.cond || (typeof r.si === 'object' && r.si) || {};
+      const v = p.vitesse ?? Math.hypot(this.vx || 0, this.vy || 0);
+      if (si.vitesseMin != null && v < si.vitesseMin) continue;
+      if (si.vitesseMax != null && v > si.vitesseMax) continue;
+      const prof = this.y - CONFIG.SURFACE_Y;
+      if (si.profMin != null && prof < si.profMin) continue;
+      if (si.profMax != null && prof > si.profMax) continue;
+      if (si.nuit != null && (Main.nightAmount() > 0.5) !== !!si.nuit) continue;
+      if (si.faimMin != null && this.hunger < si.faimMin) continue;
+      this._regleCd = this._regleCd || {};
+      if ((this._regleCd[i] ?? 0) > t) continue;
+      if (!this.jouerAnime(r.jouer, deEtat)) continue;   // piste occupée : événement perdu
+      this._regleCd[i] = t + (r.cooldown ?? 10);
+      return;
+    }
+    // Aucune scène custom : le clip qui porte le NOM de l'événement joue en
+    // défaut — celui du dessin, sinon celui de la bibliothèque partagée (un
+    // clip `peur` dans la bibliothèque anime tout l'aquarium d'un coup).
+    this.jouerAnime(type, deEtat);
+  }
+
   crash(duree = null) {
     if (this._ecraseT > 0 || this.state === 'dizzy') return;
-    this.jouerAnime('crash');       // le dessin peut avoir SA version du crash
+    this.evenement('crash');        // le dessin peut avoir SA version du crash
     // La TENUE de l'accordéon est un réglage de la pose `crash` du dessin
     // (`duree`, posée dans l'atelier) — chaque espèce a son tempo comique.
     if (duree == null) {
@@ -1306,6 +1386,7 @@ class Entity {
   // Choc : il part en vrille, voit des étoiles et reste sonné un moment.
   assomme(solY = null, vfx = true) {
     if (this.state === 'dizzy') return;
+    this.evenement('assomme');
     this.state = 'dizzy'; this.stateTimer = U.rand(2.5, 4);
     this.target = null; this._faceAt = null;
     this.choc(1, solY !== null ? 'y' : 'x');
@@ -1689,13 +1770,14 @@ class Entity {
           // Le VENTRE À PLAT : il s'aplatit en gelée à l'impact, d'autant plus
           // fort qu'il retombe vite. Silencieux, donc à chaque fois.
           this.choc(U.clamp(this.vy / 380, 0.4, 1), 'y');
+          this.evenement('collision', { avec: 'surface', vitesse: this.vy });
           if (Math.random() < 1 / 3) this.setExpression('dizzy', 1); // plat retentissant, un coup sur trois
         }
         return;
       }
       if (this.state === 'wander' && this.y < CONFIG.SURFACE_Y + def.depthBand[1] * 0.8 && Math.random() < dt * 0.1) {
         this.jumpState = 'air';
-        this.jouerAnime('saut');    // le dessin peut avoir SA cabriole
+        this.evenement('saut');     // le dessin peut avoir SA cabriole
         this._airborne = false;
         this.vy = -U.rand(240, 330);
         // élan horizontal : un saut en cloche, pas une chandelle sur place.
@@ -1860,6 +1942,7 @@ class Entity {
         // Contact franc : le choc se voit et s'entend (une fois, pas à chaque frame)
         if (push > 0.55 && (this._bumpCd ?? 0) <= 0) {
           this._bumpCd = 3;
+          this.evenement('collision', { avec: 'colosse' });
           this.choc(0.7);                     // l'écrasement de gelée (chacun le sien)
           this.emote('surprise', 1.6);
           Particles.burst((this.x + o.x) / 2, (this.y + o.y) / 2, '#dff0ff', 8);
@@ -1894,6 +1977,9 @@ class Entity {
         if (o === this || o.dead) continue;
         const contact = o.size * 0.85 + this.size;
         if (U.dist2(this.x, this.y, o.x, o.y) < contact * contact) {
+          // La règle du dessin passe AVANT le crash par défaut : si elle joue,
+          // elle occupe la piste et le `jouerAnime('crash')` du crash échoue.
+          this.evenement('collision', { avec: 'colosse' });
           this.crash();
           o.emote('surprise', 1.8);
           break;
@@ -1911,6 +1997,7 @@ class Entity {
       if (choc && o.size >= 45) {
         const contact = o.size * 0.85 + this.size;
         if (U.dist2(this.x, this.y, o.x, o.y) < contact * contact) {
+          this.evenement('collision', { avec: 'colosse' });
           if (enFleche) this.crash();       // en scène : l'accordéon du Coyote
           else this.assomme();              // hors scène : la vrille d'avant
           o.emote('surprise', 1.8);
@@ -2253,6 +2340,10 @@ class Entity {
       // Dents-Molles, mais la règle vaut pour tout le monde.
       // Seule une VRAIE charge assomme (un simple plongeon ne suffit pas)
       if (this.vy > 300 && def.movement !== 'crawl' && def.movement !== 'fixed') this.assomme(fy);
+      // Le bus des règles : « collision : sol », avec la vitesse d'impact —
+      // c'est le `si.vitesseMin` de la règle qui sépare le vrai plantage du
+      // frôlement (ce contact-ci se joue des centaines de fois par minute).
+      this.evenement('collision', { avec: 'sol', vitesse: sp });
       this.vy = Math.min(0, this.vy);
       // UN NUAGE PAR SECONDE AU PLUS. Il partait à CHAQUE frame passée contre
       // le sable à plus de 100 px/s : 953 nuages/min, le deuxième émetteur du
@@ -2268,8 +2359,34 @@ class Entity {
     if (sp > 5) this.angle = U.angleLerp(this.angle, Math.atan2(this.vy, this.vx * 0.4), dt * 5);
   }
 
+  // LA GRANDE SCÈNE DE LA MORT (décision d'auteur : TOUTES les morts). Si le
+  // dessin a une scène ou un clip « mort », le corps se fige le temps de le
+  // jouer — yeux en X, petite âme, ce qu'on aura dessiné — puis meurt pour de
+  // bon. `mangee` : c'est le prédateur qui conclura (cf. Ecosystem.eat).
+  agonise(mangee) {
+    const sp = (this.def.sprite && typeof Sprites !== 'undefined') ? Sprites.get(this.def.sprite) : null;
+    if (!sp) return false;
+    let nom = null;
+    for (const r of (sp.scenes || [])) {
+      const typeR = typeof r.si === 'string' ? r.si : r.quand;
+      if (typeR === 'mort' && r.jouer) { nom = r.jouer; break; }
+    }
+    if (!nom && Sprites.clipDe(sp, 'mort')) nom = 'mort';
+    if (!nom) return false;
+    const clip = Sprites.clipDe(sp, nom);
+    if (!clip || !clip.cles || !clip.cles.length) return false;
+    // La mort passe avant toute animation en cours, et sa durée est BORNÉE :
+    // une agonie de dix secondes bloquerait un prédateur tout ce temps.
+    this._anime = { nom, t0: null, deEtat: false };
+    this._agonie = U.clamp(clip.cles[clip.cles.length - 1].t + 0.15, 0.5, 2.5);
+    this._agonieMangee = !!mangee;
+    this.target = null; this._faceAt = null;
+    return true;
+  }
+
   die() {
     if (this.dead) return;
+    if (!this._mortJouee && this._agonie == null && this.agonise(false)) return;
     this.dead = true;
     if (this.stage === 'adult' || this.stage === 'fry') {
       // UNE seule arête, mise à l'échelle du poisson : trois petites arêtes

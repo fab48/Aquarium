@@ -288,6 +288,12 @@ embarquée, donc on ne la retrouve plus.
     commune d'un clic sur ↺. Le visage étant dessiné **par-dessus** le dessin,
     repeindre le calque ne changeait rien : c'était la seule façon d'avoir une
     pupille dorée ou un bec orange.
+  - **l'épaisseur du trait** (`visage.trait`, en multiples de l'épaisseur
+    d'origine). La couleur du trait se réglait, pas son poids : un dessin au
+    trait fin héritait d'un visage au gros feutre, et l'inverse sur un dessin
+    épais. Tous les traits la suivent — bouche, sourcil, œil fermé, contour du
+    bec, anneau de la ventouse. Mesuré sur le bec : 1 238 px d'encre à 0 (plus de
+    contour du tout), 1 847 à 1, 3 435 à 3.
 - **Appendices** — nageoire, patte, antenne, bras. Clic dans le vide pour en
   poser un. **Deux types**, parce que ce sont deux gestes différents :
   - **nageoire** — la forme *pivote* autour de l'ancre. Le disque affiché est le
@@ -1078,7 +1084,8 @@ d'espèce reste lu : le manifeste ne fait que le compléter ou l'annuler.
 | `tailOndes` | nombre d'ondes le long de la queue — 0 = battement d'un bloc, 1-2 = onde qui **court** (murène) | 0 |
 | `queueCalques` | restreint l'ondulation à certains calques | tous |
 | `faceK`, `faceTx`, `faceTy` | calibration en multiples de `size` (repli) | `def.spriteFace`, puis 0,75 |
-| `animes` | **animations par ÉVÉNEMENT** : `{ mange: { boucle, cles: [{ t, pose, visage }] } }` — une timeline de poses clés (interpolées) avec, par clé, un VISAGE optionnel (tenu jusqu'à la clé suivante qui en pose un). Jouée par `Entity.jouerAnime` quand l'événement survient chez l'espèce ; **sans animation dessinée, le comportement générique — visage compris — reste la règle**. Événements : `peur, dort, chasse, parade, voyage, attaque` (transitions d'état, table `ANIM_ETATS`) et `mange, crash, saut, pond, charge` (à la source). Édité dans l'atelier : vue Scènes → Timeline. | aucun |
+| `clips` | **clips locaux au dessin** : `{ nom: { boucle, cles: [{ t, pose, visage }] } }` — une timeline de poses clés interpolées, avec par clé un VISAGE optionnel (tenu jusqu'à la clé suivante qui en pose un). Un clip local l'emporte sur son homonyme de la **BIBLIOTHÈQUE PARTAGÉE** `Assets/clips.json` (`Sprites.clipDe`) — la chorégraphie y est commune à toutes les espèces, mais les clés référencent des POSES que chaque animal redéfinit. Un clip de **visage seul** (aucune clé de pose) joue sur sa propre piste, combinable par-dessus une animation de corps. (`animes` est l'ancien nom des clips locaux, toujours lu.) | bibliothèque |
+| `scenes` | **« SI événement [conditions] ALORS play clip »** : `[{ si, avec, cond, jouer, cooldown }]`, p. ex. `{ si: 'collision', avec: 'sol', cond: { vitesseMin: 180 }, jouer: 'dans_les_pommes', cooldown: 15 }`. Événements : `mort` (la grande scène — le corps se fige le temps du clip, borné 2,5 s, MÊME mangé : le prédateur attend), `mange, graine, peur, dort, chasse, parade, voyage, attaque, saut, pond, charge, crash, assomme`, `collision` (avec `sol`\|`surface`\|`colosse`). Sans scène, le clip qui porte le NOM de l'événement joue en défaut ; sans clip, le générique du moteur — visage compris. `cond` est un **vocabulaire fermé** (`vitesseMin/Max`, `profMin/Max`, `nuit`, `faimMin`) — pas de code dans le JSON ; une scène HABILLE, jamais la simulation. **Une seule animation de corps à la fois** : un événement pendant une scène est perdu, le cooldown gate la suite. (`regles` est l'ancien nom, toujours lu — son type s'appelait `quand`.) Édité dans l'atelier : 🎬 → Scènes du poisson. | aucune |
 | `poses` | **poses de scène par nom** (`cabre`, `crash`, …), chacune = les cinq poignées de la COLONNE `{ dx[5], dy[5], sy[5], rot, duree }` — `dx`/`dy` la position de chaque poignée en fraction de la longueur du dessin (**libres en x ET en y** : la colonne est une courbe, pas une fonction — le museau peut revenir en arrière pour un « C », ou se tirer dans le corps pour l'accordéon), `sy` l'épaisseur, `rot` l'orientation de l'ensemble, `duree` le TEMPO (montée du cabré, tenue du crash — lu par les gags). Dessinées dans l'atelier (vue Scènes → Pose manuelle : glisser les points, molette = épaisseur, 💾 cabré / 💾 crash). La déformation passe par les POINTS (`FishBody.colonne` → `deformer`, comme l'onde de queue) : aucune couture, et le visage suit la tête, tourné avec elle. | `FishBody.POSES` |
 
 ### Un appendice (`fins[]`)

@@ -239,16 +239,14 @@
     <button id="bAnime" title="Jouer l'animation du dessin entier">▶ Animer</button>
     <button id="bRecadrer" title="Recentrer la vue sur le dessin">⛶ Recadrer</button>
     <button id="bFantome" title="Superposer en gris la silhouette procédurale remplacée">👻 Silhouette</button>
-    <select id="selScene" title="Jouer une scène cartoon du jeu sur l'aperçu — cabré, flèche, crash du Coyote…">
+    <!-- DEUX VUES, pas un fourre-tout : la timeline avait grandi dans le
+         sélecteur d'aperçu, par accident. « Scènes du poisson » = SES scènes
+         (SI événement ALORS play clip), les défauts en aperçu, et les clips
+         sur leur timeline. « Poses » = les poignées de la colonne. -->
+    <select id="selScene" title="Les scènes du poisson (SI événement ALORS play clip), ou l'éditeur de poses">
       <option value="">🎬 Scène…</option>
-      <option value="pose">Pose manuelle (poignées)</option>
-      <option value="timeline">Timeline (poses clés)</option>
-      <option value="charge">Charge complète</option>
-      <option value="cabre">Cabré (ressort)</option>
-      <option value="fleche">Flèche + smear</option>
-      <option value="crash">Crash du Coyote</option>
-      <option value="choc">Choc gelée</option>
-      <option value="plat">Ventre à plat</option>
+      <option value="scenes">Scènes du poisson</option>
+      <option value="pose">Poses (poignées)</option>
     </select>
   </div>
 
@@ -265,7 +263,6 @@
     <span class="astuce">glisse les points — LIBRES, en x et en y : tire le museau vers le corps pour l'accordéon, vers l'arrière-haut pour le C · molette&nbsp;=&nbsp;épaisseur</span>
     <label>orientation<input type="range" id="pRot" min="-1.2" max="1.2" step="0.02" value="0"></label>
     <label>durée&nbsp;(s)<input type="number" id="pDuree" min="0.2" max="6" step="0.1" value="0.8" style="width:54px"></label>
-    <label>lecture<select id="selVitesse"><option value="1">1×</option><option value="0.5">½×</option><option value="0.25">¼×</option></select></label>
     <button id="pNeutre" title="Pose neutre">↺</button>
     <select id="selPose" title="Charger une pose du dessin (ou une pose par défaut)"><option value="">charger…</option></select>
     <input type="text" id="nomPose" placeholder="nom (cabre, crash, …)" style="width:110px"
@@ -273,28 +270,44 @@
     <button id="pGarder" title="Garder la pose affichée sous ce nom dans le dessin (💾 Enregistrer ensuite)">💾 pose</button>
   </div>
 
-  <!-- LA TIMELINE DE POSES CLÉS (mode « Timeline » de la vue Scènes). Une
-       animation = un ÉVÉNEMENT du jeu (mange, peur, dort, chasse, parade,
-       attaque, pond, saut, crash, charge) + des clés { temps, pose, visage }.
-       Le jeu la joue quand l'événement survient chez CETTE espèce — et sans
-       animation dessinée, le comportement générique (visage compris) reste la
-       règle. -->
+  <!-- LA VUE SCÈNES DU POISSON. Trois étages, du plus regardé au plus édité :
+       1. les APERÇUS PAR DÉFAUT (les mises en scène du moteur, jouées telles
+          que le jeu les joue quand rien de custom ne les remplace) ;
+       2. les SCÈNES : « SI événement [conditions] ALORS play clip » — mort,
+          mange, collision·sol… La scène HABILLE, jamais la simulation. Une
+          seule animation de corps à la fois, un événement pendant une scène
+          est perdu, le cooldown gate la suite ;
+       3. les CLIPS : timelines { temps, pose, visage } de la BIBLIOTHÈQUE
+          PARTAGÉE (Assets/clips.json — la chorégraphie est commune, les poses
+          restent celles de chaque animal) ou locaux au dessin. -->
   <div id="timeBox" hidden>
     <div class="rangeeA">
-      <select id="selAnime"><option value="">— animation —</option></select>
-      <select id="aCree" title="Créer l'animation d'un événement du jeu — elle se jouera quand il survient chez cette espèce">
-        <option value="">+ animation…</option>
-        <option>mange</option><option>peur</option><option>dort</option>
-        <option>chasse</option><option>parade</option><option>attaque</option>
-        <option>pond</option><option>saut</option><option>crash</option><option>charge</option>
-      </select>
+      <b>défauts</b>
+      <button data-demo="cabre">cabré</button><button data-demo="fleche">flèche</button>
+      <button data-demo="crash">crash</button><button data-demo="choc">choc</button>
+      <button data-demo="plat">ventre à plat</button><button data-demo="charge">charge</button>
+      <button data-demo="" title="Arrêter l'aperçu">■</button>
+      <label>lecture<select id="selVitesse"><option value="1">1×</option><option value="0.5">½×</option><option value="0.25">¼×</option></select></label>
+    </div>
+    <div class="rangeeA" style="border-top: 1px solid var(--bord); padding-top: 6px;">
+      <b>scènes</b>
+      <button id="sAjout" title="SI événement [conditions] ALORS play clip">+ scène</button>
+      <span class="astuce">si · vitesse ≥ · play · cooldown (s) — les défauts jouent quand rien de custom ne matche</span>
+    </div>
+    <div id="scenesL"></div>
+    <div class="rangeeA" style="border-top: 1px solid var(--bord); padding-top: 6px;">
+      <b>clips</b>
+      <select id="selClip"><option value="">— clip —</option></select>
+      <input type="text" id="nomClip" placeholder="nouveau clip…" style="width:104px">
+      <button id="cAjout" title="Créer un clip dans la bibliothèque partagée">+ clip</button>
       <label><input type="checkbox" id="aBoucle"> boucle</label>
-      <button id="aSupprime" title="Supprimer cette animation">🗑</button>
+      <button id="cSupprime" title="Supprimer ce clip">🗑</button>
+      <button id="cBiblio" title="Écrire la bibliothèque partagée (Assets/clips.json)">💾 bibliothèque</button>
     </div>
     <div id="cles"></div>
     <div class="rangeeA">
       <button id="aAjoutCle">+ clé</button>
-      <span class="astuce">une clé = temps (s) · pose (créées dans « Pose manuelle ») · visage — l'aperçu joue en boucle, règle la lecture en ½× pour juger</span>
+      <span class="astuce">une clé = temps (s) · pose (créées dans « Poses ») · visage — l'aperçu joue le clip choisi en boucle</span>
     </div>
   </div>
 
@@ -417,7 +430,8 @@ let sceneJeu = '', sceneT0 = 0, vitesseScene = 1;   // ½× / ¼× pour juger un
 const colNeutre = () => ({ dx: [0, 0, 0, 0, 0], dy: [0, 0, 0, 0, 0],
                            sy: [1, 1, 1, 1, 1], rot: 0, duree: 0.8 });
 let colEdit = null, colPoint = -1, colHandles = [];
-let animeSel = '';           // l'animation ouverte dans la timeline
+let clipSel = '';            // le clip ouvert dans la timeline
+let demo = '';               // l'aperçu par défaut en cours (cabre, crash…)
 let fantome = false;    // superposition de la silhouette procédurale
 let attrape = null;     // ce que la souris tient en ce moment
 let filtreTxt = '';     // filtre du rail — 51 espèces, on ne les parcourt plus à l'œil
@@ -522,7 +536,17 @@ function ampleurApp(f) {
   for (const j of calquesDe(f)) {
     const sh = doc.shapes[j]; if (!sh) continue;
     for (const p of sh.points) {
-      if (TYPE(f) === 'aile') {
+      if (TYPE(f) === 'pince' && f.source === 'coquille') {
+        // Pilotée par l'ouverture : la course va de 0 (fermée) à 1 (grande
+        // ouverte), et non de la seule amplitude du claquement.
+        const L = Math.max(1, f.r || 1);
+        const a0 = (f.ang != null ? f.ang : 0) * Math.PI / 180;
+        const ax = Math.cos(a0), ay = Math.sin(a0);
+        const px = p[0] - f.x, py = p[1] - f.y;
+        const along = px * ax + py * ay, cote = -px * ay + py * ax;
+        if (along <= 0 || cote <= 0) continue;
+        maxi = Math.max(maxi, Math.hypot(px, py) * U.clamp(along / L, 0, 1) * A * Math.PI / 180);
+      } else if (TYPE(f) === 'aile') {
         // L'angle croît avec `u`, donc le déplacement du bout est un arc dont
         // le rayon est la distance à l'épaule.
         const L = Math.max(1, f.r || 1);
@@ -856,7 +880,7 @@ function choisir(id) {
 
 function apres() {
   trace = null; coches.clear(); humeur = 'idle'; acteurs.clear();
-  sceneJeu = ''; animeSel = '';
+  sceneJeu = ''; clipSel = ''; demo = '';
   { const s = $('#selScene'); if (s) s.value = '';
     const p = $('#poseBox'); if (p) p.hidden = true;
     const tb = $('#timeBox'); if (tb) tb.hidden = true; }
@@ -983,16 +1007,33 @@ function dessinerColonne(sp) {
   ctx.restore();
 }
 
+// Le clip ouvert dans la timeline : LOCAL au dessin d'abord (sa variante
+// l'emporte, comme au rendu — `Sprites.clipDe`), sinon la bibliothèque.
+function clipCourant() {
+  if (!clipSel) return null;
+  return (doc && ((doc.clips && doc.clips[clipSel]) || (doc.animes && doc.animes[clipSel])))
+      || Sprites.clips[clipSel] || null;
+}
+function nomsClips() {
+  return [...new Set([
+    ...Object.keys(Sprites.clips || {}),
+    ...Object.keys((doc && doc.clips) || {}),
+    ...Object.keys((doc && doc.animes) || {}),
+  ])].sort();
+}
+const clipEstLocal = (n) => !!(doc && ((doc.clips && doc.clips[n]) || (doc.animes && doc.animes[n])));
+
 // Les rangées de la timeline : une clé = { temps, pose nommée, visage }. Tout
-// est reconstruit à chaque geste (comme le panneau), l'état vit dans doc.animes.
+// est reconstruit à chaque geste (comme le panneau) ; l'état vit dans le clip
+// (bibliothèque partagée, ou local au dessin).
 function majCles() {
-  const boite = $('#cles'), sel = $('#selAnime');
+  const boite = $('#cles'), sel = $('#selClip');
   if (!boite || !sel) return;
-  const noms = Object.keys((doc && doc.animes) || {});
-  sel.innerHTML = '<option value="">— animation —</option>'
-    + noms.map(n => `<option${n === animeSel ? ' selected' : ''}>${n}</option>`).join('');
-  const an = doc && doc.animes && doc.animes[animeSel];
-  if (!an) { boite.innerHTML = '<span class="astuce">crée une animation (+ animation…) ou choisis-en une</span>'; return; }
+  sel.innerHTML = '<option value="">— clip —</option>'
+    + nomsClips().map(n => `<option value="${n}"${n === clipSel ? ' selected' : ''}>${n}${clipEstLocal(n) ? ' · local' : ''}</option>`).join('');
+  const an = clipCourant();
+  if (!an) { boite.innerHTML = '<span class="astuce">choisis un clip, ou crée-le (nom + « + clip »)</span>'; majScenes(); return; }
+  an.cles = an.cles || [];
   $('#aBoucle').checked = !!an.boucle;
   const poseOpts = [...new Set([...Object.keys((doc && doc.poses) || {}), ...Object.keys(FishBody.POSES)])];
   const visOpts = Object.keys(FishBody.EMOTIONS);
@@ -1007,7 +1048,7 @@ function majCles() {
     <button data-i="${i}" data-c="x" title="supprimer la clé">×</button></div>`).join('');
   boite.querySelectorAll('input,select').forEach(el => el.addEventListener('change', ev => {
     const i = +ev.target.dataset.i, champ = ev.target.dataset.c;
-    instantane();
+    if (clipEstLocal(clipSel)) instantane(); else biblioTouchee();
     if (champ === 't') {
       an.cles[i].t = Math.max(0, parseFloat(ev.target.value) || 0);
       an.cles.sort((a, b) => a.t - b.t);
@@ -1016,10 +1057,67 @@ function majCles() {
     majCles(); dessiner();
   }));
   boite.querySelectorAll('button').forEach(b => b.addEventListener('click', ev => {
-    instantane();
+    if (clipEstLocal(clipSel)) instantane(); else biblioTouchee();
     an.cles.splice(+ev.target.dataset.i, 1);
     sceneT0 = performance.now() / 1000;
     majCles(); dessiner();
+  }));
+  majScenes();
+}
+
+// La bibliothèque a bougé et n'est pas écrite : le bouton 💾 le rappelle.
+function biblioTouchee() {
+  const b = $('#cBiblio');
+  if (b) b.textContent = '💾 bibliothèque •';
+}
+
+// Les rangées de SCÈNES : « SI événement [conditions] ALORS play clip ».
+// L'état vit dans doc.scenes (les anciennes `regles` y migrent à l'ouverture).
+function majScenes() {
+  const boite = $('#scenesL');
+  if (!boite) return;
+  if (doc && !doc.scenes && doc.regles) {
+    // Migration douce de l'ancien format : `quand` devient `si`, l'objet de
+    // conditions devient `cond`.
+    doc.scenes = doc.regles.map(r => ({ si: r.quand || r.si, avec: r.avec || null,
+      cond: (typeof r.si === 'object' && r.si) || r.cond || {}, jouer: r.jouer, cooldown: r.cooldown }));
+    delete doc.regles;
+  }
+  const scenes = (doc && doc.scenes) || [];
+  const SI = ['mort', 'mange', 'graine', 'peur', 'dort', 'chasse', 'parade', 'voyage',
+              'attaque', 'saut', 'pond', 'charge', 'crash', 'assomme',
+              'collision:sol', 'collision:surface', 'collision:colosse'];
+  const cle = (r) => r.si + (r.avec ? ':' + r.avec : '');
+  boite.innerHTML = scenes.map((r, i) => `<div class="cle">
+    si <select data-i="${i}" data-c="si">${SI.map(o => `<option${o === cle(r) ? ' selected' : ''}>${o}</option>`).join('')}</select>
+    <input type="number" data-i="${i}" data-c="vitesseMin" value="${(r.cond && r.cond.vitesseMin) ?? ''}"
+           placeholder="vit ≥" step="10" min="0" style="width:58px"
+           title="vitesse minimale (px/s) — sépare le vrai plantage du frôlement">
+    play <select data-i="${i}" data-c="jouer" title="le clip joué">
+      <option value=""${!r.jouer ? ' selected' : ''}>(clip…)</option>
+      ${nomsClips().map(o => `<option${o === r.jouer ? ' selected' : ''}>${o}</option>`).join('')}</select>
+    <input type="number" data-i="${i}" data-c="cooldown" value="${r.cooldown ?? 10}" step="1" min="1"
+           style="width:52px" title="cooldown de la scène (s)">
+    <button data-i="${i}" data-c="x" title="supprimer la scène">×</button></div>`).join('')
+    || '<span class="astuce">aucune scène custom — les défauts du moteur jouent (mange, peur, crash, charge…)</span>';
+  boite.querySelectorAll('input,select').forEach(el => el.addEventListener('change', ev => {
+    const i = +ev.target.dataset.i, champ = ev.target.dataset.c, r = doc.scenes[i];
+    instantane();
+    if (champ === 'si') {
+      const [siT, avec] = ev.target.value.split(':');
+      r.si = siT; r.avec = avec || null;
+    } else if (champ === 'vitesseMin') {
+      r.cond = r.cond || {};
+      const v = parseFloat(ev.target.value);
+      if (isFinite(v) && v > 0) r.cond.vitesseMin = v; else delete r.cond.vitesseMin;
+    } else if (champ === 'cooldown') r.cooldown = Math.max(1, parseFloat(ev.target.value) || 10);
+    else if (champ === 'jouer') r.jouer = ev.target.value || '';
+    majScenes();
+  }));
+  boite.querySelectorAll('button').forEach(b => b.addEventListener('click', ev => {
+    instantane();
+    doc.scenes.splice(+ev.target.dataset.i, 1);
+    majScenes();
   }));
 }
 
@@ -1035,40 +1133,41 @@ function jouerScene(e, t) {
     if (colEdit) e._poseMain = colEdit;
     return;
   }
-  // MODE TIMELINE : l'animation ouverte est jouée par LE MÊME lecteur que le
-  // jeu (`FishBody.poseAt`), en boucle, à la vitesse de lecture choisie.
-  if (sceneJeu === 'timeline') {
-    const an = doc && doc.animes && doc.animes[animeSel];
+  if (sceneJeu !== 'scenes') return;
+  // VUE SCÈNES, sans aperçu par défaut en cours : le CLIP choisi joue en
+  // boucle, par LE MÊME lecteur que le jeu (`FishBody.poseAt`).
+  if (!demo) {
+    const clip = clipCourant();
     const spA = Sprites.cache['__atelier__'];
-    if (an && an.cles && an.cles.length && spA) {
-      const fin = Math.max(0.1, an.cles[an.cles.length - 1].t || 0.1);
+    if (clip && clip.cles && clip.cles.length && spA) {
+      const fin = Math.max(0.1, clip.cles[clip.cles.length - 1].t || 0.1);
       let u = (t - sceneT0) * vitesseScene;
-      u = an.boucle !== false ? u % fin : Math.min(u, fin);
-      const p = FishBody.poseAt(spA, an, doc.poses, u);
+      u = clip.boucle === false ? Math.min(u, fin) : u % fin;
+      const p = FishBody.poseAt(spA, clip, doc && doc.poses, u);
       e._poseMain = { dx: p.dx, dy: p.dy, sy: p.sy, rot: p.rot };
       if (p.visage) { e.expression = p.visage; e._held = true; e.exprTimer = 9; }
     }
     return;
   }
   const CYCLES = { charge: 7, cabre: 2.8, fleche: 2.6, crash: 3.8, choc: 1.8, plat: 1.8 };
-  const u = ((t - sceneT0) * vitesseScene) % CYCLES[sceneJeu];
+  const u = ((t - sceneT0) * vitesseScene) % CYCLES[demo];
   const pose = (expr) => { e.expression = expr; e._held = true; e.exprTimer = 9; };
-  if (sceneJeu === 'cabre') {
+  if (demo === 'cabre') {
     e._crispe = u < 0.9 ? (u / 0.9) ** 2 : u < 2.2 ? 1 : Math.max(0, 1 - (u - 2.2) / 0.5);
     pose('proud');
-  } else if (sceneJeu === 'fleche') {
+  } else if (demo === 'fleche') {
     if (u < 2.1) { e._etire = Math.max(0.6, 1 - u * 1.5); e._smear = e._etire; pose('angry'); }
-  } else if (sceneJeu === 'charge') {
+  } else if (demo === 'charge') {
     if (u < 1.2) { e._crispe = (u / 1.2) ** 2; pose('proud'); }
     else if (u < 2.8) { e._etire = Math.max(0.6, 1 - (u - 1.2) * 1.5); e._smear = e._etire; pose('angry'); }
     else if (u < 4.6) { e._ecraseT = 1; pose('surprise'); }
     else if (u < 5.5) { e._chocT = u - 4.6; e._chocAmp = -0.8; e._chocAxe = 'x'; pose('dizzy'); }
-  } else if (sceneJeu === 'crash') {
+  } else if (demo === 'crash') {
     if (u < 1.8) { e._ecraseT = 1; pose('surprise'); }
     else if (u < 2.7) { e._chocT = u - 1.8; e._chocAmp = -0.8; e._chocAxe = 'x'; pose('dizzy'); }
-  } else if (sceneJeu === 'choc' || sceneJeu === 'plat') {
+  } else if (demo === 'choc' || demo === 'plat') {
     if (u < 0.9) {
-      e._chocT = u; e._chocAmp = 1; e._chocAxe = sceneJeu === 'plat' ? 'y' : 'x';
+      e._chocT = u; e._chocAmp = 1; e._chocAxe = demo === 'plat' ? 'y' : 'x';
       pose('surprise');
     }
   }
@@ -1725,6 +1824,25 @@ function sectionVisage() {
         et une gueule de requin ne jouent pas la colère avec la même bouche. Le bandeau
         du bas montre le résultat sur toutes les humeurs.`)
 
+    + (st === 'bec' ? (() => {
+        const b = doc.bec || {};
+        const cur = (id, cle, lib, min, max, pas, def) =>
+          `<label>${lib} <span class="val" id="v${id}">${(b[cle] == null ? def : b[cle]).toFixed(2)}</span></label>
+           <input type="range" id="s${id}" data-bec="${cle}" data-def="${def}"
+             min="${min}" max="${max}" step="${pas}" value="${b[cle] == null ? def : b[cle]}">`;
+        return `<h2>Le bec</h2>`
+          + cur('BecLg', 'long', 'Longueur', 0.3, 2.5, 0.05, 1)
+          + cur('BecHt', 'haut', 'Mandibule supérieure', 0, 3, 0.05, 1)
+          + cur('BecBs', 'bas', 'Mandibule inférieure', 0, 3, 0.05, 1)
+          + cur('BecEc', 'ecart', 'Écartement', 0, 6, 0.1, 1)
+          + `<label>Orientation <span class="val" id="vBecAn">${Math.round(b.angle || 0)}°</span></label>
+             <input type="range" id="sBecAn" data-bec="angle" data-def="0" min="-60" max="60" step="1" value="${Math.round(b.angle || 0)}">`
+          + `<div class="rangee"><button id="bBecRaz" ${doc.bec ? '' : 'disabled'}>Bec par défaut</button></div>`
+          + A(`Les deux mandibules se règlent <b>séparément</b> : un pélican a une mandibule
+              inférieure énorme et une supérieure fine, un goéland l'inverse, un bec de
+              canard est plat des deux côtés. À <b>0</b>, une mandibule disparaît — il
+              reste un cure-dent. L'<b>écartement</b> est le jour qui subsiste bec fermé.`);
+      })() : '')
     + `<h2>Couleurs</h2>`
     + c('encre',   '#1c2733', 'Trait (contour, œil fermé)')
     + c('sourcil', '#1c2733', 'Sourcil')
@@ -1735,6 +1853,12 @@ function sectionVisage() {
     + c('levres',  '#e8607f', 'Lèvres / ventouse')
     + c('dent',    '#ffffff', 'Dents')
     + c('bec',     '#f0a83c', 'Bec')
+    + `<label>Épaisseur du trait <span class="val" id="vVTr">${(v.trait == null ? 1 : v.trait).toFixed(2)}</span>×</label>
+    <input type="range" id="sVTr" min="0" max="3" step="0.05" value="${v.trait == null ? 1 : v.trait}">`
+    + A(`Le poids de <b>tous</b> les traits du visage : bouche, sourcil, œil fermé,
+        contour du bec. La couleur se réglait déjà, pas l'épaisseur — un dessin au trait
+        fin héritait d'un visage au gros feutre, et l'inverse sur un dessin épais. À 0, il
+        n'y a plus de trait du tout.`)
     + `<div class="rangee"><button id="bVisRaz" ${doc.visage ? '' : 'disabled'}>Tout remettre par défaut</button></div>`
     + A(`Le visage est dessiné <b>par-dessus</b> le dessin : le repeindre dans le calque
         ne change rien. C'est ici que le trait d'encre, la pupille ou le bec prennent
@@ -1814,6 +1938,19 @@ function sectionAppendices() {
         + A(`Rien ne bouge tant que l'animation est à l'arrêt : le dessin est alors rendu
              dans sa <b>pose de repos</b>, exactement sur ses points. Le même bouton est
              en haut de la fenêtre.`))
+    + (t === 'pince' ? `
+    <h2>Piloté par</h2>
+    <div class="rangee">
+      <button data-src="nage" class="${f.source === 'coquille' ? '' : 'on'}">La nage</button>
+      <button data-src="coquille" class="${f.source === 'coquille' ? 'on' : ''}">🐚 L'ouverture</button>
+    </div>`
+      + A(`Un appendice bat normalement au rythme du <b>corps</b>. Un coquillage, lui,
+          s'ouvre selon son <b>état</b> : entrouvert quand il dort — refermé, on ne verrait
+          pas ses yeux clos — il glousse quand il mange, et s'ouvre en grand quand il
+          fabrique une perle. C'est ce que fait sa silhouette procédurale, et c'est ce
+          qu'un dessin ne pouvait pas retrouver.<br>
+          Le bandeau des humeurs le montre : <b>sleeping</b> et <b>eating</b> n'ouvrent pas
+          la valve pareil.`) : '')
     + `<div class="rangee"><button id="bMiroirFin" class="${f.miroir ? 'on' : ''}">${f.miroir ? 'Symétrique ✓' : 'Rendre symétrique'}</button></div>`
     + A(`Un crabe, une raie, un poulpe ont des appendices des <b>deux</b> côtés : un seul
         ancrage n'en anime qu'une moitié. En symétrique, un second est posé en miroir de
@@ -2330,7 +2467,7 @@ function cablerBarres() {
     // Couper l'animation coupe la scène : un crash figé à mi-plop n'est pas
     // une pose de repos, et le dessin doit redevenir saisissable.
     if (!anime) {
-      sceneJeu = ''; const s = $('#selScene'); if (s) s.value = '';
+      sceneJeu = ''; demo = ''; const s = $('#selScene'); if (s) s.value = '';
       $('#poseBox').hidden = true; $('#timeBox').hidden = true;
     }
     barre();
@@ -2355,12 +2492,13 @@ function cablerBarres() {
     sceneT0 = performance.now() / 1000;
     if (sceneJeu && !anime) anime = true;      // une scène ne se joue qu'animée
     $('#poseBox').hidden = sceneJeu !== 'pose';
-    $('#timeBox').hidden = sceneJeu !== 'timeline';
+    $('#timeBox').hidden = sceneJeu !== 'scenes';
+    demo = '';
     if (sceneJeu === 'pose') {
       colEdit = chargerPose('cabre'); $('#pRot').value = colEdit.rot;
       $('#nomPose').value = 'cabre'; majSelPose();
     }
-    if (sceneJeu === 'timeline') majCles();
+    if (sceneJeu === 'scenes') majCles();
     barre(); dessiner();
   });
   on('#pRot', 'input', ev => { if (colEdit) { colEdit.rot = parseFloat(ev.target.value); dessiner(); } });
@@ -2382,32 +2520,70 @@ function cablerBarres() {
     dire(`pose « ${nom} » gardée dans le dessin — 💾 Enregistrer pour l'écrire dans Assets/`);
   });
 
-  // --- La timeline (mode « Timeline ») ---
-  on('#selAnime', 'change', ev => { animeSel = ev.target.value; sceneT0 = performance.now() / 1000; majCles(); });
-  on('#aCree', 'change', ev => {
-    const nom = ev.target.value;
-    ev.target.value = '';
-    if (!doc || !nom) return;
-    instantane();
-    doc.animes = doc.animes || {};
-    doc.animes[nom] = doc.animes[nom] || { boucle: false, cles: [{ t: 0, pose: '', visage: '' }] };
-    animeSel = nom; sceneT0 = performance.now() / 1000;
+  // --- La vue « Scènes du poisson » ---
+  document.querySelectorAll('#timeBox [data-demo]').forEach(b =>
+    b.addEventListener('click', ev => {
+      demo = ev.target.dataset.demo || '';
+      sceneT0 = performance.now() / 1000;
+      dessiner();
+    }));
+  on('#selClip', 'change', ev => {
+    clipSel = ev.target.value; demo = '';
+    sceneT0 = performance.now() / 1000;
     majCles(); dessiner();
   });
-  on('#aSupprime', 'click', () => {
-    const an = doc && doc.animes && doc.animes[animeSel];
-    if (!an) return;
-    instantane(); delete doc.animes[animeSel]; animeSel = '';
+  on('#cAjout', 'click', () => {
+    const nom = ($('#nomClip').value || '').trim();
+    if (!nom) { dire('donne un nom au clip (champ à côté de « + clip »)'); return; }
+    // Un nouveau clip naît dans la BIBLIOTHÈQUE partagée (décision d'auteur) :
+    // il servira à toutes les espèces, chacune avec ses propres poses.
+    Sprites.clips[nom] = Sprites.clips[nom] || { boucle: false, cles: [{ t: 0, pose: '', visage: '' }] };
+    biblioTouchee();
+    clipSel = nom; demo = ''; $('#nomClip').value = '';
+    sceneT0 = performance.now() / 1000;
     majCles(); dessiner();
+  });
+  on('#cSupprime', 'click', () => {
+    if (!clipSel) return;
+    if (clipEstLocal(clipSel)) {
+      instantane();
+      if (doc.clips) delete doc.clips[clipSel];
+      if (doc.animes) delete doc.animes[clipSel];
+    } else { delete Sprites.clips[clipSel]; biblioTouchee(); }
+    clipSel = '';
+    majCles(); dessiner();
+  });
+  on('#cBiblio', 'click', () => {
+    dire('écriture de la bibliothèque…');
+    fetch('api/sprite/clips', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Sprites.clips),
+    }).then(r => r.json()).then(rep => {
+      if (rep.erreur) return dire('refusé : ' + rep.erreur, 'ko');
+      $('#cBiblio').textContent = '💾 bibliothèque';
+      dire(`bibliothèque écrite dans ${rep.fichier} (${rep.octets} octets)`, 'ok');
+    }).catch(() => dire('le serveur de dev ne répond pas — la bibliothèque reste en mémoire', 'ko'));
   });
   on('#aBoucle', 'change', ev => {
-    const an = doc && doc.animes && doc.animes[animeSel];
-    if (an) { an.boucle = ev.target.checked; sceneT0 = performance.now() / 1000; }
+    const an = clipCourant();
+    if (!an) return;
+    if (clipEstLocal(clipSel)) instantane(); else biblioTouchee();
+    an.boucle = ev.target.checked;
+    sceneT0 = performance.now() / 1000;
+  });
+  on('#sAjout', 'click', () => {
+    if (!doc) return;
+    instantane();
+    doc.scenes = doc.scenes || [];
+    doc.scenes.push({ si: 'collision', avec: 'sol', cond: { vitesseMin: 180 },
+                      jouer: clipSel || '', cooldown: 15 });
+    majScenes();
   });
   on('#aAjoutCle', 'click', () => {
-    const an = doc && doc.animes && doc.animes[animeSel];
-    if (!an) { dire('crée ou choisis d\'abord une animation'); return; }
-    instantane();
+    const an = clipCourant();
+    if (!an) { dire('choisis ou crée d\'abord un clip'); return; }
+    if (clipEstLocal(clipSel)) instantane(); else biblioTouchee();
+    an.cles = an.cles || [];
     const fin = an.cles.length ? an.cles[an.cles.length - 1].t : -0.5;
     an.cles.push({ t: +(fin + 0.5).toFixed(1), pose: '', visage: '' });
     sceneT0 = performance.now() / 1000;
@@ -2655,6 +2831,12 @@ function cabler() {
     doc.points.eye.r = SVGImport.rayonOeil(doc.shapes, doc.points.eye, doc.naturalW);
     marquer(); panneau();
   });
+  document.querySelectorAll('[data-src]').forEach(b => b.addEventListener('click', () => {
+    instantane();
+    const f = doc.fins[finSel];
+    if (b.dataset.src === 'coquille') f.source = 'coquille'; else delete f.source;
+    marquer(); panneau();
+  }));
   on('#bAnimeIci', 'click', () => { anime = true; barre(); panneau(); });
   on('#selFin', 'change', e => { finSel = +e.target.value; panneau(); dessiner(); });
   ['#sFA', '#sFO', '#sFAm', '#sFPh', '#sFV', '#sTO'].forEach(sel => on(sel, 'pointerdown', instantane));
@@ -2878,6 +3060,33 @@ function cabler() {
     if (doc.visage && !Object.keys(doc.visage).length) delete doc.visage;
     marquer(); panneau();
   }));
+  on('#sVTr', 'pointerdown', instantane);
+  on('#sVTr', 'input', e => {
+    const v = +e.target.value;
+    doc.visage = doc.visage || {};
+    if (Math.abs(v - 1) < 0.001) delete doc.visage.trait; else doc.visage.trait = v;
+    if (!Object.keys(doc.visage).length) delete doc.visage;
+    $('#vVTr').textContent = v.toFixed(2);
+    marquer();
+  });
+  on('#sVTr', 'change', () => panneau());
+  // Les réglages du bec : un seul gestionnaire pour les cinq curseurs, chacun
+  // portant sa clé et sa valeur par défaut. Une valeur par défaut n'est pas
+  // écrite dans le fichier.
+  document.querySelectorAll('[data-bec]').forEach(inp => {
+    inp.addEventListener('pointerdown', instantane);
+    inp.addEventListener('input', () => {
+      const cle = inp.dataset.bec, def = +inp.dataset.def, v = +inp.value;
+      doc.bec = doc.bec || {};
+      if (Math.abs(v - def) < 0.001) delete doc.bec[cle]; else doc.bec[cle] = v;
+      if (!Object.keys(doc.bec).length) delete doc.bec;
+      const lbl = $('#v' + inp.id.slice(1));
+      if (lbl) lbl.textContent = cle === 'angle' ? Math.round(v) + '°' : v.toFixed(2);
+      marquer();
+    });
+    inp.addEventListener('change', () => panneau());
+  });
+  on('#bBecRaz', 'click', () => { instantane(); delete doc.bec; marquer(); panneau(); });
   on('#bVisRaz', 'click', () => { instantane(); delete doc.visage; marquer(); panneau(); });
 
   // --- Apparence d'un calque -------------------------------------------------
@@ -3951,6 +4160,8 @@ function aEnvoyer() {
   // rendre le réglage tel qu'il était, pas une valeur par défaut.
   if (d.tailBlend != null) d.tailBlend = a(d.tailBlend);
   if (d.tailAxe != null && Math.round(d.tailAxe) === 90) delete d.tailAxe;
+  if (d.bec) for (const c in d.bec) d.bec[c] = a(d.bec[c]);
+  if (d.visage && d.visage.trait != null) d.visage.trait = a(d.visage.trait);
   // `base` reste dans le fichier : c'est une donnée du dessin, pas un réglage
   // d'outil — le jeu s'en sert pour l'encre du visage.
   if (d.base && !d.base.primaire && !d.base.secondaire) delete d.base;
@@ -4083,8 +4294,13 @@ function boucle() { if (anime) { dessiner(); } bandeau(); requestAnimationFrame(
 Promise.all([
   fetch('Assets/sprites.json').then(r => (r.ok ? r.json() : {})).catch(() => ({})),
   fetch('Assets/Reperes/index.json').then(r => (r.ok ? r.json() : {})).catch(() => ({})),
+  // La bibliothèque de clips partagée : l'atelier l'édite, il doit donc la
+  // charger — sinon chaque session repartirait d'une bibliothèque vide et
+  // « 💾 bibliothèque » écraserait celle des autres.
+  fetch('Assets/clips.json').then(r => (r.ok ? r.json() : {})).catch(() => ({})),
 ])
-  .then(([m, rep]) => {
+  .then(([m, rep, clips]) => {
+    Sprites.clips = clips || {};
     REPERES = rep || {};
     manifeste = m || {};
     // Les sprites déclarés en dur dans species.js comptent aussi.

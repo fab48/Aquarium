@@ -347,7 +347,51 @@ Les événements câblés (`Entity.jouerAnime`) : les transitions d'ÉTAT via la
 table `ANIM_ETATS` (`flee→peur, sleep→dort, hunt→chasse, court→parade,
 migrate→voyage, strike→attaque`) — dessiner une animation de ce nom dans
 l'atelier SUFFIT, rien à câbler ; et les ponctuels à leur source : `mange`
-(mastication et graine), `crash`, `saut`, `pond`, `charge`. Exemple canon :
+(mastication et graine), `crash`, `saut`, `pond`, `charge`.
+
+**SCÈNES ET CLIPS — le modèle de l'auteur, qui a remplacé mes trois
+mécanismes séparés** (animations-par-nom, règles, aperçus) :
+
+- **Un CLIP** est une timeline réutilisable, et la bibliothèque est
+  **PARTAGÉE** (`Assets/clips.json`, décision d'auteur) : la chorégraphie est
+  commune, mais les clés référencent des POSES que chaque animal redéfinit —
+  le poulpe joue le même clip que le thon avec son propre corps. Un clip
+  local au dessin (`doc.clips`, et les vieilles `animes`) l'emporte sur son
+  homonyme de bibliothèque (`Sprites.clipDe`). `build.py` expédie la
+  bibliothèque (fichier + pré-cache PWA + `PRECHARGE.clips` en inline).
+- **Une SCÈNE** (`doc.scenes`) = « SI événement [conditions] ALORS play
+  clip » : `{ si: 'collision', avec: 'sol', cond: { vitesseMin: 180 },
+  jouer: 'dans_les_pommes', cooldown: 15 }`. Le bus
+  `Entity.evenement(type, p)` est branché sur des tests qui existaient déjà
+  (tout le moteur est en cercles et en seuils — le sol est un champ de
+  hauteurs par colonne, pas un cast) : `collision` sol/surface/colosse,
+  `assomme`, `graine`, plus tous les noms d'événements (mange, peur, dort…).
+  Sans scène, le clip qui PORTE LE NOM de l'événement joue en défaut ; sans
+  clip, le générique du moteur. `cond` est un **vocabulaire fermé** (vitesse,
+  profondeur, nuit, faim — pas de code dans le JSON ; ce qui agit sur la
+  simulation reste un gag dans gags.js). L'ancien format `regles`
+  (`quand`/`si`-objet) est encore lu, un typeof départage.
+- **Une seule animation de CORPS à la fois** — un événement pendant une scène
+  est PERDU, pas de file, le cooldown gate la suite — et les clips de
+  **VISAGE SEUL** (aucune clé de pose) ont leur propre piste et se combinent
+  par-dessus. Le cooldown est vital : « collision : sol » se joue des
+  centaines de fois par minute (contact au sable mesuré à 953/min),
+  `vitesseMin` sépare le vrai plantage du frôlement.
+- **LA MORT SE JOUE, TOUTES les morts** (décision d'auteur) : un clip ou une
+  scène `mort` fige le corps le temps de sa grande scène (bornée à 2,5 s)
+  avant l'arête — et **même mangée** : le prédateur SE FIGE, la regarde
+  jouer, puis revient l'avaler (`Entity.agonise` + `_attendRepas` ; la
+  simulation ne change pas, seul l'avalage se décale). Vérifié : mort
+  naturelle → clip → arête ; dans la gueule → le requin attend 1,55 s → il
+  mâche.
+
+L'atelier a été réorganisé sur ce modèle : le menu 🎬 n'a plus que DEUX vues —
+**Scènes du poisson** (les aperçus des défauts du moteur, la liste des scènes
+SI→play, et les clips avec leur timeline ; 💾 bibliothèque écrit
+`Assets/clips.json` par `api/sprite/clips`, chargée au démarrage sinon chaque
+session écraserait celle des autres) et **Poses** (les poignées de la
+colonne). La timeline avait grandi dans le sélecteur d'aperçu — un accident
+d'historique, signalé par l'auteur, pas un design. Exemple canon :
 « un animal bizarre quand il mange » = une animation `mange` de trois clés
 (surprise → crash+eating → cabré+happy), vérifiée en jeu sur une vraie
 graine. L'atelier édite tout ça : vue Scènes → **Timeline (poses clés)** —
@@ -1481,6 +1525,12 @@ Quatre règles :
   d'effort `vigueur` déjà appliqué à la queue), mais la vraie leçon est que
   l'atelier affiche maintenant le **débattement obtenu en pixels**, en rouge
   sous 1 % : un curseur dont on ne peut pas lire l'effet se règle à l'aveugle.
+- **Un appendice peut être piloté par l'ÉTAT et pas par la nage** (`fins[].source`).
+  L'ouverture d'un coquillage ne suit pas le battement du corps : entrouverte en
+  dormant — refermée, on ne verrait pas ses yeux clos —, elle glousse en mangeant
+  et s'ouvre en grand sur une perle. `FishBody.ouvertureCoquille` est donc extraite
+  de `drawShell` et offerte aux appendices : un coquillage DESSINÉ retrouve
+  l'animation de sa silhouette, ce qu'un rythme libre ne pouvait pas imiter.
 - **Un accessoire de gag enfermé dans une silhouette disparaît avec elle.** La
   danse du Crabe Disco a déjà été hissée dans `FishBody.choregraphie()`,
   appliquée AUTOUR du corps quel qu'il soit. Restent la **poche du Pélican**, la

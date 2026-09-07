@@ -7,7 +7,13 @@
 //                 secondaire donne son défaut à l'encre du visage (donc au
 //                 sourcil et au trait de la bouche).
 //   visage      — PALETTE du visage commun : encre, pupille, gorge, langue,
-//                 lèvres, bec, joue. Surcharge partielle de `FishBody.VISAGE`.
+//                 lèvres, bec, joue, plus `trait` — le POIDS du trait, en
+//                 multiples de l'épaisseur d'origine. Surcharge partielle de
+//                 `FishBody.VISAGE`.
+//   bec         — { haut, bas, angle, ecart, long } : les deux mandibules se
+//                 règlent SÉPARÉMENT (un pélican a une mandibule inférieure
+//                 énorme, un goéland l'inverse), avec l'orientation du bec et le
+//                 jour qui reste entre elles bec fermé.
 //   boucheStyle — forme de la bouche : standard, grande, petite, gueule (à
 //                 dents), bec, ventouse. Ce que la bouche EXPRIME reste piloté
 //                 par les émotions, identiques pour tout l'aquarium.
@@ -81,7 +87,12 @@
 //                             claque. Un sinus ne sait pas dire « clac » : il
 //                             referme aussi lentement qu'il ouvre.
 //                 Communs : `calques` (les formes entraînées), `miroir`,
-//                 `amp`, `phase`, `vitesse`.
+//                 `amp`, `phase`, `vitesse`, et `source` — ce QUI pilote
+//                 l'appendice. Par défaut la nage ; `'coquille'` le branche sur
+//                 l'ouverture d'un coquillage, qui suit l'ÉTAT de la créature
+//                 (entrouverte en dormant, qui glousse en mangeant, grande
+//                 ouverte sur une perle) et non le battement du corps. C'est ce
+//                 qui rend à un coquillage DESSINÉ l'animation de sa silhouette.
 //
 // Le fichier est écrit par `atelier.html`. `Assets/sprites.json` dit quelle
 // espèce utilise quel dessin (voir `init`).
@@ -90,6 +101,20 @@
 // procédurale continue d'être dessinée. Aucune frame n'attend un sprite.
 const Sprites = {
   cache: {},              // nom -> objet préparé | null (en cours) | false (échec)
+
+  // LA BIBLIOTHÈQUE DE CLIPS PARTAGÉE (`Assets/clips.json`, décision
+  // d'auteur) : des timelines de poses clés utilisables par TOUTES les
+  // espèces. La chorégraphie est commune, mais les clés référencent des POSES
+  // — que chaque animal redéfinit dans son dessin : le poulpe joue le même
+  // clip que le thon avec son propre corps. Un clip local au dessin
+  // (`doc.clips`) l'emporte sur celui de la bibliothèque du même nom, et les
+  // vieilles `animes` du dessin comptent comme des clips locaux.
+  clips: {},
+  clipDe(sp, nom) {
+    return (sp && sp.clips && sp.clips[nom])
+        || (sp && sp.animes && sp.animes[nom])
+        || this.clips[nom] || null;
+  },
 
   // Le manifeste `Assets/sprites.json` associe une espèce à son dessin :
   //     { "requin": "SharkSVG", "murene": null }
@@ -106,6 +131,9 @@ const Sprites = {
     // Quand la page les a embarqués, il n'y a rien à aller chercher.
     const pre = this.PRECHARGE;
     if (pre) for (const nom in pre.dessins) this.cache[nom] = this.preparer(pre.dessins[nom]);
+    // La bibliothèque de clips embarquée doit se charger AVANT le retour
+    // anticipé du mode embarqué, comme les dessins.
+    if (pre && pre.clips) this.clips = pre.clips;
 
     for (const id in SPECIES) if (SPECIES[id].sprite) this.charger(SPECIES[id].sprite);
     if (pre) { this.appliquerManifeste(pre.manifeste); return; }
@@ -114,6 +142,14 @@ const Sprites = {
       .then(r => (r.ok ? r.json() : null))
       .then(m => { if (m) this.appliquerManifeste(m); })
       .catch(() => {});     // pas de manifeste = rien à faire, cas normal
+
+    // La bibliothèque de clips partagée. Asynchrone comme le reste : tant
+    // qu'elle n'est pas là, seuls les clips locaux des dessins jouent.
+    // (En mode embarqué, `PRECHARGE.clips` la fournit — cf. plus haut.)
+    fetch('Assets/clips.json')
+      .then(r => (r.ok ? r.json() : null))
+      .then(c => { if (c) this.clips = c; })
+      .catch(() => {});     // pas de bibliothèque = cas normal
   },
 
   appliquerManifeste(m) {
@@ -198,6 +234,15 @@ const Sprites = {
       // Jouées par `Entity.jouerAnime` quand l'événement du même nom survient ;
       // sans animation déclarée, le comportement générique reste la règle.
       animes: d.animes || null,
+      // CLIPS locaux au dessin (une variante propre à l'animal l'emporte sur
+      // la bibliothèque partagée du même nom, cf. `Sprites.clipDe`).
+      clips: d.clips || null,
+      // SCÈNES : `[{ si: 'collision', avec: 'sol', conditions via le champ
+      // homonyme `si` de la règle (vitesseMin…), jouer, cooldown }]` —
+      // « SI événement ALORS play clip ». Le bus `Entity.evenement` les
+      // filtre. Vocabulaire fermé, purement visuel. (`regles` est l'ancien
+      // nom du même format, toujours lu ; son champ type s'appelait `quand`.)
+      scenes: d.scenes || d.regles || null,
       queueCalques: vises(d.queueCalques),
       // CALQUES MASQUÉS. Réglage de travail de l'atelier — on éteint une pièce
       // le temps de voir ce qu'il y a dessous — jamais enregistré dans le
@@ -251,6 +296,7 @@ const Sprites = {
       // visage — donc au trait de la bouche et au sourcil, qui la suivent — pour
       // qu'un liseré de forme et un sourcil ne jurent pas l'un à côté de l'autre.
       // Une couleur déclarée à la main dans `visage` l'emporte toujours.
+      bec: d.bec || null,
       visage: (d.base && d.base.secondaire)
         ? Object.assign({ encre: d.base.secondaire, sourcil: d.base.secondaire }, d.visage || {})
         : (d.visage || null),

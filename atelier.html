@@ -459,6 +459,39 @@ const COUL = { center: '#0a8f3c', nose: '#8a5ea8', eye: '#e0322f', eye2: '#e0322
                mouth: '#1560d8', tail: '#c98a1b' };
 function ancres() { return CLE_ANCRES.filter(c => doc && doc.points[c]); }
 
+// --- L'ANCRE DE BOUCHE, EXPRESSION PAR EXPRESSION ---------------------------
+// Le cri, le bâillement et le bisou ne sortent pas du même endroit d'un museau :
+// une ancre unique les pose tous au même point, et il y en a forcément un qui
+// tombe à côté. Choisir une humeur dans le bandeau du bas puis tirer l'ancre de
+// bouche décale CETTE bouche-là, et elle seule. Tant qu'on ne l'a pas tirée, il
+// n'y a pas de décalage : l'ancre commune sert à tout le monde.
+//
+// Le décalage est retenu par FORME de bouche (`cri`, `bisou`, `ronfle`…) et non
+// par humeur : `happy`, `love` et `proud` sourient du même sourire, les régler
+// trois fois serait trois fois le même travail — et trois façons de se
+// contredire. Le repos est la référence : sur l'humeur `idle`, tirer l'ancre
+// déplace l'ancre elle-même, comme avant.
+function boucheHumeur() { return (FishBody.EMOTIONS[humeur] || FishBody.EMOTIONS.idle).mouth; }
+function boucheDefaut() { return FishBody.EMOTIONS.idle.mouth; }
+function decalBouche(nom) { return (doc && doc.bouches && doc.bouches[nom]) || null; }
+// La position AFFICHÉE de l'ancre de bouche pour l'humeur en cours : c'est elle
+// qu'on voit, qu'on attrape et qu'on tire.
+function posBouche() {
+  const a = doc && doc.points && doc.points.mouth;
+  if (!a) return null;
+  const d = decalBouche(boucheHumeur());
+  return d ? { x: a.x + d[0], y: a.y + d[1], r: a.r } : a;
+}
+function posAncre(cle) { return cle === 'mouth' ? posBouche() : (doc.points[cle]); }
+
+// Les deux mandibules DESSINÉES. Un bec tracé procéduralement ne ressemblera
+// jamais à celui qu'on a dessiné ; un bec dessiné, lui, ne savait pas s'ouvrir.
+// Marquer deux calques `bec haut` / `bec bas` les fait pivoter autour de l'ancre
+// de bouche au rythme de l'expression — et le bec procédural s'efface.
+function becDessine() {
+  return !!(doc && doc.shapes.some(sh => sh.role === 'becHaut' || sh.role === 'becBas'));
+}
+
 // --- Groupes de calques -----------------------------------------------------
 // « Aplatir » ne fusionne PAS les tracés : un corps et sa rayure n'ont pas la
 // même couleur, les souder ferait perdre le dessin. Aplatir, ici, c'est déclarer
@@ -1509,8 +1542,20 @@ function poignees(sp) {
 
   // Ancres
   for (const cle of ancres()) {
-    const a = doc.points[cle]; if (!a) continue;
+    const a0 = doc.points[cle]; if (!a0) continue;
+    // La bouche se montre là où elle tombe POUR L'HUMEUR EN COURS.
+    const a = cle === 'mouth' ? posBouche() : a0;
     const [x, y] = versEcran([a.x, a.y]);
+    // Décalée : un fantôme reste sur l'ancre commune, avec un fil entre les
+    // deux — sinon on ne sait plus d'où elle est partie, ni comment y revenir.
+    if (cle === 'mouth' && (a.x !== a0.x || a.y !== a0.y)) {
+      const [x0, y0] = versEcran([a0.x, a0.y]);
+      ctx.strokeStyle = 'rgba(21,96,216,0.5)'; ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x, y); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(x0, y0, 3, 0, Math.PI * 2); ctx.stroke();
+    }
     // L'outil Visage travaille sur les mêmes deux ancres : leurs cercles de
     // taille doivent y rester saisissables, sinon on règle un œil à l'aveugle.
     const vif = outil === 'ancres' || (outil === 'visage' && (cle.startsWith('eye') || cle === 'mouth'));
@@ -1532,7 +1577,13 @@ function poignees(sp) {
     ctx.moveTo(x - R, y); ctx.lineTo(x + R, y);
     ctx.moveTo(x, y - R); ctx.lineTo(x, y + R);
     ctx.stroke();
-    if (vif) { ctx.fillStyle = COUL[cle]; ctx.font = '11px system-ui'; ctx.fillText(cle, x + 9, y - 5); }
+    if (vif) {
+      ctx.fillStyle = COUL[cle]; ctx.font = '11px system-ui';
+      // Sur la bouche, dire QUELLE bouche on est en train de régler : sans ça
+      // on décale « la bouche » sans savoir laquelle des quatorze.
+      ctx.fillText(cle === 'mouth' && boucheHumeur() !== boucheDefaut()
+                   ? 'mouth · ' + boucheHumeur() : cle, x + 9, y - 5);
+    }
   }
 }
 
@@ -1824,6 +1875,45 @@ function sectionVisage() {
         et une gueule de requin ne jouent pas la colère avec la même bouche. Le bandeau
         du bas montre le résultat sur toutes les humeurs.`)
 
+    + (becDessine() ? (() => {
+        const ouv = doc.bec && doc.bec.ouverture != null ? doc.bec.ouverture : 32;
+        return `<h2>Le bec dessiné</h2>`
+          + `<label>Ouverture <span class="val" id="vBecOu">${Math.round(ouv)}</span>°</label>
+             <input type="range" id="sBecOu" data-bec="ouverture" data-def="32"
+               min="0" max="80" step="1" value="${Math.round(ouv)}">`
+          + A(`Deux calques marqués <b>bec haut</b> et <b>bec bas</b> (onglet Calque) pivotent
+              autour de l'<b>ancre de bouche</b>, chacun de son côté, au rythme de
+              l'expression : c'est le dessin qui donne la forme, le socle commun qui donne
+              le geste. Tant qu'un bec est dessiné, la bouche <b>procédurale n'est plus
+              tracée</b> — il y en aurait deux l'une sur l'autre.<br>
+              L'ouverture est l'angle atteint <b>bouche grande ouverte</b> (l'humeur
+              <b>eating</b>). Pose l'ancre de bouche à la <b>charnière</b> du bec, pas à sa
+              pointe : c'est le point autour duquel les deux moitiés tournent.`);
+      })() : '')
+    + (() => {
+        // Les décalages déjà posés, avec de quoi les défaire. Le geste se fait
+        // sur le dessin ; ce tableau n'est là que pour s'y retrouver et revenir
+        // en arrière — un décalage oublié sur une humeur qu'on ne regarde plus
+        // est introuvable autrement.
+        const dec = doc.bouches || {};
+        const noms = Object.keys(dec);
+        const cour = boucheHumeur();
+        return `<h2>Ancre par expression</h2>`
+          + `<p class="aide">Humeur montrée : <b>${humeur}</b> — bouche <b>${cour}</b>${
+              cour === boucheDefaut() ? ' <i>(le repos : c’est l’ancre commune)</i>' : ''}</p>`
+          + (noms.length ? noms.map(n => `<div class="rangee">
+              <label style="flex:1">${n}<span class="val">${dec[n][0].toFixed(1)}, ${dec[n][1].toFixed(1)}</span></label>
+              <button data-boucheraz="${n}" title="Revenir à l'ancre commune">↺</button>
+            </div>`).join('') : '<p class="aide"><i>aucun décalage — toutes les bouches sortent de l’ancre commune</i></p>')
+          + A(`Le cri, le bâillement et le bisou ne sortent pas du même endroit d'un museau.
+              Clique une humeur dans le <b>bandeau du bas</b>, puis tire l'<b>ancre de
+              bouche</b> sur le dessin : le décalage ne vaut que pour cette bouche-là.
+              Tant qu'on ne la tire pas, il n'y en a aucun.<br>
+              C'est la <b>forme</b> de bouche qui est retenue, pas l'humeur :
+              <b>happy</b>, <b>love</b> et <b>proud</b> sourient du même sourire, il n'y a
+              donc qu'un réglage pour les trois. Sur <b>idle</b>, tirer l'ancre déplace
+              l'ancre commune, comme avant.`);
+      })()
     + (st === 'bec' ? (() => {
         const b = doc.bec || {};
         const cur = (id, cle, lib, min, max, pas, def) =>
@@ -2153,6 +2243,18 @@ function sectionApparence() {
     + A(`Facultatif, et il remplace le numéro <b>partout</b> : liste des formes, formes
         entraînées par un appendice, vitesses. Sur un dessin à vingt pièces, « forme 7 »
         ne dit rien et on cherche la bonne en les allumant une par une.`)
+    + `<label>Rôle</label>
+    <select id="selRole">
+      ${[['', 'aucun — calque ordinaire'],
+         ['becHaut', '🦆 bec — mandibule du haut'],
+         ['becBas', '🦆 bec — mandibule du bas']].map(([v, t]) =>
+        `<option value="${v}"${(sh.role || '') === v ? ' selected' : ''}>${t}</option>`).join('')}
+    </select>`
+    + A(`Un rôle donne au calque un <b>geste du visage commun</b> plutôt qu'une animation
+        de nage. Les deux mandibules d'un <b>bec</b> s'ouvrent autour de l'ancre de
+        bouche, chacune de son côté, au rythme de l'expression — et le bec procédural
+        s'efface, sinon il y en aurait deux l'un sur l'autre. L'angle se règle dans
+        l'onglet <b>Visage</b>.`)
     + `<label>Remplissage</label>
     <div class="rangee">
       ${champCouleur('id="cFill"', (sh.fill && sh.fill[0] === '#') ? sh.fill : '#888888')}
@@ -3087,6 +3189,12 @@ function cabler() {
     inp.addEventListener('change', () => panneau());
   });
   on('#bBecRaz', 'click', () => { instantane(); delete doc.bec; marquer(); panneau(); });
+  document.querySelectorAll('[data-boucheraz]').forEach(b => b.addEventListener('click', () => {
+    instantane();
+    if (doc.bouches) delete doc.bouches[b.dataset.boucheraz];
+    if (doc.bouches && !Object.keys(doc.bouches).length) delete doc.bouches;
+    marquer(); panneau();
+  }));
   on('#bVisRaz', 'click', () => { instantane(); delete doc.visage; marquer(); panneau(); });
 
   // --- Apparence d'un calque -------------------------------------------------
@@ -3181,6 +3289,13 @@ function cabler() {
     }
     marquer(); panneau();
     dire(`${nomForme(formeSel)} repeint aux couleurs de base`, 'ok');
+  });
+  on('#selRole', 'change', e => {
+    instantane();
+    const f = sh(); if (!f) return;
+    if (e.target.value) f.role = e.target.value; else delete f.role;
+    marquer(); panneau();
+    dire(e.target.value ? `${nomForme(formeSel)} → ${e.target.value}` : `${nomForme(formeSel)} : plus de rôle`, 'ok');
   });
   on('#nomCalque', 'focus', instantane);
   on('#nomCalque', 'input', e => {
@@ -3674,12 +3789,13 @@ function pres(sx, sy) {
       if (!a) continue;
       const r = cle === 'mouth' ? tailleBouche() : a.r;
       if (!r) continue;
-      const [x, y] = versEcran([a.x, a.y]);
+      const pa = posAncre(cle);
+      const [x, y] = versEcran([pa.x, pa.y]);
       if (Math.hypot(sx - (x + r * vueT.k), sy - y) < seuil) return { type: 'rayonOeil', cle };
     }
     if (outil === 'visage') {
       for (const cle of ['eye', 'eye2', 'mouth']) {
-        const p2 = doc.points[cle]; if (!p2) continue;
+        const p2 = posAncre(cle); if (!p2) continue;
         const [x, y] = versEcran([p2.x, p2.y]);
         if (Math.hypot(sx - x, sy - y) < seuil) return { type: 'ancre', cle };
       }
@@ -3690,7 +3806,7 @@ function pres(sx, sy) {
     // de la liste raflait tous les clics.
     let best = null, bestD = seuil;
     for (const cle of ancres()) {
-      const p = doc.points[cle];
+      const p = posAncre(cle);
       const [x, y] = versEcran([p.x, p.y]);
       const d = Math.hypot(sx - x, sy - y);
       if (d < bestD) { bestD = d; best = { type: 'ancre', cle }; }
@@ -3920,7 +4036,21 @@ vue.addEventListener('pointermove', ev => {
   const sx = ev.clientX - r.left, sy = ev.clientY - r.top;
   const [x, y] = versDoc(sx, sy);
   const a = attrape;
-  if (a.type === 'ancre') { doc.points[a.cle].x = x; doc.points[a.cle].y = y; }
+  if (a.type === 'ancre') {
+    // Tirer l'ancre de bouche pendant qu'une humeur AUTRE que le repos est
+    // montrée décale cette bouche-là, pas l'ancre commune. C'est exactement le
+    // geste que demande « la gueule ouverte tombe trop bas ».
+    if (a.cle === 'mouth' && boucheHumeur() !== boucheDefaut()) {
+      const p = doc.points.mouth, nom = boucheHumeur();
+      const dx = Math.round((x - p.x) * 100) / 100, dy = Math.round((y - p.y) * 100) / 100;
+      doc.bouches = doc.bouches || {};
+      // Ramenée sur l'ancre, elle n'a plus de décalage du tout : on n'écrit pas
+      // un [0, 0] dans le fichier pour dire « rien ».
+      if (Math.abs(dx) < 0.05 && Math.abs(dy) < 0.05) delete doc.bouches[nom];
+      else doc.bouches[nom] = [dx, dy];
+      if (!Object.keys(doc.bouches).length) delete doc.bouches;
+    } else { doc.points[a.cle].x = x; doc.points[a.cle].y = y; }
+  }
   else if (a.type === 'rayonOeil2') {
     doc.points.eye.r2 = Math.max(1, x - a.cx);
   }
@@ -4257,7 +4387,9 @@ cHum.addEventListener('click', ev => {
   // grimace, et il faut retrouver `idle` dans une grille de dix-huit.
   humeur = (humeur === c.ex) ? 'idle' : c.ex;
   dire(humeur === 'idle' ? '' : `aperçu en « ${humeur} » — reclique la vignette pour revenir au repos`);
-  dessiner();
+  // Le panneau annonce quelle bouche l'ancre est en train de régler : le laisser
+  // périmé après un clic sur une vignette, c'est décaler la mauvaise.
+  panneau(); dessiner();
 });
 cHum.style.cursor = 'pointer';
 cHum.title = "Clique une humeur pour la voir en grand";

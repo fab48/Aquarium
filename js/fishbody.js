@@ -895,6 +895,17 @@ const FishBody = {
     const battement = repos ? 0 : Math.sin(ph * 0.7 + e.phase + 1);
     // Les reflets à reporter par-dessus tous les calques (`reflet.dessus`).
     const tardifs = [];
+    // LE BEC DESSINÉ. Deux calques marqués `role: 'becHaut'` / `'becBas'`
+    // s'ouvrent autour de l'ancre de bouche, au rythme de l'EXPRESSION : le
+    // dessinateur donne la forme, le socle commun donne le geste. Un bec tracé
+    // procéduralement ne ressemblera jamais à celui qu'on a dessiné ; un bec
+    // dessiné, lui, ne savait pas s'ouvrir.
+    const emB = this.EMOTIONS[e.expression] || this.EMOTIONS.idle;
+    const kB = e.emoteK ? e.emoteK() : 1;
+    const gB = this.geste(kB > 0.35 ? emB.mouth : this.EMOTIONS.idle.mouth,
+                          t + (e.phase || 0));
+    const becAmp = (sp.bec && sp.bec.ouverture != null ? sp.bec.ouverture : 32) * Math.PI / 180;
+    const becPiv = sp.bouche || { x: sp.cx, y: sp.cy };
     sp.shapes.forEach((forme, i) => {
       // Calque éteint dans l'atelier : rien à peindre. Il reste dans la liste,
       // donc les indices que visent les appendices et la queue ne bougent pas —
@@ -908,6 +919,15 @@ const FishBody = {
         ctx.translate(forme.pivot[0], forme.pivot[1]);
         ctx.rotate(battement * (forme.amp || 15) * 0.007);
         ctx.translate(-forme.pivot[0], -forme.pivot[1]);
+      }
+      // Mandibule DESSINÉE : elle pivote autour de l'ancre de BOUCHE, chacune de
+      // son côté. Au repos rien ne bouge — dans l'atelier, animation arrêtée, le
+      // dessin doit coïncider avec ses points.
+      if ((forme.role === 'becHaut' || forme.role === 'becBas') && !repos) {
+        const sensB = forme.role === 'becHaut' ? -1 : 1;
+        ctx.translate(becPiv.x, becPiv.y);
+        ctx.rotate(sensB * gB.o * becAmp);
+        ctx.translate(-becPiv.x, -becPiv.y);
       }
       this.tracerForme(ctx, forme, sp, anim, apps, i);
       // Couleur de la forme POUR CET INDIVIDU : elle peut être fixe, ou tirée
@@ -1017,7 +1037,9 @@ const FishBody = {
                       e.emoteK ? e.emoteK() : 1, e._eyeLook, !!bo, vis.pal, vis.style);
         ctx.restore();
       }
-      if (bo) {
+      // Un bec DESSINÉ est déjà la bouche : en tracer un second par-dessus,
+      // procédural, en ferait deux superposés.
+      if (bo && !sp.becDessine) {
         const expr = e.expression, k2 = e.emoteK ? e.emoteK() : 1;
         const em = this.EMOTIONS[expr] || this.EMOTIONS.idle;
         // À défaut de taille propre, la bouche suit l'œil — le comportement
@@ -1031,9 +1053,16 @@ const FishBody = {
           ctx.rotate(pb[2]);
           ctx.translate(-(bo.x - sp.cx) * k, -(bo.y - sp.cy) * k);
         }
-        this.bouche(ctx, (bo.x - sp.cx) * k + dx, (bo.y - sp.cy) * k + dy, fsB,
-                    k2 > 0.35 ? em.mouth : this.EMOTIONS.idle.mouth, t + (e.phase || 0),
-                    vis.pal, vis.style);
+        const nomB = k2 > 0.35 ? em.mouth : this.EMOTIONS.idle.mouth;
+        // DÉCALAGE PROPRE À UNE FORME DE BOUCHE. Le cri, le bâillement et le
+        // bisou ne sortent pas du même endroit du museau : une ancre unique les
+        // pose tous au même point, et l'un d'eux tombe forcément à côté. Le
+        // décalage est en unités du DESSIN, donc il suit l'échelle. Absent, la
+        // bouche reste à son ancre — les dessins déjà calés ne bougent pas.
+        const dec = sp.bouches && sp.bouches[nomB];
+        this.bouche(ctx, (bo.x + (dec ? dec[0] : 0) - sp.cx) * k + dx,
+                    (bo.y + (dec ? dec[1] : 0) - sp.cy) * k + dy, fsB,
+                    nomB, t + (e.phase || 0), vis.pal, vis.style);
         ctx.restore();
       }
     }

@@ -885,6 +885,73 @@ remplace (le repère pour juger d'une taille — surtout sur un dessin importé 
 qui force `Main.nightAmount()` à 1 : le faux `Main` de la page répond « plein
 jour », donc sans lui une luminescence ne se voit **jamais** dans l'atelier.
 
+### Le bec DESSINÉ, et l'ancre de bouche expression par expression
+
+Deux manques de la même famille : le visage commun est **commun**, et il n'y a
+donc qu'une bouche et qu'une ancre pour tout le monde. Ça tient tant que la
+créature a une bouche de poisson.
+
+**Un bec dessiné qui joue quand même l'animation.** Le style de bouche `bec`
+trace deux mandibules **procédurales** : leur longueur, leur hauteur, leur
+écartement et leur orientation se règlent, mais leur *forme* est celle du
+moteur. Aucun réglage ne fera de ce triangle le bec crochu du perroquet ni la
+poche du pélican — c'est du dessin, et le dessin appartient à l'atelier.
+
+Deux calques marqués **bec haut** et **bec bas** (onglet Calque → *Rôle*) sont
+maintenant tracés par l'artiste, et **pivotent autour de l'ancre de bouche**,
+chacun de son côté, à l'ouverture que réclame l'expression courante
+(`FishBody.geste(...).o`, la même valeur qui ouvre toutes les autres bouches du
+jeu). Le dessinateur donne la forme, le socle commun donne le geste.
+
+Trois points qui ne s'improvisent pas :
+
+- **Le bec procédural s'efface** dès qu'un calque porte un de ces deux rôles
+  (`sp.becDessine`) : sinon il y aurait deux becs l'un sur l'autre, celui qu'on
+  a dessiné et celui que le moteur trace.
+- **L'ancre de bouche est la CHARNIÈRE**, pas la pointe. C'est le seul point du
+  réglage qui demande d'y penser en dessinant : posée à la pointe du bec, la
+  mandibule balaierait au lieu de s'ouvrir. Mesuré sur un bec de test : la base
+  parcourt **1,3 px** pendant que la pointe en parcourt **39,7** — une charnière,
+  pas un glissement.
+- **Au repos, rien ne tourne** (`_repos`), comme pour tout le reste du dessin :
+  animation arrêtée, le contour affiché coïncide avec ses points. Relevé de
+  l'emprise verticale du bec : **8,0 px** au repos et bouche fermée, **38,4 px**
+  sur `eating`, soit 4,8 fois plus ouvert.
+
+L'angle atteint bouche grande ouverte est un réglage (`bec.ouverture`, 32° par
+défaut, onglet Visage) : un bec de pélican s'ouvre autrement qu'un bec de
+moineau.
+
+**Une ancre de bouche par forme de bouche.** Le cri, le bâillement et le bisou
+ne sortent pas du même endroit d'un museau — une gueule grande ouverte descend,
+un bisou pointe en avant. Avec une ancre unique, on calait la bouche au repos et
+l'une des treize autres tombait à côté ; c'est le réglage le plus délicat de
+l'atelier, et il n'avait qu'un seul curseur pour quatorze cas.
+
+Le geste : cliquer une humeur dans le **bandeau du bas**, puis tirer l'ancre de
+bouche sur le dessin. Elle se montre alors à la place qu'elle occupe *pour cette
+humeur-là*, avec un fantôme et un fil pointillé vers l'ancre commune, et son
+étiquette dit laquelle des quatorze on est en train de régler. **Si on ne la
+tire pas, il n'y a pas de décalage** : le dessin garde exactement le
+comportement d'avant, et les fichiers déjà calés ne bougent pas.
+
+Deux décisions :
+
+- **C'est la FORME de bouche qui est retenue, pas l'humeur.** `happy`, `love`,
+  `proud` et `wink` sourient du même sourire : les régler quatre fois serait
+  quatre fois le même travail, et quatre façons de se contredire. Mesuré : un
+  seul réglage sur `sourire` déplace les quatre de **6,67 px**, et laisse
+  `angry` — une autre forme — à **0,00**.
+- **Le repos est la référence.** Sur `idle`, tirer l'ancre déplace l'**ancre
+  commune**, comme avant : c'est bien ce qu'on veut dire par « par défaut ».
+  Mesuré : un décalage posé sur `gloutonne` déplace `eating` de **9,33 px** et
+  laisse `idle` et `angry` à **0,00**.
+
+Ramenée exactement sur l'ancre commune, la bouche perd son décalage plutôt que
+d'enregistrer un `[0, 0]` — et le tableau du panneau liste les décalages posés
+avec un ↺ pour chacun : un décalage oublié sur une humeur qu'on ne regarde plus
+serait autrement introuvable.
+
 ### Un sélecteur de couleur s'ouvre au RELÂCHEMENT — mais sans exiger un clic parfait
 
 La fenêtre native d'un `<input type=color>` s'ouvre dès l'**enfoncement** du
@@ -1057,6 +1124,8 @@ d'espèce reste lu : le manifeste ne fait que le compléter ou l'annuler.
 | `points.eye.r` | **taille de l'œil, en unités du dessin** — la calibration à préférer | on passe à `faceK` |
 | `points.mouth` | ancre de la bouche, **honorée séparément** | bouche à sa place par défaut |
 | `points.mouth.r` | **taille de la bouche**, indépendante de celle de l'œil | la bouche suit l'œil |
+| `bouches` | **décalage de l'ancre par FORME de bouche** : `{ cri: [dx, dy], bisou: […] }`, en unités du dessin | toutes sortent de `points.mouth` |
+| `bec` | le bec procédural : `{ long, haut, bas, ecart, angle }` — les deux mandibules se règlent séparément — et `ouverture`, l'angle d'un **bec dessiné** bouche grande ouverte | bec symétrique, 32° |
 | `points.nose`, `points.tail` | repères de l'atelier | ignorés par le jeu |
 | `visage` | **palette du visage commun** : `encre`, `sourcil`, `pupille`, `blanc`, `gorge`, `langue`, `levres`, `dent`, `bec`, `joue` — surcharge **partielle** | `FishBody.VISAGE` |
 | `boucheStyle` | **forme de la bouche** : `standard`, `grande`, `petite`, `gueule`, `bec`, `ventouse` | `standard` |
@@ -1075,6 +1144,7 @@ d'espèce reste lu : le manifeste ne fait que le compléter ou l'annuler.
 | `shapes[].pivot` | rotation en bloc — **repli** quand aucun `fins[]` ne vise la forme | elle ondule |
 | `shapes[].amp` | amplitude d'animation, en degrés pour une nageoire | 15 |
 | `shapes[].groupe` | nom libre : calques **aplatis** en un seul bloc animé | forme isolée |
+| `shapes[].role` | **rôle dans le visage commun** : `becHaut` / `becBas` — la mandibule est DESSINÉE et pivote autour de l'ancre de bouche ; le bec procédural s'efface | calque ordinaire |
 | `fins[]` | **appendices**, voir le tableau ci-dessous | rien n'est animé |
 | `tailBlend` | x en deçà duquel les points appartiennent à la queue | rien n'ondule |
 | `sansQueue` | la créature n'a **pas** de queue (crabe, étoile, coquillage) | elle en a une |

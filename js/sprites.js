@@ -10,7 +10,11 @@
 //                 lèvres, bec, joue, plus `trait` — le POIDS du trait, en
 //                 multiples de l'épaisseur d'origine. Surcharge partielle de
 //                 `FishBody.VISAGE`.
-//   bec         — { haut, bas, angle, ecart, long } : les deux mandibules se
+//   bouches     — décalage de l'ancre par FORME de bouche :
+//                 { cri: [dx, dy], bisou: [dx, dy], … } en unités du dessin.
+//   shapes[].role — 'becHaut' / 'becBas' : la mandibule est DESSINÉE et s'ouvre
+//                 autour de l'ancre de bouche ; le bec procédural s'efface.
+//   bec         — { haut, bas, angle, ecart, long, ouverture } : les deux mandibules se
 //                 règlent SÉPARÉMENT (un pélican a une mandibule inférieure
 //                 énorme, un goéland l'inverse), avec l'orientation du bec et le
 //                 jour qui reste entre elles bec fermé.
@@ -297,6 +301,15 @@ const Sprites = {
       // qu'un liseré de forme et un sourcil ne jurent pas l'un à côté de l'autre.
       // Une couleur déclarée à la main dans `visage` l'emporte toujours.
       bec: d.bec || null,
+      // BEC DESSINÉ : deux calques marqués `role: 'becHaut'` / `'becBas'`
+      // s'ouvrent autour de l'ancre de bouche au rythme de l'expression. Le
+      // dessinateur donne la forme, le socle commun donne le geste — et le bec
+      // procédural s'efface, sans quoi il y en aurait deux superposés.
+      becDessine: shapes.some(sh => sh.role === 'becHaut' || sh.role === 'becBas'),
+      // Décalage de l'ancre par FORME de bouche (`cri`, `bisou`, `ronfle`…), en
+      // unités du dessin : le cri et le bisou ne sortent pas du même endroit du
+      // museau, et une ancre unique en pose forcément un à côté.
+      bouches: d.bouches || null,
       visage: (d.base && d.base.secondaire)
         ? Object.assign({ encre: d.base.secondaire, sourcil: d.base.secondaire }, d.visage || {})
         : (d.visage || null),

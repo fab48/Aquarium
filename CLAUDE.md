@@ -1464,6 +1464,16 @@ Quatre règles :
   `decalerCalques()` répercute toute renumérotation sur ce qui vise les calques
   (appendices **et** `queueCalques`), au lieu des trois corrections à la main
   qui ne portaient que sur `layerIndex`.
+- **Le visage commun est commun, ses ANCRAGES ne le sont plus.** Deux calques
+  marqués `role: 'becHaut'` / `'becBas'` sont un **bec dessiné** : ils pivotent
+  autour de l'ancre de bouche, chacun de son côté, à l'ouverture de l'expression
+  courante — et le bec procédural s'efface, sinon il y en aurait deux l'un sur
+  l'autre. L'ancre doit être posée à la **charnière** (base 1,3 px de course,
+  pointe 39,7). De même, `bouches: { cri: [dx, dy] }` décale l'ancre **par forme
+  de bouche** : le cri et le bisou ne sortent pas du même endroit d'un museau, et
+  une ancre unique en pose forcément un à côté. C'est la FORME qui est retenue,
+  pas l'humeur (`happy`, `love`, `proud` et `wink` partagent `sourire`), et le
+  repos reste la référence — sans décalage, rien ne bouge.
 - **Le chargement est asynchrone et ne bloque aucune frame** : tant que le
   fichier n'est pas là (ou s'il est illisible), la silhouette procédurale
   continue d'être dessinée.

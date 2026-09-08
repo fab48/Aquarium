@@ -1575,14 +1575,20 @@ Quatre règles :
   sur le Poisson Volant, aire du polygone déformé : rapport min/max 0,71 sans, 
   0,42 au défaut, 0,21 à fond) ou `pince` (**une charnière et deux
   mâchoires** :
-  seule celle d'un côté de l'axe pivote — faire tourner les deux ferait tourner
-  la pince au lieu de l'ouvrir ; et ce côté se lit par un **produit vectoriel**,
-  qui **s'inverse dans un miroir** : sans le corriger par `sens`, une pince
-  rendue symétrique ouvre la mâchoire haute d'un côté et la basse de l'autre.
-  Le juge d'une paire symétrique n'est pas « quelle moitié bouge » — un découpage
-  par l'ordonnée de la charnière ne veut rien dire sur un axe incliné — mais
-  « la paire **reste-t-elle** symétrique en s'animant » : on retourne un côté
-  déformé et on le compare à l'autre). Le rythme d'une pince n'est pas un va-et-vient :
+  les DEUX
+  mâchoires s'écartent de l'axe, chacune de son côté, et l'amplitude est
+  l'écartement TOTAL. N'en animer qu'une était le geste d'une **porte**, pas
+  d'une pince, et obligeait à choisir laquelle — un choix qui se lit par le
+  signe d'un **produit vectoriel**, donc qui s'inverse dès qu'on retourne le
+  repère : une paire ouvrait la mâchoire du haut d'un côté et celle du bas de
+  l'autre, par le bouton *symétrique* comme en posant deux pinces d'angles
+  opposés. Les animer toutes les deux fait disparaître le choix, donc le
+  problème. Deux pièges de vérification : « quelle moitié bouge » n'est pas un
+  juge (découper par l'ordonnée de la charnière ne veut rien dire sur un axe
+  incliné — le bon critère est qu'une paire symétrique **reste** symétrique en
+  s'animant, la référence étant l'écart du DESSIN et non zéro), et deux
+  appendices **déphasés n'ouvrent pas ensemble**, donc chacun se mesure à SON
+  moment). Le rythme d'une pince n'est pas un va-et-vient :
   fermée 55 % du cycle, ouverture douce sur 30 %, puis **clac** sur les 15 %
   restants. Un sinus ne sait pas dire « clac », il referme aussi lentement qu'il
   ouvre. Une patte de crabe ou un bras de poulpe animés

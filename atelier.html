@@ -577,8 +577,8 @@ function ampleurApp(f) {
         const a0 = (f.ang != null ? f.ang : 0) * Math.PI / 180;
         const ax = Math.cos(a0), ay = Math.sin(a0);
         const px = p[0] - f.x, py = p[1] - f.y;
-        const along = px * ax + py * ay, cote = -px * ay + py * ax;
-        if (along <= 0 || cote <= 0) continue;
+        const along = px * ax + py * ay;
+        if (along <= 0) continue;
         maxi = Math.max(maxi, Math.hypot(px, py) * U.clamp(along / L, 0, 1) * A * Math.PI / 180);
       } else if (TYPE(f) === 'aile') {
         // L'angle croît avec `u`, donc le déplacement du bout est un arc dont
@@ -592,14 +592,15 @@ function ampleurApp(f) {
         maxi = Math.max(maxi, Math.hypot(px, py) * u * A * Math.PI / 180 * 2);
       } else if (TYPE(f) === 'pince') {
         // Une pince ouvre d'autant plus qu'on s'éloigne de la charnière : la
-        // course du bout est un arc, pas une translation. Et seule la mâchoire
-        // d'un côté de l'axe compte.
+        // course du bout est un arc, pas une translation. Les DEUX mâchoires
+        // s'écartent, chacune d'un demi-angle : ce qu'on annonce est donc
+        // l'ÉCARTEMENT total, ce qui se voit et ce que le curseur règle.
         const L = Math.max(1, f.r || 1);
         const a0 = (f.ang != null ? f.ang : 0) * Math.PI / 180;
         const ax = Math.cos(a0), ay = Math.sin(a0);
         const px = p[0] - f.x, py = p[1] - f.y;
-        const along = px * ax + py * ay, cote = -px * ay + py * ax;
-        if (along <= 0 || cote <= 0) continue;
+        const along = px * ax + py * ay;
+        if (along <= 0) continue;
         maxi = Math.max(maxi, Math.hypot(px, py) * U.clamp(along / L, 0, 1) * A * Math.PI / 180);
       } else if (TYPE(f) === 'tentacule') {
         const L = Math.max(1, f.r || 1);
@@ -2008,7 +2009,7 @@ function sectionAppendices() {
     + A(t === 'aile'
       ? 'L\'angle <b>croît le long de l\'envergure</b> : l\'épaule tient, le bout décrit tout l\'arc — l\'inverse d\'une nageoire, dont le plein effet est sur l\'ancre, là où le bras de levier est nul. Et il est <b>retardé</b> vers le bout (curseur <i>souplesse</i>), donc l\'aile se courbe au lieu de rester une planche. Le battement est <b>asymétrique</b> : descente vive, remontée lente — un va-et-vient régulier, c\'est du carton qui claque.'
       : t === 'pince'
-      ? 'Une <b>charnière</b> à l\'ancre, et seule la mâchoire d\'un côté de la flèche s\'ouvre — l\'autre reste solidaire du membre. Elle reste <b>fermée</b> les trois quarts du temps, s\'ouvre en douceur, puis <b>claque</b> : c\'est ce rythme qui se lit, un va-et-vient régulier ne dirait rien.'
+      ? 'Une <b>charnière</b> à l\'ancre, et les <b>deux mâchoires</b> s\'écartent de la flèche, chacune de son côté — l\'amplitude est l\'<b>écartement total</b>, chacune en prend la moitié. Ce qui est <b>derrière</b> la charnière ne bouge pas : c\'est le bras. Elle reste <b>fermée</b> les trois quarts du temps, s\'ouvre en douceur, puis <b>claque</b> : c\'est ce rythme qui se lit, un va-et-vient régulier ne dirait rien.'
       : tent
       ? 'Une <b>onde court</b> de l\'ancre vers la pointe de la flèche : la base ne bouge pas, le bout parcourt toute l\'amplitude. C\'est ce qu\'il faut pour une patte, une antenne, un bras — un pivot les rend raides.'
       : 'La forme <b>pivote</b> autour de l\'ancre : plein effet au centre du disque, plus rien à son bord.')

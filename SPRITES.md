@@ -389,27 +389,50 @@ embarquée, donc on ne la retrouve plus.
 
     Quatre espèces l'attendent — Pélican, Goéland, Cormoran, Fou Moustachu — et
     le Poisson Volant, dont les pectorales sont exactement ça.
-  - **pince** — une **charnière** à l'ancre, et seule la mâchoire d'un côté de
-    l'axe pivote ; l'autre reste solidaire du membre. Faire tourner les deux
-    ferait tourner la pince entière au lieu de l'ouvrir.
+  - **pince** — une **charnière** à l'ancre, et les **deux mâchoires s'écartent**
+    de l'axe, chacune de son côté. Ce qui est *derrière* la charnière ne bouge
+    pas : c'est le bras. L'amplitude est l'**écartement total**, chacune en prend
+    la moitié — un réglage à 45° reste un écartement de 45°.
 
-    **Et « de quel côté » change de signe dans un miroir.** Le côté se lit par
-    un **produit vectoriel**, et un produit vectoriel s'inverse quand on
-    retourne le repère : une pince rendue symétrique ouvrait donc la mâchoire
-    HAUTE d'un côté et la BASSE de l'autre. Le miroir ne retourne pas le
-    dessin — l'artiste a tracé ses deux pinces lui-même — il ne retourne que le
-    **repère de l'appendice** : c'est donc `cote * sens` qu'il faut tester, et
-    la même mâchoire s'ouvre des deux côtés.
+    Une seule mâchoire mobile a été essayé d'abord, et c'était moins bon à deux
+    titres. À l'œil, c'est le geste d'une **porte** et pas d'une pince : le
+    membre entier semble pivoter. Et il fallait **choisir** laquelle des deux
+    bouge — un choix qui se lit par le signe d'un **produit vectoriel**, donc
+    qui s'inverse dès qu'on retourne le repère. Une paire de pinces ouvrait
+    alors la mâchoire du haut d'un côté et celle du bas de l'autre, et ce
+    quelle que soit la façon de la déclarer : par le bouton *symétrique*, ou en
+    posant deux pinces avec des angles opposés (−16° et −164° sur le crabe),
+    ce que fait spontanément un dessinateur. En les animant toutes les deux, le
+    problème disparaît de lui-même : le signe du côté ne dit plus **qui** bouge,
+    il dit dans quel sens, et il s'inverse exactement comme il faut de l'autre
+    côté.
 
-    Le juge, ici, ne peut pas être « la moitié haute bouge-t-elle ? » : découper
-    la pince par l'ordonnée de sa charnière ne veut rien dire dès que l'axe est
-    incliné, et sur le crabe (axe à −16°) ce découpage donnait la bonne réponse
-    pour de mauvaises raisons. Ce qu'on veut vérifier, c'est qu'**une paire
-    symétrique reste symétrique en s'animant** : on retourne la pince de droite
-    déformée et on la compare à celle de gauche. Mesuré sur le crabe — deux
-    pinces tracées à la main, donc jamais symétriques au pixel près :
-    **6,5 px** d'écart au repos, **18,6 px** pendant l'ouverture avant
-    correction, **6,5 px** après, c'est-à-dire exactement celui du dessin.
+    Deux pièges de vérification rencontrés là :
+
+    - **« La moitié haute bouge-t-elle ? » n'est pas un juge.** Découper la
+      pince par l'ordonnée de sa charnière ne veut rien dire dès que l'axe est
+      incliné, et il l'est toujours sur un vrai dessin : sur le crabe (axe à
+      −16°) ce découpage donne la bonne réponse pour de mauvaises raisons. Le
+      bon critère est qu'**une paire symétrique reste symétrique en s'animant** —
+      on retourne une pince déformée et on la compare à l'autre. Deux pinces
+      tracées à la main ne sont jamais symétriques au pixel près : la référence
+      est l'écart du DESSIN, pas zéro. Mesuré sur le crabe, 6,5 px au repos,
+      18,6 px pendant l'ouverture avec une seule mâchoire, **5,6 px** avec les
+      deux.
+    - **Deux appendices déphasés n'ouvrent pas ensemble.** Les deux pinces du
+      crabe sont à 0° et 174° de déphasage : chercher l'instant où la *somme*
+      des deux courses est maximale relève l'une grande ouverte et l'autre
+      fermée, et on conclut qu'elle ne s'anime pas. Chaque appendice se mesure
+      à **son** moment.
+
+    Relevé sur le crabe, course de chaque mâchoire à l'ouverture maximale :
+
+    | | avant | après |
+    |---|---|---|
+    | pince droite (amp 17°) | 2,4 px / **16,5 px** | **8,3 px / 8,3 px** |
+    | pince gauche (amp 32°) | 4,7 px / **32,0 px** | **16,2 px / 16,2 px** |
+
+    L'écartement total est conservé ; c'est sa répartition qui change.
     Son rythme n'est pas un va-et-vient : elle reste **fermée 55 %** du cycle,
     s'ouvre en douceur sur 30 %, puis **claque** sur les 15 % restants. Un sinus
     ne sait pas dire « clac » — il passe autant de temps ouvert que fermé et

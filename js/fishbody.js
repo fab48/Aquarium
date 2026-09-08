@@ -1266,24 +1266,29 @@ const FishBody = {
             x = fx + px * cos - py * sin;
             y = f.y + px * sin + py * cos;
           } else if (f.type === 'pince') {
-            // Une PINCE a une charnière et deux mâchoires : seule celle d'un
-            // côté de l'axe bouge, l'autre reste solidaire du membre. Faire
-            // pivoter les deux ferait tourner la pince entière au lieu de
-            // l'ouvrir.
+            // UNE PINCE OUVRE SES DEUX MÂCHOIRES, chacune de son côté de l'axe.
+            //
+            // Une seule mâchoire mobile, c'était le geste d'une porte, pas d'une
+            // pince : le membre entier semblait pivoter, et il fallait choisir
+            // laquelle des deux bougeait. Ce choix se lisait par le signe d'un
+            // produit vectoriel — donc il s'inversait dès qu'on retournait le
+            // repère, que ce soit par `miroir` ou parce que l'artiste avait
+            // dessiné la seconde pince avec l'angle opposé. La pince de droite
+            // ouvrait alors la mâchoire du haut, celle de gauche celle du bas.
+            //
+            // Les deux mâchoires s'écartent maintenant de l'axe, chacune du côté
+            // où elle est déjà : c'est plus juste à regarder, et le problème du
+            // miroir disparaît de lui-même. Le signe du côté ne dit plus QUI
+            // bouge — tout bouge — il dit dans quel sens, et il s'inverse
+            // exactement comme il faut de l'autre côté. `sens` n'a donc plus
+            // rien à faire dans l'angle : c'est la géométrie qui s'en charge.
             const L = Math.max(1, f.r || 1);
             const a0 = (f.ang != null ? f.ang : 0) * Math.PI / 180;
             const ax = Math.cos(a0) * sens, ay = Math.sin(a0);
             const px = x - fx, py = y - f.y;
             const along = px * ax + py * ay;          // le long de la pince
-            // DE QUEL COTE DE L'AXE, et c'est ici que le miroir se joue. `cote`
-            // est un produit vectoriel, donc il CHANGE DE SIGNE quand on
-            // retourne le repere : la pince de droite ouvrait la machoire
-            // opposee a celle de gauche — en haut d'un cote, en bas de l'autre.
-            // Le miroir ne retourne pas le DESSIN (l'artiste a dessine ses deux
-            // pinces lui-meme), il ne retourne que le repere de l'appendice :
-            // multiplier par `sens` remet la meme machoire des deux cotes.
-            const cote = (-px * ay + py * ax) * sens;
-            if (along <= 0 || cote <= 0) continue;    // hors de la mâchoire mobile
+            if (along <= 0) continue;                 // côté corps : la base tient
+            const cote = -px * ay + py * ax;          // de part et d'autre de l'axe
             // Plus on s'éloigne de la charnière, plus on s'ouvre : c'est un
             // pivot, pas une translation.
             const poids = U.clamp(along / L, 0, 1);
@@ -1297,7 +1302,10 @@ const FishBody = {
               const u = ((anim.ph * 0.7 * vit + dph) / (Math.PI * 2)) % 1;
               ouv = this.claquement(u < 0 ? u + 1 : u);
             }
-            const a = sens * ouv * poids * anim.vigueur * A * Math.PI / 180;
+            // L'amplitude est l'ÉCARTEMENT TOTAL de la pince : chaque mâchoire
+            // en prend la moitié, sinon régler 45° en ouvrirait 90 et tous les
+            // dessins déjà réglés s'ouvriraient du double.
+            const a = Math.sign(cote) * ouv * poids * anim.vigueur * A * Math.PI / 360;
             const cos = Math.cos(a), sin = Math.sin(a);
             x = fx + px * cos - py * sin;
             y = f.y + px * sin + py * cos;

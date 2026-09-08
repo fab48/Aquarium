@@ -321,8 +321,33 @@ embarquée, donc on ne la retrouve plus.
     épais. Tous les traits la suivent — bouche, sourcil, œil fermé, contour du
     bec, anneau de la ventouse. Mesuré sur le bec : 1 238 px d'encre à 0 (plus de
     contour du tout), 1 847 à 1, 3 435 à 3.
-- **Appendices** — nageoire, patte, antenne, bras. Clic dans le vide pour en
-  poser un. **Deux types**, parce que ce sont deux gestes différents :
+- **Appendices** — nageoire, patte, antenne, bras. On **arme un type** dans la
+  palette (🐟 Nageoire · 🐙 Tentacule · 🦀 Pince · 🕊 Aile), puis un clic sur le
+  dessin le pose là, sur le calque sélectionné — tout son groupe s'il est
+  aplati. <kbd>Échap</kbd> désarme, comme pour les formes simples.
+
+  **La palette est le premier geste de l'outil, elle s'affiche donc qu'il y ait
+  des appendices ou non.** Le choix du type ne vivait que dans le bloc de
+  réglage d'un appendice *existant*, et le seul moyen d'en poser un était un
+  « clic dans le vide » que rien n'annonçait : sur un dessin qui n'en a pas
+  encore — c'est-à-dire tout dessin qu'on commence — le panneau disait « aucun
+  appendice » et s'arrêtait là. La pince, l'aile et le tentacule étaient
+  **introuvables** pour qui repartait de zéro, et le type posé était toujours
+  `nageoire`.
+
+  Les quatre types sont décrits **une seule fois** (`TYPES_APP`) : nom, icône,
+  aide, et les défauts que `reglerType` applique à la création **comme** au
+  changement de type. Deux tables — une pour les boutons, une pour les valeurs —
+  se seraient contredites au premier réglage. Les défauts n'y sont pas
+  décoratifs : les unités diffèrent d'un type à l'autre (degrés de rotation,
+  pourcentage de longueur, degrés d'ouverture) et l'**angle change de sens**
+  (l'axe où court l'onde d'un tentacule, vers la queue ; l'axe de la charnière
+  d'une pince, vers l'avant). Reporter la valeur d'un type sur l'autre donnait
+  une patte qui décollait du corps, ou une pince qui s'ouvrait à l'envers.
+  Vérifié sur les quatre : nageoire 20° sans direction, tentacule 25 %/180°,
+  pince 45°/0°, aile 55°/180°.
+
+  **Quatre types**, parce que ce sont quatre gestes différents :
   - **nageoire** — la forme *pivote* autour de l'ancre. Le disque affiché est le
     **rayon d'influence** : plein effet au centre, plus rien au bord.
   - **aile** — l'angle **croît le long de l'envergure** : l'épaule tient, la

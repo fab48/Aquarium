@@ -412,6 +412,9 @@ let coches = new Set();     // formes cochées, pour les gestes de groupe
 let trace = null;           // polygone en cours de tracé (mode Dessiner)
 let couleurTrace = '#5b8fb5';
 let primitive = null;       // forme simple armée dans l'outil Dessiner
+// Le type d'appendice ARMÉ : le prochain clic dans le vide en pose un de ce
+// type-là. `null` = nageoire, le type ordinaire.
+let appType = null;
 let apercuPrim = null;      // le rectangle en cours de tirage
 let lisseTrace = true;
 let imgFond = null;         // Image() de l'éventuel calque de repérage
@@ -1938,10 +1941,58 @@ function sectionVisage() {
         la couleur de la créature.`);
 }
 
+// LES QUATRE TYPES D'APPENDICE, en un seul endroit. Ils étaient décrits deux
+// fois — une palette de boutons dans le panneau, une table de valeurs par défaut
+// dans le gestionnaire de changement de type — et le premier ne servait qu'à
+// changer le type d'un appendice EXISTANT. Un dessin qui n'en avait aucun
+// n'affichait donc ni palette ni moyen d'en poser un : la pince, l'aile et le
+// tentacule n'existaient plus pour qui commençait un dessin.
+//
+// Les unités ne sont pas les mêmes d'un type à l'autre (degrés de rotation,
+// pourcentage de longueur, degrés d'ouverture), et l'ANGLE ne veut pas dire la
+// même chose non plus : pour un tentacule c'est l'axe le long duquel l'onde
+// court (vers la queue), pour une pince l'axe de la charnière (vers l'avant, là
+// où regarde la bête). Reporter la valeur d'un type sur l'autre donnait une
+// patte qui décollait du corps, ou une pince qui s'ouvrait à l'envers.
+const TYPES_APP = {
+  nageoire:  { ico: '🐟', nom: 'Nageoire',  amp: 20, ang: null,
+               aide: 'elle pivote autour de l\u2019ancre : nageoire, aileron, oreille' },
+  tentacule: { ico: '🐙', nom: 'Tentacule', amp: 25, ang: 180,
+               aide: 'une onde y court : patte, antenne, bras, moustache' },
+  pince:     { ico: '🦀', nom: 'Pince',     amp: 45, ang: 0,
+               aide: 'une charnière qui claque : pince de crabe, valve, bec' },
+  aile:      { ico: '🕊', nom: 'Aile',      amp: 55, ang: 180,
+               aide: 'elle bat ET se retourne : aile d\u2019oiseau, de raie' },
+};
+// Les réglages propres au type, posés à la création comme au changement.
+function reglerType(f, type) {
+  const T = TYPES_APP[type] || TYPES_APP.nageoire;
+  f.type = type;
+  f.amp = T.amp;
+  if (T.ang == null) delete f.ang; else f.ang = T.ang;
+  return f;
+}
+// La palette de création : elle est le PREMIER geste de l'outil, elle vit donc
+// en tête de sa section, et elle s'affiche qu'il y ait des appendices ou non.
+function paletteApp() {
+  return `<h2>Poser un appendice</h2>
+    <div class="rangee" style="flex-wrap:wrap">` + Object.keys(TYPES_APP).map(k =>
+      `<button data-poserapp="${k}" class="${appType === k ? 'on' : ''}"
+        title="${TYPES_APP[k].aide}">${TYPES_APP[k].ico} ${TYPES_APP[k].nom}</button>`).join('')
+    + `</div>`
+    + (appType
+      ? `<p class="aide" style="color:#0a6b2e"><b>${TYPES_APP[appType].nom} armée</b> —
+         <kbd>clic</kbd> sur le dessin pour la poser sur ${nomForme(formeSel)}.
+         <kbd>Échap</kbd> pour annuler.</p>`
+      : A(`Choisis un type, puis <kbd>clic</kbd> sur le dessin : l'appendice se pose là,
+           et entraîne le calque sélectionné (tout son <b>groupe</b> s'il est aplati).
+           Sans type armé, un clic dans le vide pose une nageoire.`));
+}
+
 function sectionAppendices() {
-  let h = A(`Nageoire, patte, antenne, bras de poulpe. <kbd>clic</kbd> dans le vide en
-      pose un sur le calque sélectionné.`);
-  if (!doc.fins.length) return h + '<p class="aide"><i>aucun appendice</i></p>';
+  let h = paletteApp();
+  if (!doc.fins.length) return h + '<p class="aide"><i>aucun appendice sur ce dessin</i></p>';
+  h += '<h2>Régler</h2>';
   const f = doc.fins[finSel], t = TYPE(f), tent = t === 'tentacule', axe = t !== 'nageoire';
   h += `<select id="selFin">${doc.fins.map((o, i) => {
       const cl = calquesDe(o);
@@ -1950,12 +2001,10 @@ function sectionAppendices() {
     }).join('')}</select>
 
     <h2>Type</h2>
-    <div class="rangee">
-      <button data-typeapp="nageoire" class="${t === 'nageoire' ? 'on' : ''}">Nageoire</button>
-      <button data-typeapp="tentacule" class="${t === 'tentacule' ? 'on' : ''}">Tentacule</button>
-      <button data-typeapp="pince" class="${t === 'pince' ? 'on' : ''}">🦀 Pince</button>
-      <button data-typeapp="aile" class="${t === 'aile' ? 'on' : ''}">🕊 Aile</button>
-    </div>`
+    <div class="rangee" style="flex-wrap:wrap">` + Object.keys(TYPES_APP).map(k =>
+      `<button data-typeapp="${k}" class="${t === k ? 'on' : ''}"
+        title="${TYPES_APP[k].aide}">${TYPES_APP[k].ico} ${TYPES_APP[k].nom}</button>`).join('')
+    + `</div>`
     + A(t === 'aile'
       ? 'L\'angle <b>croît le long de l\'envergure</b> : l\'épaule tient, le bout décrit tout l\'arc — l\'inverse d\'une nageoire, dont le plein effet est sur l\'ancre, là où le bras de levier est nul. Et il est <b>retardé</b> vers le bout (curseur <i>souplesse</i>), donc l\'aile se courbe au lieu de rester une planche. Le battement est <b>asymétrique</b> : descente vive, remontée lente — un va-et-vient régulier, c\'est du carton qui claque.'
       : t === 'pince'
@@ -2932,30 +2981,20 @@ function cabler() {
   ['#sFAm', '#sFR'].forEach(sel => on(sel, 'change', () => panneau()));
   on('#sFPh', 'input', e => { doc.fins[finSel].phase = +e.target.value; $('#vFPh').textContent = e.target.value + '°'; marquer(); });
   on('#sFV', 'input', e => { doc.fins[finSel].vitesse = +e.target.value; $('#vFV').textContent = (+e.target.value).toFixed(2); marquer(); });
+  // Changer le type d'un appendice EXISTANT. Les défauts propres au type
+  // viennent de `TYPES_APP`, comme à la création : deux tables se seraient
+  // contredites au premier réglage.
   document.querySelectorAll('[data-typeapp]').forEach(b => b.addEventListener('click', () => {
     instantane();
-    const f = doc.fins[finSel];
-    f.type = b.dataset.typeapp;
-    // Les deux réglages ne sont pas dans la même unité (degrés de rotation d'un
-    // côté, pourcentage de longueur de l'autre) : garder l'ancienne valeur
-    // donnait une patte qui décollait du corps au changement de type.
-    // Les unités diffèrent d'un type à l'autre (degrés de rotation, pourcentage
-    // de longueur, degrés d'ouverture) : garder l'ancienne valeur donnait une
-    // patte qui décollait du corps au changement de type.
-    f.amp = f.type === 'tentacule' ? 25
-          : f.type === 'pince' ? 45
-          : f.type === 'aile' ? 55 : 20;
-    // L'ANGLE aussi change de sens d'un type à l'autre : pour un tentacule c'est
-    // l'axe le long duquel l'onde court (vers la queue par défaut), pour une
-    // pince l'axe de la charnière (vers l'avant, là où regarde la bête). Garder
-    // la valeur précédente donnait une pince qui s'ouvre à l'envers, héritée du
-    // tentacule qu'elle venait de remplacer.
-    // Une aile part de l'épaule vers le bout, donc vers l'ARRIÈRE du dessin,
-    // comme un tentacule.
-    if (f.type === 'tentacule' || f.type === 'aile') f.ang = 180;
-    else if (f.type === 'pince') f.ang = 0;
-    else delete f.ang;
+    reglerType(doc.fins[finSel], b.dataset.typeapp);
     marquer(); panneau();
+  }));
+  // Armer un type pour le PROCHAIN appendice posé. Même geste que les formes
+  // simples de l'outil Dessiner : on arme, puis on clique sur le dessin.
+  document.querySelectorAll('[data-poserapp]').forEach(b => b.addEventListener('click', () => {
+    appType = appType === b.dataset.poserapp ? null : b.dataset.poserapp;
+    panneau();
+    if (appType) dire(`${TYPES_APP[appType].nom} armée — clic sur le dessin pour la poser`);
   }));
   document.querySelectorAll('[data-cal]').forEach(c => c.addEventListener('change', () => {
     instantane();
@@ -3742,6 +3781,7 @@ addEventListener('keydown', ev => {
   if (!(ev.ctrlKey || ev.metaKey)) return;
   if (ev.key === 'Escape' && pipette) { pipette = null; majCurseur(); panneau(); return; }
   if (ev.key === 'Escape' && primitive) { primitive = null; apercuPrim = null; panneau(); dessiner(); return; }
+  if (ev.key === 'Escape' && appType) { appType = null; panneau(); dire('appendice désarmé'); return; }
   const k = ev.key.toLowerCase();
   if (k === 'z' && !ev.shiftKey) { ev.preventDefault(); annuler(histoire, futur); }
   else if (k === 'y' || (k === 'z' && ev.shiftKey)) { ev.preventDefault(); annuler(futur, histoire); }
@@ -3941,10 +3981,14 @@ vue.addEventListener('pointerdown', ev => {
     // Le nouvel appendice entraîne TOUT LE GROUPE du calque actif : si l'artiste
     // a pris la peine d'aplatir une patte en trois pièces, il ne veut pas poser
     // trois ancrages identiques.
-    doc.fins.push({ x, y, r, type: 'nageoire', amp: 20, phase: 0, vitesse: 1,
-                    calques: groupeDe(formeSel) });
+    const nouv = reglerType({ x, y, r, phase: 0, vitesse: 1,
+                              calques: groupeDe(formeSel) }, appType || 'nageoire');
+    doc.fins.push(nouv);
     finSel = doc.fins.length - 1;
+    const quoi = TYPES_APP[nouv.type].nom;
+    appType = null;              // posé, désarmé : on règle avant d'en poser un autre
     marquer(); panneau();
+    dire(`${quoi} posée sur ${nomForme(formeSel)}`, 'ok');
     return;
   }
 

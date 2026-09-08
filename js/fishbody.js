@@ -1275,7 +1275,14 @@ const FishBody = {
             const ax = Math.cos(a0) * sens, ay = Math.sin(a0);
             const px = x - fx, py = y - f.y;
             const along = px * ax + py * ay;          // le long de la pince
-            const cote = -px * ay + py * ax;          // de part et d'autre de l'axe
+            // DE QUEL COTE DE L'AXE, et c'est ici que le miroir se joue. `cote`
+            // est un produit vectoriel, donc il CHANGE DE SIGNE quand on
+            // retourne le repere : la pince de droite ouvrait la machoire
+            // opposee a celle de gauche — en haut d'un cote, en bas de l'autre.
+            // Le miroir ne retourne pas le DESSIN (l'artiste a dessine ses deux
+            // pinces lui-meme), il ne retourne que le repere de l'appendice :
+            // multiplier par `sens` remet la meme machoire des deux cotes.
+            const cote = (-px * ay + py * ax) * sens;
             if (along <= 0 || cote <= 0) continue;    // hors de la mâchoire mobile
             // Plus on s'éloigne de la charnière, plus on s'ouvre : c'est un
             // pivot, pas une translation.

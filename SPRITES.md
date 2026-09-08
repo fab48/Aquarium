@@ -392,6 +392,24 @@ embarquée, donc on ne la retrouve plus.
   - **pince** — une **charnière** à l'ancre, et seule la mâchoire d'un côté de
     l'axe pivote ; l'autre reste solidaire du membre. Faire tourner les deux
     ferait tourner la pince entière au lieu de l'ouvrir.
+
+    **Et « de quel côté » change de signe dans un miroir.** Le côté se lit par
+    un **produit vectoriel**, et un produit vectoriel s'inverse quand on
+    retourne le repère : une pince rendue symétrique ouvrait donc la mâchoire
+    HAUTE d'un côté et la BASSE de l'autre. Le miroir ne retourne pas le
+    dessin — l'artiste a tracé ses deux pinces lui-même — il ne retourne que le
+    **repère de l'appendice** : c'est donc `cote * sens` qu'il faut tester, et
+    la même mâchoire s'ouvre des deux côtés.
+
+    Le juge, ici, ne peut pas être « la moitié haute bouge-t-elle ? » : découper
+    la pince par l'ordonnée de sa charnière ne veut rien dire dès que l'axe est
+    incliné, et sur le crabe (axe à −16°) ce découpage donnait la bonne réponse
+    pour de mauvaises raisons. Ce qu'on veut vérifier, c'est qu'**une paire
+    symétrique reste symétrique en s'animant** : on retourne la pince de droite
+    déformée et on la compare à celle de gauche. Mesuré sur le crabe — deux
+    pinces tracées à la main, donc jamais symétriques au pixel près :
+    **6,5 px** d'écart au repos, **18,6 px** pendant l'ouverture avant
+    correction, **6,5 px** après, c'est-à-dire exactement celui du dessin.
     Son rythme n'est pas un va-et-vient : elle reste **fermée 55 %** du cycle,
     s'ouvre en douceur sur 30 %, puis **claque** sur les 15 % restants. Un sinus
     ne sait pas dire « clac » — il passe autant de temps ouvert que fermé et

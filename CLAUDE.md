@@ -1576,7 +1576,13 @@ Quatre règles :
   0,42 au défaut, 0,21 à fond) ou `pince` (**une charnière et deux
   mâchoires** :
   seule celle d'un côté de l'axe pivote — faire tourner les deux ferait tourner
-  la pince au lieu de l'ouvrir). Le rythme d'une pince n'est pas un va-et-vient :
+  la pince au lieu de l'ouvrir ; et ce côté se lit par un **produit vectoriel**,
+  qui **s'inverse dans un miroir** : sans le corriger par `sens`, une pince
+  rendue symétrique ouvre la mâchoire haute d'un côté et la basse de l'autre.
+  Le juge d'une paire symétrique n'est pas « quelle moitié bouge » — un découpage
+  par l'ordonnée de la charnière ne veut rien dire sur un axe incliné — mais
+  « la paire **reste-t-elle** symétrique en s'animant » : on retourne un côté
+  déformé et on le compare à l'autre). Le rythme d'une pince n'est pas un va-et-vient :
   fermée 55 % du cycle, ouverture douce sur 30 %, puis **clac** sur les 15 %
   restants. Un sinus ne sait pas dire « clac », il referme aussi lentement qu'il
   ouvre. Une patte de crabe ou un bras de poulpe animés

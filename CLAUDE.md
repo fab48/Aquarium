@@ -1573,7 +1573,12 @@ Quatre règles :
   mais ne vole pas. La corde est écrasée selon la position dans la course, donc
   l'aile se présente de face aux extrêmes et sur la tranche au passage. Mesuré
   sur le Poisson Volant, aire du polygone déformé : rapport min/max 0,71 sans, 
-  0,42 au défaut, 0,21 à fond) ou `pince` (**une charnière et deux
+  0,42 au défaut, 0,21 à fond), `queue` (**la formule même de la caudale**,
+  appliquée depuis l'ancre : même horloge, même plan `tailAxe`, même onde
+  `tailOndes` tant qu'il n'a pas la sienne — une dorsale ou une anale bat AVEC
+  le corps ; mesuré en corrélation avec le bout de la caudale : 1,000, et
+  −1,000 à 180° de déphasage, contre un tentacule qui bat à 0,7 fois la queue et
+  en travers de sa flèche) ou `pince` (**une charnière et deux
   mâchoires** :
   les DEUX
   mâchoires s'écartent de l'axe, chacune de son côté, et l'amplitude est
@@ -1588,7 +1593,12 @@ Quatre règles :
   incliné — le bon critère est qu'une paire symétrique **reste** symétrique en
   s'animant, la référence étant l'écart du DESSIN et non zéro), et deux
   appendices **déphasés n'ouvrent pas ensemble**, donc chacun se mesure à SON
-  moment). Le rythme d'une pince n'est pas un va-et-vient :
+  moment). **Une paire en miroir : une moitié du dessin chacun** — le profil
+  d'un appendice est borné à 1 au-delà de sa longueur, pas coupé, donc
+  l'ancrage d'en face « fuyait » sur les points situés devant sa flèche, et pas
+  du même montant des deux côtés (9,32 px contre 8,69 sur une paire de
+  dorsales). Chaque ancrage ne traite plus que sa moitié : écart au miroir
+  0,0000 px, aucun dessin du dépôt modifié. Le rythme d'une pince n'est pas un va-et-vient :
   fermée 55 % du cycle, ouverture douce sur 30 %, puis **clac** sur les 15 %
   restants. Un sinus ne sait pas dire « clac », il referme aussi lentement qu'il
   ouvre. Une patte de crabe ou un bras de poulpe animés

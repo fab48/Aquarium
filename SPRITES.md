@@ -347,7 +347,7 @@ embarquée, donc on ne la retrouve plus.
   Vérifié sur les quatre : nageoire 20° sans direction, tentacule 25 %/180°,
   pince 45°/0°, aile 55°/180°.
 
-  **Quatre types**, parce que ce sont quatre gestes différents :
+  **Cinq types**, parce que ce sont cinq gestes différents :
   - **nageoire** — la forme *pivote* autour de l'ancre. Le disque affiché est le
     **rayon d'influence** : plein effet au centre, plus rien au bord.
   - **aile** — l'angle **croît le long de l'envergure** : l'épaule tient, la
@@ -453,8 +453,35 @@ embarquée, donc on ne la retrouve plus.
     articulés sur une seule charnière. La pointe de la flèche se tire : elle
     règle direction et longueur d'un seul geste. Le curseur *ondes* dit si le
     membre se balance d'un bloc (0) ou se déroule (1).
+  - **comme la queue** — exactement la formule de la caudale, appliquée à partir
+    de l'ancre au lieu du pédoncule : même profil en u² (la base tient, le bout
+    balaie), même **horloge** (`ph · rQueue`), même effort, même **plan** de
+    battement (`tailAxe`) et même onde (`tailOndes` du dessin, tant que
+    l'appendice n'a pas la sienne — un bouton ↺ l'y ramène). C'est ce qu'il faut
+    à une dorsale, une anale, un second lobe de caudale : tout ce qui prolonge
+    le corps et doit battre **avec** lui.
 
-  Communs aux deux : **symétrie** (un second ancrage en miroir de l'axe vertical,
+    Ce n'est pas un tentacule sous un autre nom, et c'est mesuré. Sur une dorsale
+    posée au-dessus du dos, en suivant 6 s le bout de la caudale et le bout de la
+    nageoire :
+
+    | | corrélation avec la queue | cycles (queue / appendice) | course dans le plan de la queue |
+    |---|---|---|---|
+    | comme la queue | **1,000** | 4 / 4 | 13,0 px |
+    | idem, déphasage 180° | **−1,000** | — | 13,0 px |
+    | idem, `tailOndes` 0,6 | **1,000** | 5 / 5 | 13,0 px |
+    | tentacule | −0,146 sur son propre axe | 4 / 3 | 0,0 px (10 px en travers) |
+    | nageoire | — | — | 0,0 px |
+
+    Le tentacule a sa propre horloge (0,7 fois la queue) et bat **en travers de
+    sa flèche** : posé sur une dorsale, il balaie à l'horizontale, à contretemps
+    de la caudale verticale juste à côté — deux animaux cousus ensemble. La
+    nageoire, elle, ne déplace rien au bout : sa pondération vaut 1 sur l'ancre et
+    0 au bord du rayon, là où est justement la pointe. Sur la flèche de l'atelier,
+    l'enveloppe du battement est dessinée dans le **plan de la queue**, et non en
+    travers : ce qu'on voit est le geste réellement fait.
+
+  Communs à tous : **symétrie** (un second ancrage en miroir de l'axe vertical,
   en pointillés, jouant en sens inverse — un crabe, une raie, un poulpe ont des
   appendices des deux côtés), **amplitude**, et surtout **déphasage** et
   **vitesse** propres à chaque appendice : sans eux les huit pattes d'un crabe
@@ -1253,14 +1280,31 @@ d'espèce reste lu : le manifeste ne fait que le compléter ou l'annuler.
 
 ### Un appendice (`fins[]`)
 
+**Une paire en miroir : une moitié du dessin chacun.** Les deux ancrages d'une
+paire agissaient sur **tous** les points des calques visés. Or le profil d'un
+appendice à flèche est **borné** à 1 au-delà de sa longueur, pas coupé — c'est
+voulu, sinon la pointe se figerait dès que la flèche est un peu courte. Un point
+situé devant la flèche de l'ancrage d'en face recevait donc, en plus de son
+battement, un morceau du battement de l'autre côté ; et pas le même morceau que
+le point symétrique, puisque les deux passes s'appliquent l'une après l'autre.
+Mesuré sur une paire de dorsales « comme la queue » : **9,32 px d'un côté, 8,69
+de l'autre** — et l'essentiel de ce mouvement était la fuite d'en face, pas la
+nageoire elle-même (1,86 px chacune une fois corrigé). Chaque ancrage ne
+s'occupe maintenant que de **sa moitié** du dessin, relevée avant toute
+déformation ; sur l'axe même, c'est l'ancrage principal qui prend le point.
+Écart au miroir exact : **0,0000 px**. Aucun des 17 dessins du dépôt ne bouge :
+leurs paires (étoile, crabe) ne se recouvraient pas.
+
+
 | Champ | Rôle | Défaut |
 |---|---|---|
 | `x`, `y` | l'ancre : centre de rotation, ou **base** du tentacule | — |
 | `r` | rayon d'influence (nageoire) ou **longueur** (tentacule) | 1 |
 | `calques` | les formes entraînées, **plusieurs possibles** | `[layerIndex]` |
 | `layerIndex` | forme unique — forme historique, toujours lue | — |
-| `type` | `'nageoire'` (rotation), `'tentacule'` (onde progressive), `'pince'` (charnière qui claque) ou `'aile'` (angle croissant, retardé, battement asymétrique) | `nageoire` |
-| `miroir` | second ancrage en miroir de l'axe vertical, jouant en sens inverse | non |
+| `type` | `'nageoire'` (rotation), `'tentacule'` (onde progressive), `'pince'` (charnière, deux mâchoires), `'aile'` (angle croissant, retardé, battement asymétrique) ou `'queue'` (la formule de la caudale, calée sur elle) | `nageoire` |
+| `miroir` | second ancrage en miroir de l'axe vertical ; **chacun ne s'occupe que de sa moitié du dessin** | non |
+| `ondes` | tentacule : ondes sur la longueur ; aile : souplesse ; queue : ses propres ondes | tentacule 1 · aile 0,35 · queue `tailOndes` |
 | `amp` | degrés de rotation, ou **% de la longueur** pour un tentacule | celle du calque |
 | `phase` | déphasage en degrés — indispensable dès qu'il y a plusieurs pattes | 0 |
 | `vitesse` | multiplicateur de fréquence | 1 |

@@ -1199,6 +1199,10 @@ const FishBody = {
       x += anim.qx * dep; y += anim.qy * dep;
     }
     if (apps) {
+      // Le côté de l'axe de symétrie où se trouve le point, relevé AVANT toute
+      // déformation d'appendice : c'est lui qui dit quel ancrage d'une paire en
+      // miroir s'en occupe (voir `cotes` ci-dessous).
+      const cotePt = Math.sign(x - sp.cx);
       for (const f of apps) {
         // Chaque appendice a son propre temps. Sans déphasage ni vitesse
         // propres, les huit pattes d'un crabe battaient toutes ensemble : ça
@@ -1214,6 +1218,21 @@ const FishBody = {
         // même côté au lieu de battre comme une paire de pattes.
         const cotes = f.miroir ? [[f.x, 1], [2 * sp.cx - f.x, -1]] : [[f.x, 1]];
         for (const [fx, sens] of cotes) {
+          // UNE MOITIÉ CHACUN. Les deux ancrages d'une paire agissaient sur
+          // TOUS les points des calques visés, et un ancrage lointain en
+          // déplaçait encore dès que le point tombait devant sa flèche : le
+          // profil est borné à 1 au-delà de la longueur, pas coupé. La moitié
+          // gauche recevait alors, en plus du sien, un morceau du battement de
+          // droite — et pas le même morceau que la moitié droite recevait de
+          // gauche, puisque les deux passes s'appliquent l'une après l'autre.
+          // Mesuré sur une paire de dorsales : 9,32 px d'un côté, 8,69 de
+          // l'autre. Chaque ancrage ne s'occupe donc que de SA moitié du dessin.
+          // Sur l'axe même, c'est l'ancrage principal qui prend le point. Un
+          // ancrage posé SUR l'axe n'a pas de moitié : il garde tout, comme avant.
+          if (f.miroir) {
+            const sf = Math.sign(fx - sp.cx);
+            if (sf !== 0 && (cotePt === 0 ? sens < 0 : cotePt !== sf)) continue;
+          }
           if (f.type === 'aile') {
             // UNE AILE N'EST PAS UNE NAGEOIRE AVEC PLUS D'AMPLITUDE.
             //
@@ -1309,6 +1328,35 @@ const FishBody = {
             const cos = Math.cos(a), sin = Math.sin(a);
             x = fx + px * cos - py * sin;
             y = f.y + px * sin + py * cos;
+          } else if (f.type === 'queue') {
+            // COMME LA QUEUE. Exactement la formule de la caudale, appliquée à
+            // partir de l'ancre de l'appendice au lieu du pédoncule : même
+            // profil en u² (la base tient, le bout balaie), même horloge
+            // (`ph · rQueue`), même effort (`vigueur`), même onde (`tailOndes`
+            // du dessin tant que l'appendice n'a pas la sienne) et même AXE de
+            // battement (`tailAxe`). Une nageoire dorsale, anale ou un second
+            // lobe de caudale bat donc AVEC le corps, dans son plan et à son
+            // rythme.
+            //
+            // Ce n'est pas un tentacule : celui-ci a sa propre horloge (0,7 fois
+            // la queue) et se déplace en travers de SON axe. Posé sur une
+            // nageoire qui prolonge le corps, il battait à contretemps et dans un
+            // autre plan que la queue juste à côté — deux animaux cousus
+            // ensemble.
+            const L = Math.max(1, f.r || 1);
+            const a0 = (f.ang != null ? f.ang : 180) * Math.PI / 180;
+            const ax = Math.cos(a0) * sens, ay = Math.sin(a0);
+            const u = U.clamp(((x - fx) * ax + (y - f.y) * ay) / L, 0, 1);
+            if (u <= 0) continue;                 // côté corps : la base tient
+            const ondes = (f.ondes != null ? f.ondes : (sp.tailOndes || 0)) * Math.PI * 2;
+            // `amp` en POURCENTAGE de la longueur, comme le tentacule : le même
+            // réglage donne le même geste sur un aileron et sur une grande voile.
+            // Déphasage à 0 et vitesse à 1 = calé sur la queue.
+            const dep = (A / 100) * L * u * u * anim.vigueur
+              * Math.sin(anim.ph * anim.rQueue * vit + anim.phase + dph - u * ondes);
+            // Le miroir retourne le repère : seule la composante horizontale du
+            // battement change de sens.
+            x += anim.qx * dep * sens; y += anim.qy * dep;
           } else if (f.type === 'tentacule') {
             // TENTACULE / PATTE / ANTENNE : onde progressive le long d'un axe.
             // La base ne bouge pas, le bout décrit toute l'amplitude, et l'onde

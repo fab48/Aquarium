@@ -526,7 +526,7 @@ function calquesDe(f) {
 // l'affichage. Ajouter un type se fait ICI — l'oublier laisse le panneau croire
 // à une nageoire alors que le rendu, lui, obéit déjà.
 function TYPE(f) {
-  return ['tentacule', 'pince', 'aile'].includes(f.type) ? f.type : 'nageoire';
+  return ['tentacule', 'pince', 'aile', 'queue'].includes(f.type) ? f.type : 'nageoire';
 }
 
 // NOM D'UN CALQUE. « forme 7 » ne dit rien : sur un dessin à vingt pièces —
@@ -602,7 +602,9 @@ function ampleurApp(f) {
         const along = px * ax + py * ay;
         if (along <= 0) continue;
         maxi = Math.max(maxi, Math.hypot(px, py) * U.clamp(along / L, 0, 1) * A * Math.PI / 180);
-      } else if (TYPE(f) === 'tentacule') {
+      } else if (TYPE(f) === 'tentacule' || TYPE(f) === 'queue') {
+        // Même profil pour les deux : u² le long de la flèche, en pourcentage de
+        // la longueur. Seuls l'horloge et le plan diffèrent, pas l'ampleur.
         const L = Math.max(1, f.r || 1);
         const a0 = (f.ang != null ? f.ang : 180) * Math.PI / 180;
         const u = U.clamp(((p[0] - f.x) * Math.cos(a0) + (p[1] - f.y) * Math.sin(a0)) / L, 0, 1);
@@ -1433,11 +1435,19 @@ function poignees(sp) {
         const ax = Math.cos(a0) * sens, ay = Math.sin(a0);
         const bx = x + ax * r, by = y + ay * r;
         ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(bx, by); ctx.stroke();
-        // L'amplitude se voit : l'enveloppe que le bout parcourt.
+        // L'amplitude se voit : l'enveloppe que le bout parcourt. En travers de
+        // la flèche pour un tentacule ; dans le PLAN DE LA QUEUE pour un
+        // appendice qui bat comme elle — dessiner l'enveloppe en travers
+        // montrerait un geste qu'il ne fait pas.
         const amp = (f.amp != null ? f.amp : 15) / 100 * r;
+        let ex = -ay, ey = ax;
+        if (TYPE(f) === 'queue') {
+          const aq = (doc.tailAxe == null ? 90 : doc.tailAxe) * Math.PI / 180;
+          ex = Math.cos(aq) * sens; ey = Math.sin(aq);
+        }
         ctx.beginPath();
-        ctx.moveTo(bx - ay * amp, by + ax * amp);
-        ctx.lineTo(bx + ay * amp, by - ax * amp);
+        ctx.moveTo(bx + ex * amp, by + ey * amp);
+        ctx.lineTo(bx - ex * amp, by - ey * amp);
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.fillStyle = image ? '#9fc0dd' : (vif ? '#1560d8' : '#7ea6cc');
@@ -1964,6 +1974,8 @@ const TYPES_APP = {
                aide: 'une charnière qui claque : pince de crabe, valve, bec' },
   aile:      { ico: '🕊', nom: 'Aile',      amp: 55, ang: 180,
                aide: 'elle bat ET se retourne : aile d\u2019oiseau, de raie' },
+  queue:     { ico: '〰', nom: 'Comme la queue', amp: 25, ang: 180,
+               aide: 'elle bat avec le corps, à son rythme : dorsale, anale, lobe de caudale' },
 };
 // Les réglages propres au type, posés à la création comme au changement.
 function reglerType(f, type) {
@@ -1971,6 +1983,11 @@ function reglerType(f, type) {
   f.type = type;
   f.amp = T.amp;
   if (T.ang == null) delete f.ang; else f.ang = T.ang;
+  // `ondes` non plus ne veut pas dire la même chose d'un type à l'autre : la
+  // souplesse d'une aile (0,35), les ondes d'un tentacule (1), celles de la
+  // queue du dessin pour un appendice qui bat comme elle. Chacun reprend SON
+  // défaut plutôt que d'hériter de celui du type précédent.
+  delete f.ondes;
   return f;
 }
 // La palette de création : elle est le PREMIER geste de l'outil, elle vit donc
@@ -1995,6 +2012,9 @@ function sectionAppendices() {
   if (!doc.fins.length) return h + '<p class="aide"><i>aucun appendice sur ce dessin</i></p>';
   h += '<h2>Régler</h2>';
   const f = doc.fins[finSel], t = TYPE(f), tent = t === 'tentacule', axe = t !== 'nageoire';
+  // Les deux types à ONDE : amplitude en pourcentage de la longueur, et une onde
+  // qui court vers le bout. Ils ne diffèrent que par l'horloge et le plan.
+  const onde = tent || t === 'queue';
   h += `<select id="selFin">${doc.fins.map((o, i) => {
       const cl = calquesDe(o);
       return `<option value="${i}" ${i === finSel ? 'selected' : ''}>${i + 1}. ${TYPE(o)}`
@@ -2010,14 +2030,16 @@ function sectionAppendices() {
       ? 'L\'angle <b>croît le long de l\'envergure</b> : l\'épaule tient, le bout décrit tout l\'arc — l\'inverse d\'une nageoire, dont le plein effet est sur l\'ancre, là où le bras de levier est nul. Et il est <b>retardé</b> vers le bout (curseur <i>souplesse</i>), donc l\'aile se courbe au lieu de rester une planche. Le battement est <b>asymétrique</b> : descente vive, remontée lente — un va-et-vient régulier, c\'est du carton qui claque.'
       : t === 'pince'
       ? 'Une <b>charnière</b> à l\'ancre, et les <b>deux mâchoires</b> s\'écartent de la flèche, chacune de son côté — l\'amplitude est l\'<b>écartement total</b>, chacune en prend la moitié. Ce qui est <b>derrière</b> la charnière ne bouge pas : c\'est le bras. Elle reste <b>fermée</b> les trois quarts du temps, s\'ouvre en douceur, puis <b>claque</b> : c\'est ce rythme qui se lit, un va-et-vient régulier ne dirait rien.'
+      : t === 'queue'
+      ? 'Elle bat <b>comme la queue</b>, et <b>avec</b> elle : même rythme, même effort, même plan de battement (le <i>sens</i> réglé dans l\'onglet Queue), même onde tant qu\'on ne lui en donne pas une à elle. La base tient, le bout balaie. C\'est ce qu\'il faut à une <b>dorsale</b>, une <b>anale</b>, un second lobe de caudale : tout ce qui prolonge le corps et doit battre dans son mouvement. Un <b>tentacule</b>, lui, a son propre rythme et bat en travers de sa flèche — posé là, il se lit comme un autre animal cousu au premier.'
       : tent
       ? 'Une <b>onde court</b> de l\'ancre vers la pointe de la flèche : la base ne bouge pas, le bout parcourt toute l\'amplitude. C\'est ce qu\'il faut pour une patte, une antenne, un bras — un pivot les rend raides.'
       : 'La forme <b>pivote</b> autour de l\'ancre : plein effet au centre du disque, plus rien à son bord.')
     + `<label>${axe ? 'Longueur' : 'Rayon d\'influence'} <span class="val" id="vFR">${Math.round(f.r)}</span></label>
     <input type="range" id="sFR" min="10" max="${Math.round(doc.naturalW * 0.9)}" value="${Math.round(f.r)}">`;
   if (axe) h += `
-    <label>Direction <span class="val" id="vFA">${Math.round(f.ang != null ? f.ang : (tent ? 180 : 0))}°</span></label>
-    <input type="range" id="sFA" min="-180" max="180" value="${Math.round(f.ang != null ? f.ang : (tent ? 180 : 0))}">`;
+    <label>Direction <span class="val" id="vFA">${Math.round(f.ang != null ? f.ang : (onde ? 180 : 0))}°</span></label>
+    <input type="range" id="sFA" min="-180" max="180" value="${Math.round(f.ang != null ? f.ang : (onde ? 180 : 0))}">`;
   if (t === 'aile') h += `
     <label>Souplesse <span class="val" id="vFO">${(f.ondes != null ? f.ondes : 0.35).toFixed(2)}</span></label>
     <input type="range" id="sFO" min="0" max="1" step="0.05" value="${f.ondes != null ? f.ondes : 0.35}">`
@@ -2037,6 +2059,19 @@ function sectionAppendices() {
     <input type="range" id="sFO" min="0" max="2" step="0.05" value="${f.ondes != null ? f.ondes : 1}">`
     + A(`Tire la <b>pointe de la flèche</b> sur le dessin : direction et longueur d'un
         seul geste. 0 onde = le membre se balance d'un bloc ; 1 onde = il se déroule.`);
+  // L'onde de la QUEUE, tant qu'on ne lui en donne pas une à elle : régler les
+  // ondes du corps dans l'onglet Queue règle aussi celles de cet appendice.
+  if (t === 'queue') {
+    const suit = f.ondes == null, o = suit ? (doc.tailOndes || 0) : f.ondes;
+    h += `
+    <label>Ondes sur la longueur <span class="val">${suit ? 'comme la queue · ' : ''}<span id="vFO">${o.toFixed(2)}</span></span></label>
+    <input type="range" id="sFO" min="0" max="3" step="0.05" value="${o}">
+    <div class="rangee"><button id="bFOQueue" ${suit ? 'disabled' : ''}>↺ Suivre la queue</button></div>`
+    + A(`Tire la <b>pointe de la flèche</b> sur le dessin : direction et longueur d'un
+        seul geste. Tant qu'on n'y touche pas, les ondes sont <b>celles de la queue</b>,
+        et suivent son réglage. <b>Déphasage 0°</b> et <b>vitesse 1</b> la gardent calée
+        sur la queue ; 180° la fait battre à contretemps.`);
+  }
   // L'AMPLITUDE EN CLAIR. Un appendice se réglait à l'aveugle : « 20° » sur une
   // nageoire de rayon 31 ne déplaçait rien de plus de 1,4 px sur un dessin large
   // de 150 — l'animation était présente au calcul et invisible à l'écran, et
@@ -2045,8 +2080,8 @@ function sectionAppendices() {
   const ampl = ampleurApp(f);
   const pc = ampl / Math.max(1, doc.naturalW) * 100;
   h += `
-    <label>${t === 'pince' ? 'Ouverture' : t === 'aile' ? 'Battement' : 'Amplitude'} <span class="val" id="vFAm">${ampDe(f)}</span>${tent ? ' %' : '°'}</label>
-    <input type="range" id="sFAm" min="0" max="${tent ? 100 : 180}" value="${ampDe(f)}">
+    <label>${t === 'pince' ? 'Ouverture' : t === 'aile' ? 'Battement' : 'Amplitude'} <span class="val" id="vFAm">${ampDe(f)}</span>${onde ? ' %' : '°'}</label>
+    <input type="range" id="sFAm" min="0" max="${onde ? 100 : 180}" value="${ampDe(f)}">
     <p class="aide" style="color:${pc < 1 ? '#b3261e' : 'var(--doux)'}">
       débattement obtenu : <b>${ampl.toFixed(1)} px</b> du dessin (${pc.toFixed(1)} % de sa largeur)${
       pc < 1 ? ' — <b>invisible en jeu</b> : monte l’amplitude, ou agrandis le rayon d’influence.' : ''}</p>
@@ -2976,6 +3011,10 @@ function cabler() {
   on('#sFR', 'input', e => { doc.fins[finSel].r = +e.target.value; $('#vFR').textContent = e.target.value; marquer(); });
   on('#sFA', 'input', e => { doc.fins[finSel].ang = +e.target.value; $('#vFA').textContent = e.target.value + '°'; marquer(); });
   on('#sFO', 'input', e => { doc.fins[finSel].ondes = +e.target.value; $('#vFO').textContent = (+e.target.value).toFixed(2); marquer(); });
+  // Le curseur a donné à l'appendice SES ondes : la mention « comme la queue »
+  // et le bouton ↺ ne se remettent à jour qu'au relâchement.
+  on('#sFO', 'change', () => { if (TYPE(doc.fins[finSel]) === 'queue') panneau(); });
+  on('#bFOQueue', 'click', () => { instantane(); delete doc.fins[finSel].ondes; marquer(); panneau(); });
   on('#sFAm', 'input', e => { doc.fins[finSel].amp = +e.target.value; $('#vFAm').textContent = e.target.value; marquer(); });
   // Le débattement obtenu ne se relit qu'au relâchement : le recalculer à chaque
   // frame sur tous les points d'un dessin à vingt calques n'apporterait rien.

@@ -1082,13 +1082,33 @@ navigateur dans lequel l'auteur travaille. L'outil changeait donc de visage — 
 perdait sa pipette — selon l'endroit d'où on l'ouvrait.
 
 D'où le **💧 posé sur chaque champ de couleur**, et plus seulement sur les deux
-couleurs de base : on l'arme, on clique sur le dessin, la couleur est prise. Elle
-ne dépend d'aucun navigateur, et elle prélève **mieux** que celle du système —
-dans l'image de repérage **d'origine** quand le clic tombe dessus, pas dans ce
-que l'écran affiche, qui la mélange à son opacité et au dessin.
+couleurs de base. Il ouvre **deux pipettes, dans cet ordre** :
+
+1. **Celle du SYSTÈME** (`EyeDropper`), qui prélève **n'importe où à l'écran** —
+   une planche ouverte à côté, un autre logiciel. C'est exactement celle qu'on
+   avait dans la fenêtre de Chromium et qu'on perdait en changeant de navigateur ;
+   posée sur nos propres boutons, elle ne dépend plus de la fenêtre de personne.
+   Elle n'existe que sur **Chrome et Edge**.
+2. **Celle de l'atelier**, partout ailleurs et sur **Alt+clic** : on arme, on
+   clique sur le dessin. Elle ne sait viser que le dessin, mais elle y prélève
+   **mieux** — dans l'image de repérage **d'origine**, pas dans ce que l'écran
+   affiche, qui la mélange à son opacité et au dessin. C'est la plus juste des
+   deux pour décalquer une référence, d'où l'Alt+clic qui la force.
+
+Piège de vérification, et il coûte une session bloquée : **le sélecteur d'écran
+est MODAL**. Le déclencher depuis la console gèle la page entière jusqu'à ce
+qu'on prélève ou qu'on appuie sur Échap — un `Escape` envoyé par le clavier
+réel, pas un événement synthétique. Et on ne peut pas le remplacer par un
+mouchard depuis la console : celle-ci vit dans un **monde isolé**, `window.EyeDropper`
+qu'on y pose n'existe pas pour la page. Pour tester le repli, il faut **injecter
+un `<script>`** dans la page, qui lui s'exécute dans son monde.
 
 Deux points de construction :
 
+- **`poserDansChamp` vit au même niveau que `prelever`**, pas dans le câblage du
+  panneau : il sert au câblage ET au clic sur le dessin, qui sont deux fonctions
+  différentes. Enfermé dans la première, il n'existait pas pour la seconde — et
+  `node --check` n'en dit rien, ça ne se voit qu'au clic.
 - **La pipette d'un champ retient le NŒUD du DOM**, pas un identifiant, et le
   panneau n'est donc pas reconstruit à l'armement — il l'est à chaque geste, et
   la référence mourrait avec l'ancien nœud. Le bouton s'allume à la main, et le

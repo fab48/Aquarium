@@ -1704,7 +1704,7 @@ function champCouleur(attrs, valeur) {
       title="Clic : choisir — glisser : copier cette couleur sur un autre champ"
       style="background:${valeur}"></button><input type="color" ${attrs} value="${valeur}"
       ><button type="button" class="pipCouleur"
-      title="Prélever une couleur sur le dessin">💧</button></span>`;
+      title="Prélever une couleur n'importe où à l'écran (Alt+clic : sur le dessin)">💧</button></span>`;
 }
 
 // Une explication ne s'affiche que si l'aide est allumée.
@@ -1751,6 +1751,53 @@ function base(role) {
   const b = doc && doc.base;
   if (!b) return null;
   return (role === 'primaire' ? b.primaire : b.secondaire) || null;
+}
+
+// PRÉLEVER UNE COULEUR — deux pipettes, et la première est celle qu'on attend.
+//
+// `EyeDropper` est la pipette du SYSTÈME : elle prélève n'importe où à l'écran,
+// donc aussi bien dans une planche ouverte à côté que dans un autre logiciel.
+// C'est elle qu'on avait dans la fenêtre native de Chromium, et qu'on perdait en
+// ouvrant l'atelier dans un navigateur qui n'en offre pas. Elle est maintenant
+// sur nos propres boutons, donc elle ne dépend plus de la fenêtre de personne —
+// mais elle n'existe que sur Chrome et Edge.
+//
+// Partout ailleurs, et sur Alt+clic, on retombe sur la pipette de l'atelier : on
+// arme, on clique sur le dessin. Elle ne sait viser que le dessin, mais elle y
+// prélève MIEUX — dans l'image de repérage d'origine, pas dans ce que l'écran
+// affiche, qui la mélange à son opacité et au dessin.
+// POSER UNE COULEUR DANS UN CHAMP. Un remplissage, un contour, une couleur de
+// visage ne s'enregistrent pas au même endroit : on ne duplique la logique
+// d'aucun d'eux, on pose la valeur et on rejoue leurs deux événements —
+// exactement ce que fait déjà le glisser-déposer entre pastilles.
+//
+// Au même niveau que `prelever` : il sert au CÂBLAGE du panneau et au CLIC sur le
+// dessin, qui sont deux fonctions différentes. Enfermé dans la première, il
+// n'existait pas pour la seconde — et `node --check` n'en dit rien, ça ne se voit
+// qu'au clic.
+function poserDansChamp(champ, v) {
+  if (!document.contains(champ)) { dire('le champ visé a disparu — réarme la pipette', 'ko'); return; }
+  instantane();
+  champ.value = v;
+  champ.previousElementSibling.style.background = v;
+  champ.dispatchEvent(new Event('input', { bubbles: true }));
+  champ.dispatchEvent(new Event('change', { bubbles: true }));
+  dire(`couleur prélevée : ${v}`, 'ok');
+}
+const pipetteEcran = () => typeof EyeDropper === 'function';
+async function prelever(auClavier, poser, armer) {
+  if (!auClavier && pipetteEcran()) {
+    try {
+      const { sRGBHex } = await new EyeDropper().open();
+      poser(sRGBHex);
+    } catch (err) {
+      // Échap pendant le prélèvement, ou le navigateur qui refuse : on ne
+      // repeint rien, et surtout on ne laisse pas l'outil dans un état armé.
+      dire('prélèvement annulé');
+    }
+    return;
+  }
+  armer();
 }
 
 // PIPETTE. Ce qu'on est en train de prélever, ou `null` :
@@ -1807,12 +1854,16 @@ function sectionBase() {
       ${champCouleur('id="cBase2"', sec)}
       <button id="bPip2" class="${pipette === 'secondaire' ? 'on' : ''}">💧 prendre</button>
     </div>`
-    + A(`<b>💧 prendre</b> puis un clic sur le dessin prélève la couleur. Le prélèvement
-        se fait dans l'<b>image de repérage d'origine</b> quand le clic tombe dessus —
-        pas sur ce que l'écran affiche, qui la mélange à son opacité et au dessin.<br>
-        Le même <b>💧</b> est posé sur <b>chaque</b> champ de couleur de l'outil : la
-        fenêtre du navigateur, elle, n'est pas la même partout et n'a pas toujours de
-        pipette.`)
+    + A(`<b>💧</b> prélève une couleur <b>n'importe où à l'écran</b> — une planche
+        ouverte à côté, un autre logiciel. Le même 💧 est posé sur <b>chaque</b> champ
+        de couleur de l'outil, et il ne dépend plus de la fenêtre du navigateur, qui
+        n'est pas la même partout et n'a pas toujours de pipette.${
+        pipetteEcran() ? '' : ' <b>Ce navigateur n\'a pas de pipette d\'écran</b> : ' +
+        'le 💧 arme alors la pipette de l\'atelier, décrite ci-dessous.'}<br>
+        <b>Alt+clic</b> arme la pipette de l'atelier : un clic sur le dessin, prélevé
+        dans l'<b>image de repérage d'origine</b> — pas sur ce que l'écran affiche, qui
+        la mélange à son opacité et au dessin. C'est la plus juste des deux pour
+        décalquer une référence.`)
     + `<div class="rangee">
       <button id="bBaseAppliquer" ${pris ? '' : 'disabled'}>Appliquer à ce calque</button>
       <button id="bBaseRaz" ${pris ? '' : 'disabled'}>Oublier</button>
@@ -3376,21 +3427,26 @@ function cabler() {
   on('#cBase1', 'input', e => poseBase('primaire', e.target.value));
   on('#cBase2', 'input', e => poseBase('secondaire', e.target.value));
   ['#cBase1', '#cBase2'].forEach(sel => on(sel, 'change', () => panneau()));
-  on('#bPip1', 'click', () => { pipette = pipette && pipette.role === 'primaire' ? null : { role: 'primaire' }; panneau(); majCurseur(); });
-  on('#bPip2', 'click', () => { pipette = pipette && pipette.role === 'secondaire' ? null : { role: 'secondaire' }; panneau(); majCurseur(); });
+  const pipBase = (role) => (ev) => prelever(ev.altKey,
+    (v) => { instantane(); poseBase(role, v); panneau(); dire(`couleur ${role} prélevée : ${v}`, 'ok'); },
+    () => { pipette = pipette && pipette.role === role ? null : { role }; panneau(); majCurseur(); });
+  on('#bPip1', 'click', pipBase('primaire'));
+  on('#bPip2', 'click', pipBase('secondaire'));
   // La pipette d'un champ quelconque. Pas de `panneau()` ici : il recréerait le
   // champ qu'on vient de viser (cf. `pipette`). On allume le bouton à la main.
   document.querySelectorAll('.pipCouleur').forEach(b => {
     const champ = b.previousElementSibling;
     if (pipette && pipette.champ === champ) b.classList.add('on');
-    b.addEventListener('click', () => {
-      const arme = !(pipette && pipette.champ === champ);
-      document.querySelectorAll('.pipCouleur.on').forEach(o => o.classList.remove('on'));
-      pipette = arme ? { champ } : null;
-      b.classList.toggle('on', arme);
-      majCurseur();
-      dire(arme ? 'clic sur le dessin pour prélever la couleur — Échap pour annuler' : '');
-    });
+    b.addEventListener('click', (ev) => prelever(ev.altKey,
+      (v) => poserDansChamp(champ, v),
+      () => {
+        const arme = !(pipette && pipette.champ === champ);
+        document.querySelectorAll('.pipCouleur.on').forEach(o => o.classList.remove('on'));
+        pipette = arme ? { champ } : null;
+        b.classList.toggle('on', arme);
+        majCurseur();
+        dire(arme ? 'clic sur le dessin pour prélever la couleur — Échap pour annuler' : '');
+      }));
   });
   on('#bBaseRaz', 'click', () => { instantane(); delete doc.base; marquer(); panneau(); });
   on('#bBaseAppliquer', 'click', () => {
@@ -4047,21 +4103,10 @@ vue.addEventListener('pointerdown', ev => {
       if (cible.role === 'primaire') couleurTrace = couleur;
       marquer(); panneau();
       dire(`couleur ${cible.role} prélevée : ${couleur}`, 'ok');
-    } else if (document.contains(cible.champ)) {
-      // Le champ a ses propres gestionnaires — un remplissage, un contour, une
-      // couleur de visage ne s'enregistrent pas au même endroit. On ne
-      // duplique donc pas leur logique : on pose la valeur et on rejoue leurs
-      // deux événements, exactement comme le glisser-déposer.
-      instantane();
-      cible.champ.value = couleur;
-      cible.champ.previousElementSibling.style.background = couleur;
-      cible.champ.dispatchEvent(new Event('input', { bubbles: true }));
-      cible.champ.dispatchEvent(new Event('change', { bubbles: true }));
-      dire(`couleur prélevée : ${couleur}`, 'ok');
     } else {
-      // Le panneau a été reconstruit entre l'armement et le clic : le champ visé
-      // n'existe plus. Mieux vaut le dire que de peindre au hasard.
-      dire('le champ visé a disparu — réarme la pipette', 'ko');
+      // `poserDansChamp` dit lui-même si le panneau a été reconstruit entre
+      // l'armement et le clic, auquel cas le champ visé n'existe plus.
+      poserDansChamp(cible.champ, couleur);
     }
     return;
   }

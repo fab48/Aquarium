@@ -204,6 +204,25 @@ grille. Quatre règles s'y sont ajoutées, chacune pour un cas rencontré :
   bernard-l'ermite, oursin, krill) et les retourner les aurait mises à
   l'envers.
 
+**Un document vide change de taille QUAND la planche arrive — et ses ancres avec.**
+Un dessin neuf naît en 420 × 260, et `SVGImport.finaliser` y pose ses ancres par
+défaut : centre à 210, œil à 328, bouche à 378, départ de queue à 118. Poser la
+planche juste après donne au document la taille de la **vignette** — 178 × 122
+pour le mérou — et ne disait rien à ces ancres, qui restaient à leur place
+d'avant : toutes les cinq hors du dessin de référence, très loin à droite, avec
+le visage commun dessiné dans le vide à côté. Sur un document vide une ancre n'a
+de sens que **relativement à la surface** : elle suit donc l'échelle, comme les
+longueurs du dessin (rayon d'œil, écartement, départ de queue). Mesuré sur le
+mérou : **5 ancres sur 5 hors du dessin → 0 sur 5**, centre 210 → 89, œil 328 →
+139, bouche 378 → 160, `tailBlend` 118 → 50 ; vérifié en direct sur le
+Barracuda (vignette 205 × 141), les cinq champs affichent exactement les valeurs
+attendues. Même correctif pour une image de repérage chargée du disque, qui
+redimensionnait la surface de la même façon.
+
+Un dessin **déjà** dans cet état se répare d'un clic : les boutons **Gabarit**
+(Poisson / De face / Rampant) replacent les cinq ancres sur la **boîte des
+formes**, pas sur la surface de travail.
+
 Dans l'atelier, la planche **se pose toute seule** : à l'ouverture d'une espèce,
 sur « Nouveau dessin », sur « Partir de la silhouette » et sur un import. Sur un
 document vide elle donne sa taille à la surface de travail (on trace dedans) ;

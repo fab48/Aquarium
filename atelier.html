@@ -893,6 +893,32 @@ function bornesDoc() {
   return isFinite(x0) ? { x0, y0, x1, y1 } : null;
 }
 
+// REDIMENSIONNER UNE SURFACE DE TRAVAIL VIDE, ancres comprises.
+//
+// Un dessin neuf naît en 420 × 260, et `SVGImport.finaliser` y pose ses ancres
+// par défaut : centre à 210, œil à 328, bouche à 378, départ de queue à 118.
+// Poser la planche juste après donnait au document la taille de la VIGNETTE —
+// 178 × 122 pour le mérou — sans rien dire à ces ancres, qui restaient à leur
+// place d'avant : très loin à droite d'un dessin de référence deux fois et demie
+// plus petit, avec le visage commun dessiné dans le vide à côté.
+//
+// Sur un document vide, une ancre n'a de sens que RELATIVEMENT à la surface :
+// elle suit donc l'échelle. Ça vaut aussi pour ce qui est une longueur du
+// dessin — rayon d'œil, écartement, départ de la queue.
+function redimensionnerSurfaceVide(W, H) {
+  const sx = W / (doc.naturalW || W), sy = H / (doc.naturalH || H);
+  doc.naturalW = W; doc.naturalH = H;
+  if (!isFinite(sx) || !isFinite(sy) || (Math.abs(sx - 1) < 1e-6 && Math.abs(sy - 1) < 1e-6)) return;
+  for (const a of Object.values(doc.points || {})) {
+    if (!a) continue;
+    if (a.x != null) a.x *= sx;
+    if (a.y != null) a.y *= sy;
+    // Rayons et écartement sont des longueurs horizontales du dessin.
+    for (const c of ['r', 'r2', 'ecart']) if (a[c] != null) a[c] *= sx;
+  }
+  if (doc.tailBlend != null) doc.tailBlend *= sx;
+}
+
 function poserRepere(id, silencieux) {
   const r = REPERES[id];
   if (!doc || !r) return false;
@@ -901,7 +927,7 @@ function poserRepere(id, silencieux) {
                opacite: doc.fond ? doc.fond.opacite : 0.45 };
   // Document vide : la surface de travail prend la taille de la vignette, on
   // dessine DANS son repère. Document existant : on cale la vignette dessus.
-  if (!doc.shapes.length) { doc.naturalW = r.w; doc.naturalH = r.h; }
+  if (!doc.shapes.length) redimensionnerSurfaceVide(r.w, r.h);
   else ajusterFond();
   reprendreFond();
   if (!silencieux) dire(`planche posée en repérage (${r.w}×${r.h})`, 'ok');
@@ -4364,7 +4390,7 @@ $('#fichierFond').onchange = ev => {
       instantane();
       // La surface de travail prend la taille de l'image : on dessine DANS son
       // repère, pas à côté.
-      if (!doc.shapes.length) { doc.naturalW = im.width; doc.naturalH = im.height; }
+      if (!doc.shapes.length) redimensionnerSurfaceVide(im.width, im.height);
       chargerFond(fr.result, im.width, im.height);
       marquer(); panneau();
       dire(`${f.name} en calque de repérage (${im.width}×${im.height})`, 'ok');

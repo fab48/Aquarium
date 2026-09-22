@@ -194,6 +194,18 @@
   .couleur > input[type=color] { position: absolute; left: 10px; bottom: 0;
                                  width: 1px; height: 1px; opacity: 0; border: 0;
                                  padding: 0; pointer-events: none; }
+  /* La pipette se pose SUR la pastille, à droite : une rangée de champs de
+     couleur tient déjà tout juste dans la colonne, lui prendre sa place la
+     ferait déborder. */
+  .couleur > .pipCouleur { position: absolute; right: 3px; top: 3px; width: 24px;
+                           height: 24px; padding: 0; line-height: 22px; font-size: 13px;
+                           border-radius: 4px; border: 1px solid rgba(0,0,0,.18);
+                           background: rgba(255,255,255,.82); cursor: crosshair;
+                           opacity: .55; }
+  .couleur:hover > .pipCouleur { opacity: 1; }
+  .couleur > .pipCouleur.on { opacity: 1; background: var(--accent); color: #fff;
+                              border-color: var(--accent); }
+  .pastilles .couleur > .pipCouleur { display: none; }   /* 30 px de large : rien n'y tient */
   .pastilles .couleur { display: inline-block; width: 30px; }
   .pastilles .couleur > button { height: 26px; }
   .pastilles .sup { padding: 2px 5px; font-size: 11px; }
@@ -1665,16 +1677,34 @@ const OUTILS = {
   dessiner:  { ico: '✏️', nom: 'Dessiner',   quoi: 'Tracer un nouveau calque au clic.' },
 };
 
-// UN CHAMP DE COULEUR = une pastille cliquable + l'input natif, caché derrière.
+// UN CHAMP DE COULEUR = une pastille cliquable, l'input natif caché derrière, et
+// une PIPETTE.
+//
 // La fenêtre native d'un `<input type=color>` s'ouvre à l'ENFONCEMENT du bouton,
 // avant le relâchement : un clic parti de travers ne peut plus être annulé, et
 // ça se paye vingt fois par séance. Le `click` d'un bouton n'arrive qu'au
 // relâchement. Les identifiants et les gestionnaires ne changent pas — c'est
 // seulement ce qui déclenche l'ouverture qui change.
+//
+// Cette fenêtre appartient en revanche au NAVIGATEUR, et on n'a aucune prise
+// dessus : Chromium en offre une avec pipette d'écran, Firefox une tout autre
+// sans, et le panneau d'aperçu intégré n'est pas celui dans lequel l'auteur
+// travaille. L'outil changeait donc de visage — et perdait sa pipette — selon
+// l'endroit d'où on l'ouvrait. D'où le 💧 : l'atelier avait déjà sa propre
+// pipette pour les deux couleurs de base, elle est maintenant sur TOUS les
+// champs. Elle ne dépend d'aucun navigateur, et elle prélève mieux que celle du
+// système — dans l'image de repérage D'ORIGINE quand le clic tombe dessus, pas
+// dans ce que l'écran affiche, qui la mélange à son opacité et au dessin.
+//
+// L'ordre des trois enfants compte : la pastille d'abord (le glisser-déposer
+// lit `nextElementSibling` pour trouver l'input, et `querySelector('button')`
+// pour retrouver la pastille), l'input ensuite, la pipette en dernier.
 function champCouleur(attrs, valeur) {
   return `<span class="couleur"><button type="button" class="ouvreCouleur" draggable="true"
       title="Clic : choisir — glisser : copier cette couleur sur un autre champ"
-      style="background:${valeur}"></button><input type="color" ${attrs} value="${valeur}"></span>`;
+      style="background:${valeur}"></button><input type="color" ${attrs} value="${valeur}"
+      ><button type="button" class="pipCouleur"
+      title="Prélever une couleur sur le dessin">💧</button></span>`;
 }
 
 // Une explication ne s'affiche que si l'aide est allumée.
@@ -1723,7 +1753,14 @@ function base(role) {
   return (role === 'primaire' ? b.primaire : b.secondaire) || null;
 }
 
-// PIPETTE. `pipette` vaut le rôle qu'on est en train de prélever, ou null.
+// PIPETTE. Ce qu'on est en train de prélever, ou `null` :
+//   { role: 'primaire' | 'secondaire' }  — une des deux couleurs de base
+//   { champ: <input type=color> }        — n'importe quel autre champ
+//
+// Pour un champ, c'est le nœud du DOM qu'on retient, et le panneau n'est donc
+// PAS reconstruit à l'armement : il l'est à chaque geste, et la référence
+// mourrait avec l'ancien nœud. Le prélèvement vérifie de toute façon que le
+// champ est encore dans la page.
 let pipette = null;
 let fondEchantillon = null;      // l'image de repérage, à sa taille NATIVE
 
@@ -1772,7 +1809,10 @@ function sectionBase() {
     </div>`
     + A(`<b>💧 prendre</b> puis un clic sur le dessin prélève la couleur. Le prélèvement
         se fait dans l'<b>image de repérage d'origine</b> quand le clic tombe dessus —
-        pas sur ce que l'écran affiche, qui la mélange à son opacité et au dessin.`)
+        pas sur ce que l'écran affiche, qui la mélange à son opacité et au dessin.<br>
+        Le même <b>💧</b> est posé sur <b>chaque</b> champ de couleur de l'outil : la
+        fenêtre du navigateur, elle, n'est pas la même partout et n'a pas toujours de
+        pipette.`)
     + `<div class="rangee">
       <button id="bBaseAppliquer" ${pris ? '' : 'disabled'}>Appliquer à ce calque</button>
       <button id="bBaseRaz" ${pris ? '' : 'disabled'}>Oublier</button>
@@ -3336,8 +3376,22 @@ function cabler() {
   on('#cBase1', 'input', e => poseBase('primaire', e.target.value));
   on('#cBase2', 'input', e => poseBase('secondaire', e.target.value));
   ['#cBase1', '#cBase2'].forEach(sel => on(sel, 'change', () => panneau()));
-  on('#bPip1', 'click', () => { pipette = pipette === 'primaire' ? null : 'primaire'; panneau(); majCurseur(); });
-  on('#bPip2', 'click', () => { pipette = pipette === 'secondaire' ? null : 'secondaire'; panneau(); majCurseur(); });
+  on('#bPip1', 'click', () => { pipette = pipette && pipette.role === 'primaire' ? null : { role: 'primaire' }; panneau(); majCurseur(); });
+  on('#bPip2', 'click', () => { pipette = pipette && pipette.role === 'secondaire' ? null : { role: 'secondaire' }; panneau(); majCurseur(); });
+  // La pipette d'un champ quelconque. Pas de `panneau()` ici : il recréerait le
+  // champ qu'on vient de viser (cf. `pipette`). On allume le bouton à la main.
+  document.querySelectorAll('.pipCouleur').forEach(b => {
+    const champ = b.previousElementSibling;
+    if (pipette && pipette.champ === champ) b.classList.add('on');
+    b.addEventListener('click', () => {
+      const arme = !(pipette && pipette.champ === champ);
+      document.querySelectorAll('.pipCouleur.on').forEach(o => o.classList.remove('on'));
+      pipette = arme ? { champ } : null;
+      b.classList.toggle('on', arme);
+      majCurseur();
+      dire(arme ? 'clic sur le dessin pour prélever la couleur — Échap pour annuler' : '');
+    });
+  });
   on('#bBaseRaz', 'click', () => { instantane(); delete doc.base; marquer(); panneau(); });
   on('#bBaseAppliquer', 'click', () => {
     const f = sh(); if (!f) return;
@@ -3818,10 +3872,16 @@ function annuler(pile, autre) {
   dire(pile === histoire ? 'annulé' : 'rétabli');
 }
 addEventListener('keydown', ev => {
+  // ÉCHAP N'A PAS DE CTRL, et les trois désarmements vivaient sous la garde
+  // écrite pour Ctrl+Z : aucun ne s'est jamais déclenché, alors que l'outil
+  // promet « Échap pour annuler » à trois endroits. Ils passent donc AVANT.
+  if (ev.key === 'Escape') {
+    if (pipette) { pipette = null; majCurseur(); panneau(); dire('pipette désarmée'); }
+    else if (primitive) { primitive = null; apercuPrim = null; panneau(); dessiner(); }
+    else if (appType) { appType = null; panneau(); dire('appendice désarmé'); }
+    return;
+  }
   if (!(ev.ctrlKey || ev.metaKey)) return;
-  if (ev.key === 'Escape' && pipette) { pipette = null; majCurseur(); panneau(); return; }
-  if (ev.key === 'Escape' && primitive) { primitive = null; apercuPrim = null; panneau(); dessiner(); return; }
-  if (ev.key === 'Escape' && appType) { appType = null; panneau(); dire('appendice désarmé'); return; }
   const k = ev.key.toLowerCase();
   if (k === 'z' && !ev.shiftKey) { ev.preventDefault(); annuler(histoire, futur); }
   else if (k === 'y' || (k === 'z' && ev.shiftKey)) { ev.preventDefault(); annuler(futur, histoire); }
@@ -3978,14 +4038,31 @@ vue.addEventListener('pointerdown', ev => {
   if (ev.button !== 0) return;
   // PIPETTE : elle passe avant tout, et se désarme après un prélèvement.
   if (pipette) {
-    instantane();
-    const role = pipette;
-    doc.base = doc.base || {};
-    doc.base[role] = couleurSousLeCurseur(sx, sy);
-    if (role === 'primaire') couleurTrace = doc.base[role];
+    const cible = pipette, couleur = couleurSousLeCurseur(sx, sy);
     pipette = null; majCurseur();
-    marquer(); panneau();
-    dire(`couleur ${role} prélevée : ${doc.base[role]}`, 'ok');
+    if (cible.role) {
+      instantane();
+      doc.base = doc.base || {};
+      doc.base[cible.role] = couleur;
+      if (cible.role === 'primaire') couleurTrace = couleur;
+      marquer(); panneau();
+      dire(`couleur ${cible.role} prélevée : ${couleur}`, 'ok');
+    } else if (document.contains(cible.champ)) {
+      // Le champ a ses propres gestionnaires — un remplissage, un contour, une
+      // couleur de visage ne s'enregistrent pas au même endroit. On ne
+      // duplique donc pas leur logique : on pose la valeur et on rejoue leurs
+      // deux événements, exactement comme le glisser-déposer.
+      instantane();
+      cible.champ.value = couleur;
+      cible.champ.previousElementSibling.style.background = couleur;
+      cible.champ.dispatchEvent(new Event('input', { bubbles: true }));
+      cible.champ.dispatchEvent(new Event('change', { bubbles: true }));
+      dire(`couleur prélevée : ${couleur}`, 'ok');
+    } else {
+      // Le panneau a été reconstruit entre l'armement et le clic : le champ visé
+      // n'existe plus. Mieux vaut le dire que de peindre au hasard.
+      dire('le champ visé a disparu — réarme la pipette', 'ko');
+    }
     return;
   }
   const cible = pres(sx, sy);

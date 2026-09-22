@@ -1072,6 +1072,44 @@ d'enregistrer un `[0, 0]` — et le tableau du panneau liste les décalages pos�
 avec un ↺ pour chacun : un décalage oublié sur une humeur qu'on ne regarde plus
 serait autrement introuvable.
 
+### La fenêtre de couleur appartient au NAVIGATEUR — la pipette, non
+
+Tout ce qui suit règle le **déclenchement** de la fenêtre native d'un
+`<input type=color>`. Ce qu'il y a **dedans**, en revanche, n'appartient pas à
+l'outil : Chromium affiche sa propre fenêtre, avec une pipette d'écran ; Firefox
+en affiche une tout autre, sans ; et le panneau d'aperçu intégré n'est pas le
+navigateur dans lequel l'auteur travaille. L'outil changeait donc de visage — et
+perdait sa pipette — selon l'endroit d'où on l'ouvrait.
+
+D'où le **💧 posé sur chaque champ de couleur**, et plus seulement sur les deux
+couleurs de base : on l'arme, on clique sur le dessin, la couleur est prise. Elle
+ne dépend d'aucun navigateur, et elle prélève **mieux** que celle du système —
+dans l'image de repérage **d'origine** quand le clic tombe dessus, pas dans ce
+que l'écran affiche, qui la mélange à son opacité et au dessin.
+
+Deux points de construction :
+
+- **La pipette d'un champ retient le NŒUD du DOM**, pas un identifiant, et le
+  panneau n'est donc pas reconstruit à l'armement — il l'est à chaque geste, et
+  la référence mourrait avec l'ancien nœud. Le bouton s'allume à la main, et le
+  prélèvement vérifie que le champ est encore dans la page plutôt que de peindre
+  au hasard.
+- **On ne duplique la logique d'aucun champ.** Un remplissage, un contour, une
+  couleur de visage ne s'enregistrent pas au même endroit : la pipette pose la
+  valeur et **rejoue les deux événements** `input` et `change`, exactement comme
+  le glisser-déposer entre pastilles. Vérifié sur le remplissage d'un calque :
+  prélèvement `#ebd897` → `#fed88d`, pastille suivie, et `Ctrl+Z` rend la couleur
+  d'origine — la preuve que le geste est bien passé par le gestionnaire du champ
+  et par l'instantané d'annulation.
+
+**Échap n'a pas de Ctrl.** Les trois désarmements au clavier — pipette, forme
+simple, type d'appendice — étaient écrits **après** la garde
+`if (!(ev.ctrlKey || ev.metaKey)) return;` posée pour `Ctrl+Z` : aucun ne s'est
+jamais déclenché, alors que l'outil promet « Échap pour annuler » à trois
+endroits. Ils passent maintenant avant la garde. Vérifié : pipette armée → Échap
+→ désarmée ; type d'appendice armé → Échap → désarmé ; et `Ctrl+Z` annule
+toujours.
+
 ### Un sélecteur de couleur s'ouvre au RELÂCHEMENT — mais sans exiger un clic parfait
 
 La fenêtre native d'un `<input type=color>` s'ouvre dès l'**enfoncement** du

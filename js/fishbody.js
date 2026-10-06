@@ -1589,6 +1589,70 @@ const FishBody = {
     this.face(ctx, s, e, t);
   },
 
+  // Poisson Archer : corps argenté et CHEVRONS NOIRS qui descendent du dos,
+  // sa signature. Coupés au contour du corps, comme les bandes du clown.
+  drawArcher(ctx, e, t) {
+    const s = e.size, br = (e.def.bodyRatio || 0.5);
+    this.drawFishBody(ctx, e, t);
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(0, 0, s, s * br, 0, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.fillStyle = '#23262b';
+    for (const [bx, lg] of [[-0.62, 0.55], [-0.25, 0.8], [0.12, 0.72], [0.46, 0.5]]) {
+      ctx.beginPath();
+      ctx.moveTo(s * (bx - 0.13), -s * br * 1.1);
+      ctx.lineTo(s * (bx + 0.13), -s * br * 1.1);
+      ctx.lineTo(s * (bx + 0.02), -s * br * 1.1 + s * br * 2 * lg);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+    this.face(ctx, s, e, t);
+  },
+
+  // Requin Marteau : corps de requin et, au bout, LE MARTEAU — une barre
+  // verticale avec un œil à chaque extrémité, la version cartoon qui se lit
+  // de loin. Le visage commun est posé tel quel, décalé pour que son œil (et
+  // son sourcil, qui porte toute la lecture) tombe sur la pointe haute ; la
+  // pointe basse reçoit un second œil du même système (`oeil`), et la bouche
+  // retrouve sa place, sous le marteau.
+  drawHammer(ctx, e, t) {
+    const s = e.size;
+    this.drawFishBody(ctx, e, t);
+    const hx = s * 0.9, hh = s * 0.7, hw = s * 0.19;
+    // Le cou : la barre sort du museau, elle n'y est pas collée.
+    ctx.fillStyle = e.color;
+    ctx.beginPath(); ctx.ellipse(s * 0.72, 0, s * 0.3, s * 0.2, 0, 0, Math.PI * 2); ctx.fill();
+    // La barre : un fuseau arrondi, un peu plus renflé aux deux bouts, là où
+    // sont les yeux.
+    ctx.beginPath();
+    ctx.moveTo(hx, -hh - hw * 0.4);
+    ctx.quadraticCurveTo(hx + hw * 1.3, -hh, hx + hw * 0.7, -hh * 0.45);
+    ctx.quadraticCurveTo(hx + hw * 0.55, 0, hx + hw * 0.7, hh * 0.45);
+    ctx.quadraticCurveTo(hx + hw * 1.3, hh, hx, hh + hw * 0.4);
+    ctx.quadraticCurveTo(hx - hw * 1.3, hh, hx - hw * 0.8, hh * 0.45);
+    ctx.quadraticCurveTo(hx - hw * 0.6, 0, hx - hw * 0.8, -hh * 0.45);
+    ctx.quadraticCurveTo(hx - hw * 1.3, -hh, hx, -hh - hw * 0.4);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.13)';           // le dessous, dans l'ombre : du relief
+    ctx.beginPath(); ctx.ellipse(hx, hh * 0.62, hw * 0.85, hh * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+
+    const v = this.visageDe(e);
+    if (s * Camera.zoom < 10) { this.faceMinimale(ctx, s, e, t, v.pal); return; }
+    const fs = s * 0.7;                            // l'œil doit tenir dans la barre
+    const ex = fs * 0.55, ey = -fs * 0.18;
+    const dx = hx - ex, dy = -hh * 0.8 - ey;
+    ctx.save();
+    ctx.translate(dx, dy);
+    this.drawFace(ctx, fs, e.expression, t + (e.phase || 0),
+                  e.emoteK ? e.emoteK() : 1, e._eyeLook, true, v.pal, v.style);
+    ctx.restore();
+    this.oeil(ctx, hx, hh * 0.8, Math.max(2.5, fs * 0.22), e, t, v.pal);
+    const em = this.EMOTIONS[e.expression] || this.EMOTIONS.idle;
+    const k = e.emoteK ? e.emoteK() : 1;
+    this.bouche(ctx, s * 0.66, s * 0.2, s * 0.8, k > 0.35 ? em.mouth : 'neutre', t, v.pal, v.style);
+  },
+
   // Raie manta : losange/aile qui ondule le long de l'envergure + longue queue.
   drawRay(ctx, e, t) {
     const s = e.size;
@@ -3100,6 +3164,8 @@ const FishBody = {
       case 'shrimp': this.drawShrimp(ctx, e, t); break;
       case 'sunfish': this.drawSunfish(ctx, e, t); break;
       case 'clown': this.drawClown(ctx, e, t); break;
+      case 'archer': this.drawArcher(ctx, e, t); break;
+      case 'hammer': this.drawHammer(ctx, e, t); break;
       default: this.drawFish(ctx, e, t);
     }
     if (e._chew > 0) this.drawMouthful(ctx, e, t);

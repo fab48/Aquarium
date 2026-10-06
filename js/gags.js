@@ -44,6 +44,12 @@ const CADENCE = {
   echo:       0.4,
   fusee:      0.4,
   baille:     0.4,
+  crachat:    0.7,   // le Poisson Archer abat un oiseau. Nominal relevé : mesuré
+                     //   à 0,4, il ne partait que 0,14/min — un archer sur deux
+                     //   se fait manger par le Cormoran avant la fin de son
+                     //   cooldown (~20 min par individu), et il ne tire que
+                     //   s'il a un oiseau à portée.
+  toc:        0.4,   // la bulle « TOC ! » du Requin Marteau (le coup, lui, suit la chasse)
   // SCÈNE
   ninja:      1,     // était à 21/min
   danse:      1,
@@ -1587,5 +1593,185 @@ const GAGS = {
     e.hunger = Math.max(0, e.hunger - 0.45);
     e.wellFed = Math.min(1.6, e.wellFed + 0.55);
     e.target = null; e.state = 'wander';
+  },
+
+  // LE POISSON ARCHER ABAT UN OISEAU. Trois temps, comme toute scène :
+  //   vise  — il monte sous la surface, s'arrête, fixe l'oiseau et se
+  //           comprime (l'anticipation, `_crispe`) ;
+  //   vol   — « PTUI ! » : un jet d'eau balistique part vers la position
+  //           ANTICIPÉE de l'oiseau (il vole, il faut viser devant) ;
+  //   touché — l'oiseau tombe à l'eau, sonné (`_abattu`, cf. Entity.move) et
+  //           l'archer file le gober avant qu'il se réveille ; raté — le jet
+  //           lui retombe sur le nez, et il a honte.
+  // Le repas passe par la chasse ordinaire : `abat` ne laisse `nearestPreyFor`
+  // retenir un oiseau que s'il flotte, sonné. Un oiseau hors menu (le Pélican)
+  // ou protégé par le report de prédation tombe quand même — il se réveille,
+  // trempé et furieux, et c'est un gag à lui seul.
+  archer(e, dt, t) {
+    // Premier tir étalé sur tout le cooldown : sinon toute la population
+    // démarre avec un cooldown plein, et personne ne crache pendant les
+    // quinze premières minutes de la partie.
+    e._crachatCd = (e._crachatCd ?? Ecosystem.cadence(e, CADENCE.crachat) * U.rand(0.05, 1))
+                 - GAGS._tic(e, dt);
+    // Sa proie s'est réveillée avant qu'il arrive : elle est repartie en l'air.
+    if (e.state === 'hunt' && e.target && !(e.target._abattu > 0)) {
+      e.state = 'wander'; e.target = null;
+      e.emote('sad', 1.8);
+    }
+    if (e._arPh) { GAGS._archerScene(e, dt, t); return; }
+    GAGS._riposte(e, dt);
+    if (e._crachatCd > 0 || e.stage !== 'adult' || e.state !== 'wander') return;
+    if (e.y > CONFIG.SURFACE_Y + 220) return;
+    if (!GAGS._enVue(e)) return;                  // le public d'abord
+    for (const o of Ecosystem.bySpecies.archer || []) if (o !== e && o._arPh) return;
+    const c = GAGS._cibleArcher(e);
+    if (!c) return;
+    e._arPh = 'vise'; e._arT = 0; e._arCible = c;
+    e._crachatCd = Ecosystem.cadence(e, CADENCE.crachat);
+  },
+
+  // LA RIPOSTE. Le Cormoran plonge sur l'archer — qui lui crache au visage.
+  // Sans elle, mesuré sur 400 s : 1,5 archer mangé par minute, presque tout
+  // ce qui naissait ; l'archer n'avait pas le temps de devenir adulte, donc de
+  // tirer. Quatre fois sur cinq, le plongeur prend le jet en pleine figure, repart
+  // sonné et trempé, et l'archer s'en sort. Ce n'est pas une scène de
+  // calendrier : elle suit la chasse, donc elle reste silencieuse (le jet, pas
+  // de bulle) sauf une fois sur quatre.
+  _riposte(e, dt) {
+    e._riposteCd = (e._riposteCd ?? 0) - dt;
+    if (e._riposteCd > 0 || e.state === 'dizzy') return;
+    for (const c of Ecosystem.chasseurs || []) {
+      if (c.target !== e || !c.def.aerial || c.dead) continue;
+      const d2 = U.dist2(c.x, c.y, e.x, e.y);
+      if (d2 > 230 * 230 || d2 < 25 * 25) continue;
+      e._riposteCd = U.rand(6, 10);
+      if (Math.random() < 0.2) return;             // trop tard : il a paniqué
+      const T = 0.18, g = 420;
+      const bx = e.x, by = e.y - e.size * 0.3;
+      const vx = (c.x - bx) / T, vy = (c.y - by) / T - 0.5 * g * T;
+      for (let i = 0; i < 5; i++) {
+        const k = 1 - i * 0.05;
+        Particles.spawn({ type: 'jet', de: e.id, x: bx, y: by, vx: vx * k, vy: vy * k, g,
+          r: 3.2 - i * 0.3, life: T * 2 });
+      }
+      if (Math.random() < 0.25) Particles.shout(e.x, e.y - e.size * 1.6, 'PTUI !', '#dff4ff', 22);
+      e._faceAt = null;
+      e.emote('smug', 1.6);
+      c.assomme(null, true);
+      c.wet = 3;
+      (c._evite || (c._evite = {})).archer = Main.time + 90;   // la rancune
+      c.vy = -Math.abs(c.vy) * 0.5 - 80;              // il remonte, penaud
+      e.state = 'flee'; e.target = c; e.stateTimer = 1.2;
+      return;
+    }
+  },
+
+  // Un oiseau en vol, pas trop haut ni trop loin — et pas déjà à terre.
+  _cibleArcher(e) {
+    let best = null, bd = Infinity;
+    for (const id of ['goeland', 'moustachu', 'cormoran', 'pelican']) {
+      for (const o of Ecosystem.bySpecies[id] || []) {
+        if (o.dead || o._abattu > 0 || o.state === 'dizzy') continue;
+        const h = CONFIG.SURFACE_Y - o.y;          // hauteur au-dessus de l'eau
+        if (h < 30 || h > 380) continue;
+        const dx = Math.abs(o.x - e.x);
+        if (dx > 420) continue;
+        const d = dx * dx + h * h;
+        if (d < bd) { bd = d; best = o; }
+      }
+    }
+    return best;
+  },
+
+  _archerFin(e) {
+    e._arPh = null; e._arCible = null; e._faceAt = null;
+    e._diveTargetY = null; e._crispe = 0;
+    e.release();
+  },
+
+  _archerScene(e, dt, t) {
+    const c = e._arCible;
+    e._arT += dt;
+    if (e.state === 'flee' || e.state === 'dizzy' || e._ecraseT > 0) { GAGS._archerFin(e); return; }
+    if (e._arPh === 'vise') {
+      if (!c || c.dead || c._abattu > 0) { GAGS._archerFin(e); return; }
+      e._freeze = 0.3;
+      e._diveTargetY = CONFIG.SURFACE_Y + e.size;  // juste sous la surface
+      e._faceAt = { x: c.x, y: c.y };
+      e.hold('smug');                              // « pas bouger… »
+      e._crispe = U.clamp(e._arT / 1.1, 0, 1) * 0.7;
+      if (e._arT < 1.1) return;
+      // PTUI. Visée anticipée : là où l'oiseau SERA quand le jet arrivera.
+      const bx = e.x + (e._facing >= 0 ? 1 : -1) * e.size * 0.9, by = e.y - e.size * 0.3;
+      let T = U.clamp(Math.hypot(c.x - bx, c.y - by) / 650, 0.28, 0.75);
+      const vx = (c.x + c.vx * T - bx) / T;
+      const g = 420;
+      const vy = (c.y + c.vy * T - by) / T - 0.5 * g * T;
+      for (let i = 0; i < 7; i++) {
+        const k = 1 - i * 0.035;                   // un filet, pas une balle
+        Particles.spawn({ type: 'jet', de: e.id, x: bx, y: by, vx: vx * k, vy: vy * k, g,
+          r: 3.4 - i * 0.25, life: T * 1.9 + 0.4 });
+      }
+      Particles.shout(e.x, e.y - e.size * 1.6, 'PTUI !', '#dff4ff', 24);
+      e.release();
+      e._crispe = 0; e._etire = 0.5;               // la détente
+      e.choc(0.5, 'x');
+      e._arPh = 'vol'; e._arT = 0; e._arVol = T;
+      e._arVise = { x: c.x + c.vx * T, y: c.y + c.vy * T };
+      return;
+    }
+    if (e._arPh === 'vol') {
+      e._freeze = 0.3;
+      e._etire = Math.max(0, (e._etire ?? 0) - dt * 1.5);
+      if (e._arT < e._arVol) return;
+      e._etire = 0;
+      const v = e._arVise;
+      const touche = c && !c.dead && !(c._abattu > 0)
+        && U.dist2(c.x, c.y, v.x, v.y) < (c.size + 24) ** 2
+        && Math.random() < 0.8;                    // il arrive qu'il esquive
+      if (touche) {
+        c._abattu = U.rand(3.5, 6.5);
+        c.assomme(null, true);
+        c.stateTimer = c._abattu + 0.2;
+        c.vx *= 0.3; c.vy = 40;
+        // Le filet s'arrête sur l'oiseau : il ne continue pas sa route au travers.
+        for (const q of Particles.list) if (q.type === 'jet' && q.de === e.id) q.age = q.life;
+        Particles.burst(c.x, c.y, '#bfe6ff', 9);
+        e.emote('proud', 1.8);
+        // Au menu (et pas protégé) : il file le gober.
+        if (e.def.prey.includes(c.speciesId)) {
+          e.state = 'hunt'; e.target = c; e.stateTimer = 8;
+        }
+      } else {
+        // Le jet lui retombe dessus.
+        e.emote('ashamed', 2.2);
+        Particles.sweat(e.x, e.y - e.size, e.size);
+      }
+      GAGS._archerFin(e);
+    }
+  },
+
+  // LE REQUIN MARTEAU. Le coup de tête lui-même est dans la chasse
+  // (Entity.think, branche `def.marteau`) : il suit la faim, pas un
+  // calendrier. Ici, seulement les minuteurs — et il FOUILLE : en chasse près
+  // du fond, il rase le sable, la tête en avant, comme un vrai marteau qui
+  // balaie le fond à la recherche de ce qui s'y cache.
+  marteau(e, dt, t) {
+    if (e._toc > 0) e._toc -= dt;
+    if (e._tocCd > 0) e._tocCd -= dt;
+    const p = e.target;
+    if (e.state === 'hunt' && p && !p.dead) {
+      const fy = World.floorY(p.x);
+      // Descend au ras de sa proie : sa bande le retiendrait sinon une
+      // longueur au-dessus du sable, hors de portée d'un crabe.
+      // Le rappel de bande est une accélération douce : on pilote donc la
+      // VITESSE verticale, pour que la barre du marteau arrive au niveau du
+      // crabe et pas une longueur au-dessus.
+      if (p.y - fy > -80 && U.dist2(e.x, e.y, p.x, p.y) < 400 * 400) {
+        e._diveTargetY = null;
+        const vise = (p.y - e.size * 0.85 - e.y) * 3;
+        e.vy += (vise - e.vy) * 5 * dt;
+      }
+    }
   },
 };

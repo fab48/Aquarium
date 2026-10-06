@@ -644,13 +644,61 @@ class Entity {
       // en 3 min). Un prédateur ne dévore que ses proies déclarées.
       const comestible = p && def.prey && def.prey.includes(p.speciesId);
       // Le filtreur avale tout ce qui entre dans sa bouche : rayon large
-      const reach = (this.size + p.size) ** 2 * (def.filterFeeder ? 2.2 : 0.6);
+      // Le marteau frappe VERS LE BAS, de toute la hauteur de sa tête : une
+      // proie de fond vit dans la bande de sable, jusqu'à ~80 px sous le
+      // contour : il plonge dessus (GAGS.marteau) et la frappe du bas de la barre.
+      const reach = p && def.marteau ? (this.size * 1.25 + p.size) ** 2
+                  : (this.size + p.size) ** 2 * (def.filterFeeder ? 2.2 : 0.6);
       if (!p || p.dead || this.stateTimer <= 0) { this.state = 'wander'; this.target = null; }
       else if (!comestible) {
         // Il l'a rejoint, mais il n'en veut pas : il le lâche.
         if (U.dist2(this.x, this.y, p.x, p.y) < reach) { this.state = 'wander'; this.target = null; }
       }
       else if (U.dist2(this.x, this.y, p.x, p.y) < reach) {
+        const nearRefuge0 = Ecosystem.isNearRefuge(p.x, p.y);
+        // LE COUP DE MARTEAU (Requin Marteau) : une proie éveillée ne se mange
+        // pas, elle s'ASSOMME d'abord, d'un coup de tête dans le sable. Le
+        // repas vient après un temps (`_toc`), sur une proie qui voit les
+        // étoiles — c'est ce temps qui rend la scène lisible : toc, vrille,
+        // puis la bouchée.
+        if (def.marteau) {
+          if ((this._toc ?? 0) > 0) return;
+          // La portée est haute, pas large : il faut être AU-DESSUS de sa proie.
+          if (Math.abs(p.x - this.x) > (this.size + p.size) * 1.1) return;
+          if (p.state !== 'dizzy') {
+            // Réfugiée contre une anémone : il renonce. Compté comme un raté,
+            // c'était la moitié de ses coups — un requin qui se sonne lui-même
+            // une fois sur deux ne raconte plus un raté, il raconte un bug.
+            if (nearRefuge0) {
+              this.target = null; this.state = 'wander';
+              this.emote('sad', 1.4, false);
+              return;
+            }
+            this._toc = 0.9;
+            const fy = World.floorY(p.x);
+            if (def.missChance && Math.random() < def.missChance) {
+              // Raté : c'est lui qui a la tête dans le sable.
+              p.emote('scared', 1.6);
+              this.assomme(fy);
+            } else {
+              p.assomme(fy);
+              p.stateTimer = Math.max(p.stateTimer, 3.2);   // le temps qu'il revienne
+              this.choc(0.8, 'x');
+              this.vx *= -0.35; this.vy -= 50;               // le recul du coup
+              this.stateTimer = Math.max(this.stateTimer, 4);
+              this.emote('proud', 1.4, false);
+              if ((this._tocCd ?? 0) <= 0 && GAGS._enVue(this)) {
+                this._tocCd = Ecosystem.cadence(this, CADENCE.toc);
+                Particles.shout(this.x + this.size, this.y - this.size, 'TOC !', '#fff', 26);
+              }
+            }
+            return;
+          }
+          // Proie sonnée : il n'y a plus rien à rater.
+          Ecosystem.eat(this, p);
+          this.target = null; if (this.state === 'hunt') this.state = 'wander';
+          return;
+        }
         // Fausse charge (Orque Blagueuse) : dévie au dernier moment, jamais de vraie prise
         if (def.trickster && Math.random() < 0.33) {
           this.emote('wink', 2.4);            // « je t'ai eu ! », le visage suffit
@@ -1701,6 +1749,38 @@ class Entity {
     // --- Créatures aériennes (Moustachu Volant) : volent AU-DESSUS de la surface,
     // gérées en y monde direct (pas de depthBand classique). ---
     if (def.aerial) {
+      // ABATTU PAR UN CRACHAT (Poisson Archer, cf. GAGS.archer) : il tombe
+      // comme une pierre, s'étale à plat ventre sur l'eau et flotte, sonné,
+      // en dérivant. Il se réveille au bout de son minuteur, s'ébroue et
+      // repart trempé et furieux — à moins que l'archer n'arrive avant.
+      if (this._abattu > 0) {
+        this._abattu -= dt;
+        const flotte = CONFIG.SURFACE_Y + 2;
+        if (this.y < flotte) {
+          this.vy += 900 * dt; this.vx *= 0.99;
+          this.x += this.vx * dt; this.y += this.vy * dt;
+          if (this.y >= flotte) {
+            this.y = flotte; this.vy = 0; this.vx *= 0.2;
+            Particles.splash(this.x);
+            this.choc(1, 'y');                     // le plat retentissant
+          }
+        } else {
+          this.vx *= 0.95; this.vy = 0;
+          this.x += this.vx * dt;
+          this.y = flotte + Math.sin(t * 3 + this.phase) * 1.5;   // il dodeline sur la houle
+        }
+        this.x = U.clamp(this.x, World.shoreX, CONFIG.WORLD_WIDTH - 50);
+        this.speedNow = 0;
+        this.angle = U.angleLerp(this.angle, 0.45, dt * 6);        // de guingois
+        if (this._abattu <= 0) {
+          this._abattu = 0; this.wet = 3;
+          this.state = 'wander'; this.target = null; this.release();
+          this.vy = -230;
+          this.emote('angry', 2.5);
+          Particles.splash(this.x);
+        }
+        return;
+      }
       const bandTop = CONFIG.SURFACE_Y - 350, bandBot = CONFIG.SURFACE_Y - 80;
       let ax2 = Math.sin(t * 0.5 + this.phase * 3) * 30;
       let ay2 = Math.cos(t * 0.4 + this.phase * 2) * 15;
@@ -1734,11 +1814,14 @@ class Entity {
         if (this.y < bandTop) ay2 += (bandTop - this.y) * 3;
         if (this.y > bandBot) ay2 += (bandBot - this.y) * 3;
       }
+      // Né sur la plage, il rejoint la mer en douceur : un mur au rivage
+      // l'aurait téléporté au-dessus de l'eau à l'éclosion.
+      if (this.x < World.shoreX) ax2 += (World.shoreX - this.x) * 1.5;
       this.vx += ax2 * dt; this.vy += ay2 * dt;
       const sp2 = Math.hypot(this.vx, this.vy);
       if (sp2 > maxSpeed2) { this.vx *= maxSpeed2 / sp2; this.vy *= maxSpeed2 / sp2; }
       this.x += this.vx * dt; this.y += this.vy * dt;
-      this.x = U.clamp(this.x, World.shoreX, CONFIG.WORLD_WIDTH - 50);
+      this.x = U.clamp(this.x, World.shoreX * 0.4, CONFIG.WORLD_WIDTH - 50);
       this.speedNow = sp2;
       if (sp2 > 5) this.angle = U.angleLerp(this.angle, Math.atan2(this.vy, this.vx * 0.4), dt * 5);
       return;

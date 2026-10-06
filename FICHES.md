@@ -1,6 +1,6 @@
 # Fiches des espèces
 
-Une fiche par créature du roster — **51 espèces**. Tout ce document décrit le
+Une fiche par créature du roster — **53 espèces**. Tout ce document décrit le
 jeu **tel qu'il tourne** : phrases, faux noms latins, actions, régimes, frayères
 et plafonds sont relevés dans le code, pas souhaités.
 
@@ -418,6 +418,48 @@ la tortue.
 - **Mange** — arêtes (charogne) · plancton · **Favori**** — Graines
 - **Mangé par** — Poisson-Tapis Grande-Bouche, Anguille Coup-de-Jus
 - charognard · taille 13 · zone **Rivage → Grand large** · frayère **récif** · plafond 14, plancher 5
+
+---
+
+## Les deux arrivées du 22 septembre 2026 (2)
+
+Pas encore de dessin de référence : silhouettes procédurales (`render: 'archer'`
+et `'hammer'` dans `fishbody.js`).
+
+### Poisson Archer Tireur — *Poisson-archer* — *Toxotes crachatus*
+- **Phrase** — « Pas bouger… pas bouger… PTUI ! »
+- **Action** — il monte sous la surface, fixe un oiseau en se comprimant, et
+  **crache un jet d'eau** vers l'endroit où l'oiseau SERA (visée anticipée).
+  Touché, l'oiseau tombe à l'eau, à plat ventre, sonné (`_abattu`, 3,5 à 6,5 s)
+  — et l'archer file le gober. S'il se réveille avant, il repart trempé et
+  furieux. Raté, le jet lui retombe sur le nez, et il a honte. Le Pélican se fait
+  cracher dessus comme les autres, mais il est trop gros pour être mangé.
+- **Mange** — Goéland Chapardeur, Fou Moustachu, Cormoran Sous-Marin (**abattus
+  seulement** — flag `abat`) · plancton · **Favori** — Micro-crevettes
+- **Mangé par** — Cormoran Sous-Marin (c'est réciproque, et c'est le seul lien
+  de ce genre). Quand il plonge sur lui, l'archer lui **crache au visage** :
+  quatre fois sur cinq le cormoran repart sonné et trempé, et il laisse les
+  archers tranquilles 90 s (la rancune).
+- T3 · taille 15 · zone **toutes, sous la surface** (8–180 px) · frayère
+  **haut-fond** · plafond 8, plancher 3 · scène **bruyante** (`CADENCE.crachat`,
+  0,7/min nominal, ~0,3 réalisé, jouée devant le public)
+
+### Requin Marteau Toc-Toc — *Requin-marteau* — *Sphyrna toctoc*
+- **Phrase** — « Toc toc ! Qui est là ? Plus personne. »
+- **Action** — il fouille le fond et, au-dessus d'un rampant, il ne mord pas :
+  il **plonge et l'assomme d'un coup de tête** (flag `marteau`). La proie voit
+  les étoiles, un temps (`_toc`, 0,9 s), puis il l'avale. Raté, c'est lui qui a
+  la tête dans le sable. Silhouette : une barre en fuseau au bout du museau, un
+  œil à chaque extrémité.
+- **Mange** — Crabe Disco, Bernard-l'Ermite · plancton
+- **Mangé par** — personne (sommet de chaîne)
+- T4 · taille 46 (sous le seuil des colosses : il doit raser le sable) · zone
+  **Mer → Grand large** · frayère **haut-fond** · plafond 3 · bulle « TOC ! »
+  bornée à 0,4/min, le coup lui-même suit la faim et reste silencieux
+
+Deux corrections ailleurs dans la foulée : le **Cormoran** mange désormais
+l'Archer, et les **oiseaux nichent sur la plage** (l'œuf pondu en diffusion
+tombait au fond de la mer : des oisillons éclosaient à 1 000 px sous l'eau).
 
 ---
 

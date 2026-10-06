@@ -79,6 +79,14 @@ une ligne là-bas, puis une ligne ici et une dans `js/legend.js`.
 | danse sur sa boule disco | `happy` + **notes de musique** | gag du Crabe |
 | dort (la nuit, ~46 % de l'aquarium) | `sleeping` | `entity.js` — sauf nocturnes et embusqués |
 | fait un câlin | `happy` | gag de l'Étoile |
+| vise un oiseau, comprimé comme un ressort | `smug` (tenu) | gag du Poisson Archer |
+| a abattu son oiseau | `proud` | gag du Poisson Archer |
+| son jet lui est retombé dessus | `ashamed` + goutte | gag du Poisson Archer |
+| l'oiseau s'est réveillé avant son arrivée | `sad` | gag du Poisson Archer |
+| abattu, flotte à plat ventre | `dizzy` (tenu) | `Entity.move` — `_abattu` |
+| se réveille sur l'eau, trempé | `angry` | `Entity.move` — `_abattu` |
+| vient d'assommer un crabe | `proud` | `entity.js` — `marteau` |
+| a raté, la tête dans le sable | `dizzy` | `entity.js` — `marteau` |
 
 ---
 
@@ -103,6 +111,8 @@ Réservés à ce qu'un visage ne peut pas dire.
 | `z` | endormi |
 | `♪ ♫` | le Crabe Disco danse |
 | `!` | a peur |
+| `PTUI !` | le Poisson Archer crache sur un oiseau (régime bruyant) — et sur le Cormoran qui plonge sur lui, une fois sur quatre avec la bulle |
+| `TOC !` | le Requin Marteau assomme (bulle bornée à 0,4/min ; le coup lui-même suit la faim, silencieux) |
 
 **Conséquences de jeu.** Un gag peut coûter quelque chose : subir un prout
 augmente la faim de la victime et casse sa jauge de reproduction. C'est ce qui

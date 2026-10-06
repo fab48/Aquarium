@@ -83,6 +83,9 @@ const Ecosystem = {
     this.spawnGroups('espadon', 2);
     this.spawnGroups('goeland', 2);
     this.spawnGroups('cormoran', 2);
+    // Le Poisson Archer abat les oiseaux, le Requin Marteau assomme les rampants.
+    this.spawnGroups('archer', 3);
+    this.spawnGroups('marteau', 1);
 
     this.desempile();
   },
@@ -592,8 +595,13 @@ const Ecosystem = {
     const yMax = def.aerial ? Infinity : CONFIG.SURFACE_Y + def.depthBand[1] + M;
     // Espèces devenues trop rares : on les laisse tranquilles le temps qu'elles
     // remontent (report de prédation, cf. refugeFloor).
+    // `_evite` : une espèce qui vient de lui donner une leçon (le Cormoran
+    // qui a pris le jet d'un Poisson Archer en pleine figure) est rayée de
+    // son menu un moment. Sans cette rancune, il replongeait dès qu'il
+    // reprenait ses esprits, et la riposte ne protégeait personne.
     const huntable = def.prey.filter(p =>
-      (this.counts[p] || 0) > this.refugeFloor(p) && !this.harcelee(p));
+      (this.counts[p] || 0) > this.refugeFloor(p) && !this.harcelee(p)
+      && !(pred._evite && pred._evite[p] > Main.time));
     if (!huntable.length) return null;
 
     // Report sur l'espèce ABONDANTE : une proie qui prolifère (parce que le
@@ -614,6 +622,10 @@ const Ecosystem = {
         // à l'eau ne l'intéresse pas — c'est tout ce qui le distingue du Fou
         // Moustachu, qui plonge dedans.
         if (def.snatch && e.jumpState !== 'air') continue;
+        // `abat` : le Poisson Archer ne poursuit pas un oiseau dans le ciel — il
+        // n'y a pas accès. Il ne retient que celui qu'il vient d'abattre et qui
+        // flotte, sonné, à la surface (cf. GAGS.archer).
+        if (def.abat && !(e._abattu > 0)) continue;
         // `intouchable` : le Poisson Dentiste n'est jamais attaqué. Le contrat
         // de la station de nettoyage vaut même pour un prédateur affamé — c'est
         // justement ce qui rend l'espèce drôle.
@@ -915,6 +927,18 @@ const Ecosystem = {
     // fond, à distance de ses congénères. Ce test doit passer AVANT celui du
     // refuge — sinon oursins, coquillages et jardinières s'ancraient tous
     // autour de la même anémone, en tas, et ne pouvaient plus s'en écarter.
+    // LES OISEAUX NICHENT SUR LA PLAGE (frayère `beach`, cf. FICHES.md). Depuis
+    // qu'ils pondent sur place au lieu de migrer, l'œuf tombait par défaut au
+    // fond de la mer sous l'oiseau : on voyait des oisillons éclore à 1 000 px
+    // sous l'eau et remonter à la surface comme des bulles.
+    if (parent.def.aerial) {
+      egg.x = World.shoreX * U.rand(0.5, 0.92);
+      egg.y = World.floorY(egg.x) - 6;
+      egg.anchorX = egg.x; egg.anchorY = egg.y;
+      this.entities.push(egg);
+      this.counts[egg.speciesId] = (this.counts[egg.speciesId] || 0) + 1;
+      return;
+    }
     const posee = POSEES_AU_FOND.has(parent.def.render) || parent.def.movement === 'fixed';
     const reef = !posee && (parent.def.nursery || 'reef') === 'reef';
     const refuge = reef ? this.nearestRefuge(ox, oy) : null;

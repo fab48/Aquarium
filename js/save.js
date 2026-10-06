@@ -141,6 +141,14 @@ const Save = {
     // le `return false` : quand la restauration est abandonnée, on ne doit pas
     // avoir déjà semé des groupes dans un monde qu'Ecosystem.init va repeupler.
     let repeuplees = 0;
+    // Une espèce ARRIVÉE DANS LE CODE depuis la sauvegarde (le Poisson Archer
+    // et le Requin Marteau, le 22 septembre 2026) n'y figure pas du tout :
+    // sans ça, un joueur qui revient sur son aquarium ne verrait jamais les
+    // nouveaux venus — il faudrait qu'il recommence de zéro. Elle est semée
+    // comme les entrées illisibles.
+    for (const speciesId in SPECIES) {
+      if (!(speciesId in d.pop)) corrompues[speciesId] = corrompues[speciesId] || 0;
+    }
     for (const speciesId in corrompues) {
       if (Ecosystem.countSpecies(speciesId) > 0) continue;
       Ecosystem.spawnGroups(speciesId, 1);

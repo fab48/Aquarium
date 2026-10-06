@@ -2,10 +2,11 @@
 
 Écosystème aquatique scrollable, contemplatif et comique. Le design complet est
 dans `aquarium_vivant_game_design.docx` (chaîne alimentaire, scroll bi-axial,
-cycle de vie, nourriture favorite). Le roster en compte aujourd'hui **51**, le
-GDD en décrivait 24, et les **deux planches de design** les couvrent toutes les
-51 (`Assets/Concepts/Design Final.png` puis `… page2.png`, découpées en repères
-par `decoupe_planche.py`).
+cycle de vie, nourriture favorite). Le roster en compte aujourd'hui **53**, le
+GDD en décrivait 24, et les **deux planches de design** en couvrent 51
+(`Assets/Concepts/Design Final.png` puis `… page2.png`, découpées en repères
+par `decoupe_planche.py`) — le Poisson Archer et le Requin Marteau, arrivés
+après, n'ont pas encore de dessin de référence.
 
 ## Stack
 
@@ -115,7 +116,7 @@ qu'elle bougeait.
 
 - `config.js` — constantes monde, zones écologiques, types de nourriture. 1 m = 40 px, surface à y=300.
 - `utils.js` — helpers math/couleur (`U`).
-- `species.js` — **espèces 100 % data-driven**. Chaque fiche a un `name` rigolo **contenant la vraie espèce** ("Baleine Gros Dodo", "Poisson Confetti") et un `realName` affiché en sous-titre de la fiche d'identité. Ajouter une espèce = ajouter une entrée `SPECIES` (mouvement, bande de profondeur, proies, nourriture favorite, silhouette). **Roster complet : 51 espèces** — la liste et le détail de chacune sont dans
+- `species.js` — **espèces 100 % data-driven**. Chaque fiche a un `name` rigolo **contenant la vraie espèce** ("Baleine Gros Dodo", "Poisson Confetti") et un `realName` affiché en sous-titre de la fiche d'identité. Ajouter une espèce = ajouter une entrée `SPECIES` (mouvement, bande de profondeur, proies, nourriture favorite, silhouette). **Roster complet : 53 espèces** — la liste et le détail de chacune sont dans
 **[FICHES.md](FICHES.md)**, qui fait autorité. Chaque fiche porte aussi une **`phrase`** et un **faux nom `latin`**, affichés uniquement dans la fiche d'identité (bloc `FICHES` en fin de fichier, séparé pour que les données de simulation restent lisibles). Flags génériques documentés en tête du fichier (`refuge`, `anchorToRefuge`, `ambush`, `lure`, `ink`, `aerial`, `jumps`, `stealthy`, `trickster`, `nocturnal`, `sizeVar`, `spanRatio`, `offshore`, `piquant`, `gonflable`, `snatch`, `shock`, `pouch`, `intouchable`, `perceBallon`, `plongeur`, `eatsPoop`, `gag(e,dt,t)`).
 - `world.js` — triangle de profondeur en grille "profondeur max par colonne" (reco GDD §14), zones, fond sableux.
 - `camera.js` — scroll bi-axial borné par le triangle (impossible d'atteindre les abysses près de la plage).
@@ -829,6 +830,53 @@ prédateur, et la Raie a dû voir sa bande élargie ([1300, 1700] était une lam
 400 px) pour atteindre le fond qu'elle est censée fouiller. Validé sur 15 min :
 **51 espèces sur 51 vivantes**, prises entre 0,1 et 0,7 par minute — une
 régulation douce, pas un massacre.
+
+### Le Poisson Archer et le Requin Marteau (22 septembre 2026)
+
+Deux arrivées, deux mécaniques de chasse qui ne sont PAS des morsures — la
+proie est d'abord assommée, mangée ensuite. Le détail est dans FICHES.md.
+
+- **`abat: true` (Poisson Archer)** — ses proies déclarées sont des oiseaux,
+  mais `nearestPreyFor` n'en retient un que s'il flotte, sonné, à la surface
+  (`_abattu`). C'est la scène (`GAGS.archer`, régime bruyant) qui fait le
+  travail : visée comprimée sous la surface, « PTUI ! », jet balistique vers la
+  position ANTICIPÉE de l'oiseau (particule `jet`, gravité propre, qui ne meurt
+  pas en croisant la surface à la montée), puis l'oiseau tombe à plat ventre
+  (`Entity.move`, branche aérienne, 3,5–6,5 s) et l'archer file le gober par
+  la chasse ordinaire. Mesuré : chaque oiseau abattu a été mangé.
+- **La riposte et la rancune.** Le Cormoran mange l'Archer — c'est son seul
+  prédateur. Sans défense, il en mangeait **1,38/min**, presque tout ce qui
+  naissait. L'archer lui crache donc au visage quand il plonge sur lui
+  (`GAGS._riposte`, silencieuse sauf une fois sur quatre), et un cormoran
+  sonné garde **rancune** 90 s (`pred._evite[espèce]`, lu par
+  `nearestPreyFor` — générique, réutilisable). La riposte seule ne suffisait
+  pas : il replongeait dès qu'il reprenait ses esprits. Après : **0,41/min**,
+  l'Archer tient entre 5 et 8 sur 8.
+- **`marteau: true` (Requin Marteau)** — au contact d'une proie éveillée, il
+  ne mord pas : coup de tête, la proie `assomme()`, et il l'avale 0,9 s plus
+  tard (`_toc`). La portée est HAUTE et pas large : une proie de fond vit dans
+  la bande de sable, jusqu'à ~80 px sous le contour, alors que le requin est
+  tenu une longueur au-dessus — `GAGS.marteau` pilote sa vitesse verticale
+  pour qu'il plonge dessus. Taille 46, volontairement sous le seuil des
+  colosses (qui gardent 1,5 longueur d'eau sous le ventre). Une proie
+  réfugiée contre une anémone le fait **renoncer** : comptée comme un raté,
+  elle le faisait se sonner lui-même une fois sur deux (7 % de ratés après).
+  Plafond 3 et `metabolism: 0.7` : à quatre gros mangeurs, ils vidaient le
+  Bernard-l'Ermite jusqu'à son plancher en quatre minutes.
+
+Deux corrections sont sorties de là :
+
+- **Les oiseaux nichent sur la plage** (`layEgg`, branche `aerial`). Depuis
+  qu'ils pondent sur place plutôt que de migrer, l'œuf tombait par défaut au
+  fond de la mer : des oisillons éclosaient à 1 000 px sous l'eau et
+  remontaient comme des bulles. Le rivage est un rappel doux pour eux, plus
+  un mur — un oisillon né sur le sable aurait été téléporté au-dessus de l'eau.
+- **Une sauvegarde antérieure reçoit les nouvelles espèces** : `Save.restaurer`
+  sème toute espèce du code absente de la sauvegarde. Sans ça, un joueur qui
+  revient sur son aquarium ne verrait jamais les nouveaux venus.
+
+Validé sur 14,5 min : **53 espèces sur 53 vivantes**, Marteau 1 repas/min,
+bulle « TOC ! » 0,48/min.
 
 ### LA CADENCE DE L'AQUARIUM : peu de gags, et rares
 
@@ -1684,12 +1732,13 @@ sable 12 % → 4,3 %.
   doit passer par `decalerCalques()` comme toute autre liste d'indices ; et le
   rail range les 51 espèces **par état** d'avancement, pas dans l'ordre de
   `SPECIES`, avec un filtre — la rubrique « sans dessin de référence » est la
-  liste, tenue à jour toute seule, de ce qu'il reste à dessiner (elle est vide
-  depuis la seconde planche : les 51 en ont un).
+  liste, tenue à jour toute seule, de ce qu'il reste à dessiner (vide depuis
+  la seconde planche, elle contient de nouveau le Poisson Archer et le Requin
+  Marteau).
 - `decoupe_planche.py` — découpe les **deux planches** (`Assets/Concepts/Design
   Final.png`, 5×6, puis `… page2.png`, 5×5) en **un repère par espèce** dans
-  `Assets/Reperes/`. Les **51 espèces** en ont un ; la rubrique « sans dessin de
-  référence » du rail de l'atelier est donc vide. Chaque planche déclare sa
+  `Assets/Reperes/`. Les **51 espèces** des planches en ont un ; les deux arrivées
+  suivantes (Archer, Marteau) attendent le leur. Chaque planche déclare sa
   grille, l'ordre de ses cases et le sens de ses dessins (`PLANCHES`) — l'atelier
   ne connaît que `Assets/Reperes/<espèce>.png`.
   La grille est un **repérage, pas une frontière** : les créatures débordent de

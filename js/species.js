@@ -26,6 +26,8 @@
 //                             taille nominale : c'est ce que lit l'anti-chevauchement des colosses.
 //   sizeVar: 0..1           — dispersion des tailles adultes de l'espèce (défaut 0,13).
 //                             Fort chez les espèces bariolées, faible chez les colosses.
+//   abat: true              — ne chasse que les oiseaux qu'il a ABATTUS (`_abattu`) : Poisson Archer
+//   marteau: true           — au contact, assomme d'abord sa proie d'un coup de tête, la mange ensuite
 //   gag: (entity, dt, t) => void — comportement comique périodique, appelé depuis Entity.think
 //
 // Apparence — lus par le socle commun du visage (`FishBody.visageDe`), donc
@@ -801,7 +803,9 @@ const SPECIES = {
     depthBand: [0, 0],
     size: 21, speed: 100, sprintSpeed: 260,
     schooling: false, groupSize: [1, 2], popCap: 5,
-    prey: ['maquereau', 'crevette_claire'], missChance: 0.35, grazes: true,
+    // Le Poisson Archer : il abat les oiseaux, le Cormoran plonge le chercher.
+    // Chacun est la proie de l'autre, et c'est le seul lien de ce genre.
+    prey: ['maquereau', 'crevette_claire', 'archer'], missChance: 0.35, grazes: true,
     plongeur: true,                    // il descend BIEN plus bas que les autres oiseaux
     colors: ['#2e3b45', '#66798a'],
     render: 'bird', sizeVar: 0.1,
@@ -927,6 +931,52 @@ const SPECIES = {
     lifespan: [420, 620],
     fraiRapide: true,   // le nourrir fait des bébés TOUT DE SUITE (bas de chaîne)
   },
+
+  // Deux arrivées (2026-09-22). La première relie enfin le CIEL à la mer dans
+  // le bon sens : jusqu'ici les oiseaux mangeaient les poissons, et personne
+  // ne leur rendait la pareille.
+  //
+  // `abat: true` — il ne chasse QUE ce qu'il a abattu. Ses proies déclarées
+  // sont des oiseaux, mais `nearestPreyFor` n'en retient un que s'il flotte,
+  // sonné, à la surface (`_abattu`). C'est son gag (GAGS.archer) qui fait tout
+  // le travail : il vise, il crache, l'oiseau tombe à l'eau… et il file le
+  // gober avant qu'il se réveille. Le Pélican n'est pas au menu : trop gros,
+  // il se fait cracher dessus et repart vexé.
+  archer: {
+    name: 'Poisson Archer Tireur', realName: 'Poisson-archer', trophic: 3, movement: 'strata',
+    nursery: 'shallow',
+    depthBand: [8, 180], size: 15, speed: 58, sprintSpeed: 230,
+    schooling: false, groupSize: [2, 3], popCap: 8,
+    prey: ['goeland', 'moustachu', 'cormoran'], abat: true, grazes: true,
+    favoriteFood: 'micro_crevettes', eatsFood: true,
+    colors: ['#e9ecd8', '#f2e7b8'],
+    bodyRatio: 0.52, tail: 'fan', render: 'archer', boucheStyle: 'petite',
+    lifespan: [420, 640],
+    gag: (e, dt, t) => GAGS.archer(e, dt, t),
+  },
+
+  // `marteau: true` — au contact d'une proie éveillée, il ne la mange pas : il
+  // lui assène un COUP DE TÊTE qui l'assomme dans le sable. Le repas vient au
+  // contact suivant, sur une proie sonnée. Ses proies sont les rampants du
+  // fond, qu'aucun nageur de sa taille n'allait chercher.
+  // Taille 46 : volontairement SOUS le seuil des colosses (70), il doit
+  // pouvoir raser le sable — un colosse garde une longueur et demie d'eau sous
+  // le ventre et ne toucherait jamais un crabe.
+  marteau: {
+    name: 'Requin Marteau Toc-Toc', realName: 'Requin-marteau', trophic: 4, movement: 'free',
+    nursery: 'shallow',
+    depthBand: [250, 1900], size: 46, speed: 64, sprintSpeed: 250,
+    // Plafond 3 et métabolisme de croiseur : ses deux proies sont des
+    // rampants à plafond 14, et à quatre, gros mangeurs, ils vidaient le
+    // Bernard-l'Ermite jusqu'à son plancher en quatre minutes.
+    schooling: false, groupSize: [2, 2], popCap: 3, metabolism: 0.7,
+    prey: ['crabe', 'bernard'], marteau: true, missChance: 0.2, senseRange: 1100, grazes: true,
+    colors: ['#8e9aa6'],
+    bodyRatio: 0.34, tail: 'shark', fin: true, render: 'hammer', boucheStyle: 'gueule',
+    sizeVar: 0.08,
+    lifespan: [800, 1100],
+    gag: (e, dt, t) => GAGS.marteau(e, dt, t),
+  },
 };
 
 // ===========================================================================
@@ -995,5 +1045,7 @@ const FICHES = {
   oursin:        { latin: 'Echinus picpicus',       phrase: 'On ne touche pas. Vraiment pas.' },
   barracuda:     { latin: 'Sphyraena perceballon',  phrase: 'J’adore le bruit que ça fait.' },
   krill:         { latin: 'Euphausia scintilla',    phrase: 'On est un million, tu sais.' },
+  archer:        { latin: 'Toxotes crachatus',      phrase: 'Pas bouger… pas bouger… PTUI !' },
+  marteau:       { latin: 'Sphyrna toctoc',         phrase: 'Toc toc ! Qui est là ? Plus personne.' },
 };
 for (const id in FICHES) if (SPECIES[id]) Object.assign(SPECIES[id], FICHES[id]);

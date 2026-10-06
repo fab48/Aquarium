@@ -38,6 +38,9 @@ const Legend = {
     ['PSCHIII', 'le ballon a touché des épines — il se dégonfle d’un coup et part en vrille'],
     ['des piquants qui s’allongent', 'l’Oursin Pic-Pic vous a vu venir'],
     ['une poche qui gigote', 'le Pélican a raté : le poisson ressort par le haut'],
+    ['PTUI !', 'le Poisson Archer crache un jet d’eau sur un oiseau : touché, il tombe à l’eau, sonné — et l’archer file le gober'],
+    ['un oiseau à plat ventre sur l’eau', 'abattu par un crachat : s’il se réveille avant l’archer, il repart trempé et furieux'],
+    ['TOC !', 'le Requin Marteau assomme un crabe d’un coup de tête dans le sable, avant de le manger'],
   ],
 
   // Chaque action du jeu a son émotion attitrée. Tenir cette table à jour :
@@ -62,6 +65,8 @@ const Legend = {
     ['surpris (BOUH, éclosion, fausse charge)', 'surprise — œil rond, sourcils au plafond, bouche en o (aucune bulle : le visage suffit)'],
     ['fait semblant de charger (orque)', 'wink — clin d\'œil complice'],
     ['approche en douce (dauphin)', 'smug — paupière basse, sourire en coin'],
+    ['vise un oiseau (Poisson Archer)', 'smug — « pas bouger… », il se comprime avant de cracher'],
+    ['jet raté (Poisson Archer)', 'ashamed — ça lui est retombé sur le nez'],
     ['plongeon raté (oiseau)', 'sad — trempé et dépité'],
     ['gênée d\'avoir raté (murène)', 'blush'],
     ['timide (hippocampe, curseur proche)', 'blush'],

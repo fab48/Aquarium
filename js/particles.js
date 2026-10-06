@@ -243,6 +243,12 @@ const Particles = {
       p.age += dt;
       if (p.type === 'drop') { p.vy += 400 * dt; p.x += p.vx * dt; p.y += p.vy * dt;
         if (p.y > CONFIG.SURFACE_Y) p.age = p.life; }
+      else if (p.type === 'jet') {
+        // Le crachat du Poisson Archer : balistique, et il ne meurt pas en
+        // CROISANT la surface à la montée — seulement en y retombant.
+        p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt;
+        if (p.vy > 0 && p.y > CONFIG.SURFACE_Y) p.age = p.life;
+      }
       else if (p.type === 'sand') { p.vy += 30 * dt; p.vx *= 0.98; p.x += p.vx * dt; p.y += p.vy * dt;
         const fy = World.floorY(p.x); if (p.y > fy) p.y = fy; }
       else if (p.type === 'bubble') {
@@ -291,6 +297,15 @@ const Particles = {
       } else if (p.type === 'drop') {
         ctx.fillStyle = '#bfe6ff';
         ctx.beginPath(); ctx.arc(sx, sy, 2, 0, Math.PI * 2); ctx.fill();
+      } else if (p.type === 'jet') {
+        // Une goutte étirée dans le sens de sa course : c'est un filet d'eau.
+        const v = Math.hypot(p.vx, p.vy) || 1, l = U.clamp(v * 0.055, 6, 38);
+        ctx.globalAlpha = 0.95;
+        ctx.strokeStyle = '#d8f1ff'; ctx.lineCap = 'round';
+        ctx.lineWidth = Math.max(2, p.r);
+        ctx.beginPath();
+        ctx.moveTo(sx, sy); ctx.lineTo(sx - p.vx / v * l, sy - p.vy / v * l);
+        ctx.stroke();
       } else if (p.type === 'sand') {
         ctx.fillStyle = '#d9c092';
         ctx.beginPath(); ctx.arc(sx, sy, p.r, 0, Math.PI * 2); ctx.fill();

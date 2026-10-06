@@ -85,6 +85,9 @@ Plutôt que d'en créer trois de plus — ce sont des **rôles**, pas des poisso
 
 ### Attractions et spectacles
 
+- **Galipettes du Dauphin hors de l'eau**, avec **télescopage d'oiseaux** en
+  vol (à articuler avec `aerial`, `snatch` et la phase aérienne des sauteurs).
+
 - **L'heure du spectacle** — à heure fixe du cycle jour/nuit, dauphin et orque se
   rejoignent et enchaînent des sauts synchronisés (`jumps`). Les autres espèces
   s'arrêtent et regardent (`_freeze` + `_faceAt`) : un public. Une seule bulle 👏
@@ -134,6 +137,14 @@ Plutôt que d'en créer trois de plus — ce sont des **rôles**, pas des poisso
   ailleurs. Aujourd'hui ce n'est qu'un flag `ink`.
 - **Le rot d'encre.** L'encre doit sortir comme un **rot** mis en scène
   (inspiration, rot, nuage), pas comme un nuage silencieux.
+- **Les oursins sont agglutinés sur la plage.** À mesurer (positions, bande de
+  profondeur, `sitesHabitat`) avant de régler — cf. les règles d'entassement du
+  CLAUDE.md.
+- **Les arêtes** (`Food.bones`) : améliorer leur dessin.
+- **Poisson Archer et Requin Marteau** : vérifier que leurs gags se jouent bien
+  et à la bonne cadence (audit « 53 sur 53 vivantes » à refaire, scène par scène).
+- **Fiche d'identité de la loupe sur le côté**, comme la barre de zone, plutôt
+  qu'au survol de la créature. À arbitrer : lisibilité sur mobile, fiche épinglée.
 
 ---
 
@@ -142,6 +153,9 @@ Plutôt que d'en créer trois de plus — ce sont des **rôles**, pas des poisso
 - **Canne à pêche** — depuis la surface, lancer une ligne et attraper certains
   poissons de surface. Nouvel outil dans `input.js`, à articuler avec le clic
   « nourrir » existant.
+- **Attraper un poisson à la main** — le joueur saisit une créature (glisser ou
+  maintien), la déplace et la relâche. Pas de la canne : contact direct, avec
+  tactile en tête (cf. `Input.touch*`) ; prévoir la réaction (visage, gigotement).
 
 ---
 

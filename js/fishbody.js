@@ -655,7 +655,8 @@ const FishBody = {
   // procédurales de la méduse, du lanterne et du calamar.
   lueurForme(forme, e) {
     if (!forme.lueur) return 0;
-    const l = forme.lueur === true ? 1 : forme.lueur;
+    let l = forme.lueur === true ? 1 : forme.lueur;
+    if (e._clignote != null) l *= 0.45 + 0.55 * e._clignote;
     if (!e.def.glowAtNight) return l;
     return l * (typeof Main !== 'undefined' ? Main.nightAmount() : 0);
   },
@@ -937,6 +938,9 @@ const FishBody = {
       // à sa place : le gag du Crabe Disco et le fondu des œufs en dépendent.
       const ga = ctx.globalAlpha;
       if (forme.alpha != null && forme.alpha < 1) ctx.globalAlpha = ga * forme.alpha;
+      // La guirlande de la Crevette : ce qui luit CLIGNOTE (`_clignote`, posé
+      // par GAGS.crevette), comme les ampoules de sa silhouette procédurale.
+      if (forme.lueur && e._clignote != null) ctx.globalAlpha *= 0.45 + 0.55 * e._clignote;
       // Bioluminescence. Même mécanisme que les silhouettes procédurales
       // (`glowAtNight`) : le halo est une image en cache, pas un shadowBlur —
       // celui-ci travaille en pixels ÉCRAN et grossirait sur les petits
@@ -2211,15 +2215,11 @@ const FishBody = {
     return (e._nagePh = (e._nagePh ?? (e.phase || 0)) + f * dt);
   },
 
-  drawEel(ctx, e, t) {
+  // SON rocher percé (un rocher = une murène, GDD §12), à position FIXE autour
+  // du trou. Sorti de `drawEel` pour qu'un DESSIN de murène le garde : il était
+  // tracé dans la silhouette, et la remplacer le faisait disparaître.
+  rocherMurene(ctx, e) {
     const s = e.size;
-    const strike = U.clamp(e.strikeT ?? 0, 0, 1);
-    const SEG = 12;
-    const amp = s * 0.5 * (0.3 + strike * 0.7);
-
-    // SON rocher percé (un rocher = une murène, GDD §12), à position FIXE : le
-    // corps coulisse hors du trou, la queue y reste toujours accrochée — sans ça
-    // la murène semble s'allonger dans le vide quand elle jaillit.
     const holeX = -s * 1.1;
     // Le rocher épouse la pente du fond ; la murène, elle, reste horizontale.
     ctx.save();
@@ -2260,6 +2260,19 @@ const FishBody = {
     ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = s * 0.1;
     ctx.beginPath(); ctx.arc(0, 0, hr, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
+  },
+
+  drawEel(ctx, e, t) {
+    const s = e.size;
+    const strike = U.clamp(e.strikeT ?? 0, 0, 1);
+    const SEG = 12;
+    const amp = s * 0.5 * (0.3 + strike * 0.7);
+
+    // SON rocher percé (un rocher = une murène, GDD §12), à position FIXE : le
+    // corps coulisse hors du trou, la queue y reste toujours accrochée — sans ça
+    // la murène semble s'allonger dans le vide quand elle jaillit.
+    const holeX = -s * 1.1;
+    this.rocherMurene(ctx, e);
 
     // Corps serpentin : de la bouche du trou (fixe) jusqu'à la tête, qui avance
     // avec le jaillissement.
@@ -2654,12 +2667,11 @@ const FishBody = {
 
   // Poisson-lanterne : petit corps rond sombre + antenne à lampe. La lampe ne
   // s'allume que la nuit (Main.nightAmount() > 0.5) et clignote en faux morse.
-  drawLantern(ctx, e, t) {
+  // LA LAMPE du Lanterne, toujours pleinement visible : c'est le seul repère
+  // qui reste quand le corps a disparu dans le noir (`_fondu`). Sortie de
+  // `drawLantern` pour qu'un DESSIN la garde, posée sur son ancre `lampe`.
+  lampeLanterne(ctx, e, t, lx, ly) {
     const s = e.size;
-    // LA NUIT, ON NE VOIT PLUS QUE SA LANTERNE. `_fondu` (piloté par
-    // GAGS.lanterne) fait disparaitre le CORPS en fondu ; le fanal, lui, est
-    // dessine hors de ce voile. Elle reapparait quand elle mange.
-    const fondu = e._fondu != null ? e._fondu : 1;
     const night = (typeof Main !== 'undefined' && Main.nightAmount) ? Main.nightAmount() : 0;
     // faux morse : superposition de deux carrés d'onde de périodes premières
     const k = t * 2.2 + e.phase;
@@ -2671,6 +2683,35 @@ const FishBody = {
     const peche = !!e._lureOn;
     const lit = peche ? 1 : (night > 0.5 ? morse : 0);
     const eclat = peche ? 1 : Math.min(1, night);
+    ctx.save();
+    if (lit) {
+      // aura de la lampe : halo pré-rendu (§5.9), à la place de shadowBlur
+      this.halo(ctx, lx, ly, s * 0.6 + 22 * eclat, '#ffe9a3', 0.8 * eclat);
+      ctx.fillStyle = '#fff6c9';
+    } else {
+      ctx.fillStyle = e.colorDark;
+    }
+    ctx.beginPath(); ctx.arc(lx, ly, s * 0.3, 0, Math.PI * 2); ctx.fill();
+    if (lit) {
+      // Halo pulsant pendant la pêche : la lampe APPELLE, elle ne se contente
+      // pas d'éclairer. Un halo fixe se confondait avec la luminescence de nuit.
+      const pulse = peche ? 1 + Math.sin(t * 4 + e.phase) * 0.25 : 1;
+      ctx.fillStyle = `rgba(255,240,180,${0.25 * eclat})`;
+      ctx.beginPath(); ctx.arc(lx, ly, s * 0.7 * pulse, 0, Math.PI * 2); ctx.fill();
+      if (peche) {
+        ctx.fillStyle = 'rgba(255,235,150,0.1)';
+        ctx.beginPath(); ctx.arc(lx, ly, s * 1.8 * pulse, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.restore();
+  },
+
+  drawLantern(ctx, e, t) {
+    const s = e.size;
+    // LA NUIT, ON NE VOIT PLUS QUE SA LANTERNE. `_fondu` (piloté par
+    // GAGS.lanterne) fait disparaitre le CORPS en fondu ; le fanal, lui, est
+    // dessine hors de ce voile. Elle reapparait quand elle mange.
+    const fondu = e._fondu != null ? e._fondu : 1;
 
     // Le CORPS s'efface la nuit (`fondu`), pas le fanal : c'est tout le gag.
     const alphaAvant = ctx.globalAlpha;
@@ -2705,30 +2746,8 @@ const FishBody = {
       ctx.closePath(); ctx.fill();
     }
 
-    // Lampe — TOUJOURS pleinement visible : c'est le seul repère qui reste
-    // quand le corps a disparu dans le noir.
     ctx.globalAlpha = alphaAvant;
-    ctx.save();
-    if (lit) {
-      // aura de la lampe : halo pré-rendu (§5.9), à la place de shadowBlur
-      this.halo(ctx, lx, ly, s * 0.6 + 22 * eclat, '#ffe9a3', 0.8 * eclat);
-      ctx.fillStyle = '#fff6c9';
-    } else {
-      ctx.fillStyle = e.colorDark;
-    }
-    ctx.beginPath(); ctx.arc(lx, ly, s * 0.3, 0, Math.PI * 2); ctx.fill();
-    if (lit) {
-      // Halo pulsant pendant la pêche : la lampe APPELLE, elle ne se contente
-      // pas d'éclairer. Un halo fixe se confondait avec la luminescence de nuit.
-      const pulse = peche ? 1 + Math.sin(t * 4 + e.phase) * 0.25 : 1;
-      ctx.fillStyle = `rgba(255,240,180,${0.25 * eclat})`;
-      ctx.beginPath(); ctx.arc(lx, ly, s * 0.7 * pulse, 0, Math.PI * 2); ctx.fill();
-      if (peche) {
-        ctx.fillStyle = 'rgba(255,235,150,0.1)';
-        ctx.beginPath(); ctx.arc(lx, ly, s * 1.8 * pulse, 0, Math.PI * 2); ctx.fill();
-      }
-    }
-    ctx.restore();
+    this.lampeLanterne(ctx, e, t, lx, ly);
 
     ctx.globalAlpha = alphaAvant * fondu;
     this.drawSpots(ctx, e);
@@ -3134,25 +3153,61 @@ const FishBody = {
   },
 
   // Les gags que les silhouettes procédurales portaient DANS leur tracé, et
-  // qu'un dessin perdait donc en les remplaçant : la furtivité et le « poof »
-  // du Poulpe (`drawOctopus`), le cabré et la gueule du Poisson-Tapis
-  // (`drawWorm`). Même règle que `choregraphie` : appliqués autour du corps.
+  // qu'un dessin perdait donc en les remplaçant. Même règle que
+  // `choregraphie` : ils sont appliqués AUTOUR du corps, quel qu'il soit.
+  //   · Poulpe : furtivité et « poof » (`stealth`, `_invisible`) ;
+  //   · Poisson-Tapis : cabré et grande gueule au jaillissement (`_gueule`) ;
+  //   · Murène : la tête jaillit hors du rocher (`strikeT`) ;
+  //   · Jardinière : elle rentre dans son trou (`_rentre`) et ondule ;
+  //   · Oursin : il hérisse ses piquants (`_piquantGonfle`) ;
+  //   · Calamar Géant : il se fait tout petit (`_repli`) ;
+  //   · Anguille : elle se charge avant la décharge (`_shockCd`) ;
+  //   · Lanterne : le corps s'efface la nuit (`_fondu`), pas la lampe.
   // Ouvre toujours un `ctx.save()` ; renvoie null si le corps est invisible
   // (save déjà refermé), sinon { gueule }.
-  gagsDuCorps(ctx, e) {
+  gagsDuCorps(ctx, e, t) {
     ctx.save();
+    const s = e.size, r = e.def.render;
     const stealth = e.stealth || 0;
     if (stealth > 0) ctx.globalAlpha *= U.lerp(1, 0.2, Math.min(1, stealth));
-    if (e._invisible > 0) {
-      ctx.globalAlpha *= Math.max(0, 1 - e._invisible);
-      if (ctx.globalAlpha < 0.02) { ctx.restore(); return null; }
-    }
+    if (e._invisible > 0) ctx.globalAlpha *= Math.max(0, 1 - e._invisible);
+    if (r === 'lantern' && e._fondu != null) ctx.globalAlpha *= e._fondu;
+    if (ctx.globalAlpha < 0.02) { ctx.restore(); return null; }
     let gueule = 0;
-    if (e.def.render === 'worm') {
-      const s = e.size;
-      const jaillit = (e.state === 'strike' || e.state === 'retract') ? (e.strikeT || 0) : 0;
+    const jaillit = (e.state === 'strike' || e.state === 'retract') ? U.clamp(e.strikeT || 0, 0, 1) : 0;
+    if (r === 'worm') {
       ctx.translate(s * 0.5 * jaillit, -s * 0.5 * jaillit);
       gueule = Math.max(jaillit, e._gueule || 0);
+    } else if (r === 'eel') {
+      // Le corps glisse hors du trou ; la queue y reste (trou de 0,72·size).
+      ctx.translate(s * 0.9 * jaillit, 0);
+      gueule = jaillit;
+    } else if (r === 'gardeneel') {
+      const sortie = 1 - U.clamp(e._rentre ?? 0, 0, 1);
+      if (sortie < 0.03) { ctx.restore(); return null; }
+      // Le sable coupe ce qui est rentré : rien ne dépasse sous le trou.
+      ctx.beginPath(); ctx.rect(-s * 4, -s * 6, s * 8, s * 6.55); ctx.clip();
+      ctx.translate(0, s * 3.2 * (1 - sortie));
+      // Elle ondule depuis son pied, planté dans le trou.
+      ctx.translate(0, s * 0.5);
+      ctx.rotate(Math.sin(t * 1.4 + e.phase) * 0.07);
+      ctx.translate(0, -s * 0.5);
+    } else if (r === 'urchin') {
+      const herisse = e._piquantGonfle ?? 0;
+      const k = 1 + Math.sin(t * 0.7 + e.phase) * 0.03 + herisse * 0.22;
+      if (herisse > 0.05) ctx.translate(Math.sin(t * 43 + e.phase) * s * 0.04 * herisse, 0);
+      ctx.scale(k, k);
+    } else if (r === 'squid' && e._repli > 0) {
+      ctx.scale(1 - 0.12 * e._repli, 1 - 0.42 * e._repli);
+    } else if (r === 'ribbon') {
+      const charge = U.clamp(1 - (e._shockCd ?? 99) / 1.6, 0, 1);
+      if (charge > 0.02) {
+        // Rare et bref (une décharge toutes les quelques minutes) : le
+        // shadowBlur, d'ordinaire proscrit, reste ici abordable.
+        ctx.shadowColor = `rgba(180,230,255,${0.4 + charge * 0.6})`;
+        ctx.shadowBlur = 4 + charge * 12;
+        ctx.translate(Math.sin(t * 61) * s * 0.03 * charge, 0);
+      }
     }
     return { gueule };
   },
@@ -3162,16 +3217,34 @@ const FishBody = {
     // Un sprite déclaré prime sur la silhouette procédurale ; s'il n'est pas
     // encore chargé, `drawSprite` retombe tout seul sur le rendu par défaut.
     if (e.def.sprite) {
-      const gag = this.gagsDuCorps(ctx, e);
-      if (gag === null) { if (chore) ctx.restore(); return; }
-      // La grande gueule de l'embusqué : un dessin n'a pas de mâchoire à
-      // ouvrir, c'est le visage commun qui l'ouvre, le temps du coup.
-      const expr = e.expression, tenu = e._held;
-      if (gag.gueule > 0.45) { e.expression = 'eating'; e._held = true; }
-      this.drawSprite(ctx, e, t);
-      e.expression = expr; e._held = tenu;
-      if (e._chew > 0) this.drawMouthful(ctx, e, t);
-      ctx.restore();
+      const r = e.def.render, s = e.size;
+      // Ce qui entoure le corps et reste en place : le rocher, le trou.
+      if (r === 'eel') this.rocherMurene(ctx, e);
+      if (r === 'gardeneel') {
+        ctx.fillStyle = 'rgba(60,52,40,0.55)';
+        ctx.beginPath(); ctx.ellipse(0, s * 0.55, s * 0.45, s * 0.18, 0, 0, Math.PI * 2); ctx.fill();
+      }
+      const gag = this.gagsDuCorps(ctx, e, t);
+      if (gag) {
+        // La grande gueule de l'embusqué : un dessin n'a pas de mâchoire à
+        // ouvrir, c'est le visage commun qui l'ouvre, le temps du coup.
+        const expr = e.expression, tenu = e._held;
+        if (gag.gueule > 0.45) { e.expression = 'eating'; e._held = true; }
+        this.drawSprite(ctx, e, t);
+        e.expression = expr; e._held = tenu;
+        if (e._chew > 0) this.drawMouthful(ctx, e, t);
+        ctx.restore();
+      }
+      // La lampe, hors du voile du corps, sur l'ancre `lampe` du dessin.
+      if (r === 'lantern') {
+        const sp = Sprites.get(e.def.sprite);
+        if (sp && sp.lampe) {
+          const k = this.echelleSprite(sp, e);
+          this.lampeLanterne(ctx, e, t,
+            (sp.lampe.x - sp.cx) * k + Math.sin(t * 1.6 + e.phase) * s * 0.06,
+            (sp.lampe.y - sp.cy) * k + Math.cos(t * 1.9 + e.phase) * s * 0.05);
+        }
+      }
       if (chore) ctx.restore();
       return;
     }

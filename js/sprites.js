@@ -254,6 +254,8 @@ const Sprites = {
       // une forme écartée par le filtre ci-dessus décale toutes les suivantes.
       masques: vises(d.masques),
       oeil: d.points && d.points.eye,
+      // La lampe du Lanterne : le moteur la dessine (elle clignote, elle pêche).
+      lampe: d.points && d.points.lampe,
       // DEUXIÈME ŒIL, optionnel. Le visage commun est de PROFIL — un seul œil,
       // ce qui convient à un poisson vu de côté. Tout ce qui se voit de face ou
       // de dessus (crabe, raie, coquillage, poulpe) en veut deux. Il n'y a rien

@@ -3133,13 +3133,45 @@ const FishBody = {
     return true;
   },
 
+  // Les gags que les silhouettes procédurales portaient DANS leur tracé, et
+  // qu'un dessin perdait donc en les remplaçant : la furtivité et le « poof »
+  // du Poulpe (`drawOctopus`), le cabré et la gueule du Poisson-Tapis
+  // (`drawWorm`). Même règle que `choregraphie` : appliqués autour du corps.
+  // Ouvre toujours un `ctx.save()` ; renvoie null si le corps est invisible
+  // (save déjà refermé), sinon { gueule }.
+  gagsDuCorps(ctx, e) {
+    ctx.save();
+    const stealth = e.stealth || 0;
+    if (stealth > 0) ctx.globalAlpha *= U.lerp(1, 0.2, Math.min(1, stealth));
+    if (e._invisible > 0) {
+      ctx.globalAlpha *= Math.max(0, 1 - e._invisible);
+      if (ctx.globalAlpha < 0.02) { ctx.restore(); return null; }
+    }
+    let gueule = 0;
+    if (e.def.render === 'worm') {
+      const s = e.size;
+      const jaillit = (e.state === 'strike' || e.state === 'retract') ? (e.strikeT || 0) : 0;
+      ctx.translate(s * 0.5 * jaillit, -s * 0.5 * jaillit);
+      gueule = Math.max(jaillit, e._gueule || 0);
+    }
+    return { gueule };
+  },
+
   draw(ctx, e, t) {
     const chore = this.choregraphie(ctx, e, t);
     // Un sprite déclaré prime sur la silhouette procédurale ; s'il n'est pas
     // encore chargé, `drawSprite` retombe tout seul sur le rendu par défaut.
     if (e.def.sprite) {
+      const gag = this.gagsDuCorps(ctx, e);
+      if (gag === null) { if (chore) ctx.restore(); return; }
+      // La grande gueule de l'embusqué : un dessin n'a pas de mâchoire à
+      // ouvrir, c'est le visage commun qui l'ouvre, le temps du coup.
+      const expr = e.expression, tenu = e._held;
+      if (gag.gueule > 0.45) { e.expression = 'eating'; e._held = true; }
       this.drawSprite(ctx, e, t);
+      e.expression = expr; e._held = tenu;
       if (e._chew > 0) this.drawMouthful(ctx, e, t);
+      ctx.restore();
       if (chore) ctx.restore();
       return;
     }

@@ -18,3 +18,8 @@
 *.ico   binary
 *.docx  binary
 *.pdf   binary
+
+# Exception : un script batch reste en CRLF sur le disque. cmd.exe lit mal un
+# .bat en LF (sauts d'étiquettes, lignes coupées), et Aquarium.bat se lance d'un
+# double-clic.
+*.bat   text eol=crlf

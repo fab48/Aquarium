@@ -297,6 +297,7 @@
       <button data-demo="cabre">cabré</button><button data-demo="fleche">flèche</button>
       <button data-demo="crash">crash</button><button data-demo="choc">choc</button>
       <button data-demo="plat">ventre à plat</button><button data-demo="charge">charge</button>
+      <button data-demo="gag" title="Le gag que le moteur applique AUTOUR du dessin de cette espèce : gueule du Tapis, jaillissement de la Murène, trou de la Jardinière, piquants de l'Oursin, repli du Calamar géant, charge de l'Anguille, guirlande de la Crevette, lampe du Lanterne, poof du Poulpe">gag de l'espèce</button>
       <button data-demo="" title="Arrêter l'aperçu">■</button>
       <label>lecture<select id="selVitesse"><option value="1">1×</option><option value="0.5">½×</option><option value="0.25">¼×</option></select></label>
     </div>
@@ -467,9 +468,11 @@ const ouverts = JSON.parse(localStorage.getItem('atelier.blocs') || '{}');
 
 // `eye2` n'est présente que si l'espèce a deux yeux : la liste effective est
 // donc lue depuis le document, pas figée.
-const CLE_ANCRES = ['center', 'nose', 'eye', 'eye2', 'mouth', 'tail'];
+// `lampe` : le bout de l'antenne du Lanterne, où le MOTEUR dessine sa lampe
+// (elle clignote et pêche — `FishBody.lampeLanterne`). Absente partout ailleurs.
+const CLE_ANCRES = ['center', 'nose', 'eye', 'eye2', 'mouth', 'tail', 'lampe'];
 const COUL = { center: '#0a8f3c', nose: '#8a5ea8', eye: '#e0322f', eye2: '#e0322f',
-               mouth: '#1560d8', tail: '#c98a1b' };
+               mouth: '#1560d8', tail: '#c98a1b', lampe: '#e6b800' };
 function ancres() { return CLE_ANCRES.filter(c => doc && doc.points[c]); }
 
 // --- L'ANCRE DE BOUCHE, EXPRESSION PAR EXPRESSION ---------------------------
@@ -1046,6 +1049,11 @@ function poser(expr, t, ind = 0, joue = false) {
   // réutilisé, changer la palette dans le panneau n'aurait plus aucun effet.
   e._couleursForme = null;
   e.stealth = 0; e.strikeT = 0; e._repli = 0;
+  // Les canaux des GAGS DU CORPS (`FishBody.gagsDuCorps`) : même raison, une
+  // vignette ne doit pas hériter d'un oursin hérissé ou d'une murène lancée.
+  e._invisible = 0; e._gueule = 0; e._rentre = 0; e._piquantGonfle = 0;
+  e._shockCd = 99; e._clignote = null; e._fondu = 1; e._lureOn = false; e._poche = 0;
+  if (e.state === 'strike' || e.state === 'retract') e.state = 'wander';
   // Les canaux de SCÈNE sont remis à zéro pour tout le monde : les acteurs
   // sont partagés avec le bandeau, et une flèche qui traîne raidirait la
   // queue des vignettes (`FishBody.raideur` lit `_etire`). La vue Scènes les
@@ -1224,9 +1232,10 @@ function jouerScene(e, t) {
     }
     return;
   }
-  const CYCLES = { charge: 7, cabre: 2.8, fleche: 2.6, crash: 3.8, choc: 1.8, plat: 1.8 };
+  const CYCLES = { charge: 7, cabre: 2.8, fleche: 2.6, crash: 3.8, choc: 1.8, plat: 1.8, gag: 4 };
   const u = ((t - sceneT0) * vitesseScene) % CYCLES[demo];
   const pose = (expr) => { e.expression = expr; e._held = true; e.exprTimer = 9; };
+  if (demo === 'gag') { jouerGag(e, u, t); return; }
   if (demo === 'cabre') {
     e._crispe = u < 0.9 ? (u / 0.9) ** 2 : u < 2.2 ? 1 : Math.max(0, 1 - (u - 2.2) / 0.5);
     pose('proud');
@@ -1246,6 +1255,61 @@ function jouerScene(e, t) {
       pose('surprise');
     }
   }
+}
+
+// REMETTRE À PLAT : tourne tout le document de `deg` degrés autour de `center`
+// (sens horaire à l'écran, y vers le bas). Ce qui se lit dans le repère du
+// CORPS ne tourne pas : `tailAxe`, l'onde, les phases.
+function pivoterDessin(deg) {
+  const a = deg * Math.PI / 180, co = Math.cos(a), si = Math.sin(a);
+  const c = doc.points.center, cx = c.x, cy = c.y;
+  const rot = (x, y) => [cx + (x - cx) * co - (y - cy) * si, cy + (x - cx) * si + (y - cy) * co];
+  const r2 = v => Math.round(v * 100) / 100;
+  for (const sh of doc.shapes) {
+    sh.points = sh.points.map(p => rot(p[0], p[1]).map(r2));
+    if (sh.reflet) sh.reflet.angle = r2((sh.reflet.angle || 0) + deg);
+    if (sh.degrade && sh.degrade.type !== 'radial') sh.degrade.ang = r2((sh.degrade.ang ?? 90) + deg);
+  }
+  for (const k of ['eye', 'eye2', 'mouth', 'lampe']) {
+    const p = doc.points[k]; if (!p) continue;
+    [p.x, p.y] = rot(p.x, p.y).map(r2);
+  }
+  for (const f of doc.fins || []) {
+    [f.x, f.y] = rot(f.x, f.y).map(r2);
+    if (f.ang != null) f.ang = r2(f.ang + deg);
+  }
+  if (doc.bouches) for (const k in doc.bouches) {
+    const [dx, dy] = doc.bouches[k];
+    doc.bouches[k] = [r2(dx * co - dy * si), r2(dx * si + dy * co)];
+  }
+  // La boîte a changé : centre, museau et queue suivent (gabarit de profil),
+  // et la frontière de la queue se reporte sur le nouvel axe.
+  if (doc.tailBlend != null) doc.tailBlend = r2(rot(doc.tailBlend, cy)[0]);
+  const { x0, y0, L, H } = boiteDoc();
+  doc.points.center = { x: r2(x0 + L / 2), y: r2(y0 + H / 2) };
+  doc.points.nose = { x: r2(x0 + L), y: r2(y0 + H / 2) };
+  doc.points.tail = { x: r2(x0), y: r2(y0 + H / 2) };
+  dire(`dessin pivoté de ${deg}° autour de center`, 'ok');
+}
+
+// LE GAG DE L'ESPÈCE, tel que le moteur l'applique autour du dessin
+// (`FishBody.gagsDuCorps`, le rocher, le trou, la lampe). Une boucle de 4 s :
+// montée, tenue, retour — on règle un dessin en voyant ce que le jeu en fera.
+// Le cycle suit `def.render`, comme le moteur : c'est lui qui dit quel gag.
+function jouerGag(e, u, t) {
+  const k = u < 1 ? u : u < 2.6 ? 1 : Math.max(0, 1 - (u - 2.6) / 0.8);
+  const r = e.def.render;
+  if (r === 'worm') { e._gueule = k; e.state = 'strike'; e.strikeT = k; }
+  else if (r === 'eel') { e.state = 'strike'; e.strikeT = k; }
+  else if (r === 'gardeneel') e._rentre = k;
+  else if (r === 'urchin') e._piquantGonfle = k;
+  else if (r === 'squid') e._repli = k;
+  else if (r === 'ribbon') e._shockCd = U.lerp(1.6, 0, k);
+  else if (r === 'shrimp') e._clignote = 0.5 + 0.5 * Math.sin(t * 3);
+  else if (r === 'lantern') { e._lureOn = u < 2; e._fondu = u < 2 ? 1 : 1 - k * 0.9; }
+  else if (r === 'octopus') e._invisible = k;
+  else if (r === 'bird' && e.def.pouch) e._poche = k;
+  if (e.def.gonflable) e._piquantGonfle = k;   // le Fugu : appliqué par l'aperçu, cf. rendu
 }
 
 // Le document en cours est injecté dans le cache de `Sprites` sous une clé
@@ -1376,6 +1440,9 @@ function dessiner() {
     // La vue Scènes pose les canaux cartoon sur l'acteur, et l'aperçu
     // applique les MÊMES déformations que le jeu — traînées du smear comprises.
     jouerScene(acteur, t);
+    // Le GONFLEMENT du Fugu est appliqué par `Entity.draw`, pas par le dessin :
+    // l'aperçu du gag le reproduit ici, sinon on ne le verrait jamais.
+    if (demo === 'gag' && acteur.def.gonflable) { const pk = acteur._piquantK(); ctx.scale(pk, pk); }
     FishBody.deformationScene(ctx, acteur, t);
     FishBody.smear(ctx, acteur, t);
     FishBody.rendreScene(ctx, acteur, t);
@@ -1925,6 +1992,21 @@ function sectionAncres() {
     + A(`Replace les ancres d'un coup. Un poisson se voit de <b>profil</b> : un œil,
         bouche au museau, queue qui bat. Un crabe ou une étoile se voient de
         <b>dessus</b> : deux yeux, <b>bouche au milieu</b>, et <b>pas de queue</b>.`)
+    + `<h2>Remettre à plat</h2>
+    <div class="rangee">
+      <input type="number" id="nPivot" value="0" step="1" min="-180" max="180" style="width:64px"
+             title="degrés ; positif = tourne dans le sens des aiguilles d'une montre">°
+      <button id="bPivot">↻ pivoter tout le dessin</button>
+    </div>`
+    + A(`Fait tourner <b>tout</b> le dessin autour de <b>center</b> : calques, ancres,
+        appendices et leurs angles, reflets, dégradés. Pour qu'une créature décalquée
+        penchée nage <b>à plat</b> en jeu. Le repère, lui, ne tourne pas. Ctrl+Z annule.`)
+    + (defEspece().render === 'lantern' && !doc.points.lampe
+        ? `<div class="rangee"><button id="bLampe">+ ancre lampe</button></div>`
+          + A(`Le Lanterne garde sa <b>lampe</b> : c'est le jeu qui la dessine (morse la
+              nuit, appât en pêche, visible quand le corps s'efface). Pose l'ancre au
+              bout de l'antenne, <b>sans dessiner l'ampoule</b>.`)
+        : '')
     + (doc.points.eye2 ? A(`Second œil <b>placé librement</b> : son ancre <code>eye2</code>
         est dans la liste ci-dessus.`) : '')
     + A(`Le <b>nombre d'yeux</b> et leurs tailles sont dans l'outil <b>🙂 Visage</b> :
@@ -3211,6 +3293,17 @@ function cabler() {
     marquer(); panneau();
   }));
   document.querySelectorAll('[data-gab]').forEach(b => b.addEventListener('click', () => { gabarit(b.dataset.gab); }));
+  on('#bPivot', 'click', () => {
+    const deg = parseFloat($('#nPivot').value) || 0;
+    if (!deg) return;
+    instantane(); pivoterDessin(deg); marquer(); cadrer(); panneau();
+  });
+  on('#bLampe', 'click', () => {
+    instantane();
+    const n = doc.points.nose, e = doc.points.eye;
+    doc.points.lampe = { x: n.x, y: Math.max(0, (e ? e.y : n.y) - 40) };
+    marquer(); panneau();
+  });
   on('#bAplatir', 'click', aplatir);
   on('#bDegrouper', 'click', degrouper);
   document.querySelectorAll('[data-coche]').forEach(c => c.addEventListener('click', ev => {

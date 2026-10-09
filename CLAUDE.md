@@ -1592,10 +1592,16 @@ Quatre règles :
   l'animation de sa silhouette, ce qu'un rythme libre ne pouvait pas imiter.
 - **Un accessoire de gag enfermé dans une silhouette disparaît avec elle.** La
   danse du Crabe Disco a déjà été hissée dans `FishBody.choregraphie()`,
-  appliquée AUTOUR du corps quel qu'il soit. Restent la **poche du Pélican**, la
-  **lampe du Poisson-lanterne** et le **rocher de la Murène** : activer un dessin
-  sur l'une de ces trois espèces sans faire la même opération supprimerait son
-  gag.
+  appliquée AUTOUR du corps quel qu'il soit. Tous les autres l'ont été depuis
+  (octobre 2026), dans `FishBody.gagsDuCorps` et la branche sprite de
+  `FishBody.draw` : poche du Pélican (sous le `becBas` dessiné), lampe du
+  Lanterne (ancre `points.lampe`, réglable dans l'atelier), rocher et
+  jaillissement de la Murène, trou de la Jardinière, hérissement de l'Oursin,
+  repli du Calamar Géant, charge de l'Anguille, guirlande de la Crevette,
+  gueule du Poisson-Tapis, poof du Poulpe. L'atelier les joue tous (vue
+  Scènes → « gag de l'espèce »). Avant d'activer un dessin sur une espèce à
+  `render` spécial : lister les `e._xxx` que lit sa `drawXxx` et hisser ce qui
+  manque — sinon le gag disparaît sans la moindre erreur.
 - **La queue ondule, les nageoires pivotent.** Les points en deçà de `tailBlend`
   sont déviés en `u²` (le battement part du pédoncule caudal, pas du milieu du
   corps), et une forme qui porte un `pivot` tourne autour au lieu d'onduler.

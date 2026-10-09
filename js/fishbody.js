@@ -3165,6 +3165,40 @@ const FishBody = {
   //   · Lanterne : le corps s'efface la nuit (`_fondu`), pas la lampe.
   // Ouvre toujours un `ctx.save()` ; renvoie null si le corps est invisible
   // (save déjà refermé), sinon { gueule }.
+  // La poche gonflée du Pélican, sous un bec DESSINÉ. Sur son dessin, le bec
+  // du bas (`role: 'becBas'`) est déjà une poche : le remplissage pend donc
+  // SOUS lui, sur ses deux tiers avant, et le poisson y gigote.
+  pocheDessinee(ctx, e, t) {
+    const bourre = Math.max(e._chew > 0 ? 1 : 0, e._poche ?? 0);
+    if (bourre < 0.05) return;
+    const sp = Sprites.get(e.def.sprite);
+    if (!sp) return;
+    const i = sp.shapes.findIndex(sh => sh.role === 'becBas');
+    const bo = i >= 0 && sp.boites ? sp.boites[i] : null;
+    if (!bo) return;
+    const s = e.size, k = this.echelleSprite(sp, e);
+    const X = x => (x - sp.cx) * k, Y = y => (y - sp.cy) * k;
+    const x0 = X(bo.x0 + (bo.x1 - bo.x0) * 0.15), x1 = X(bo.x0 + (bo.x1 - bo.x0) * 0.7);
+    const yb = Y(bo.y1) - s * 0.08;
+    const remue = Math.sin(t * 26 + e.phase) * s * 0.09 * bourre;
+    const bas = sp.shapes[i];
+    ctx.save();
+    ctx.fillStyle = bas.fill || '#f0a54a';
+    ctx.strokeStyle = bas.stroke || 'rgba(120,60,20,0.6)';
+    ctx.lineWidth = Math.max(0.6, (bas.lineWidth || 2) * k);
+    ctx.beginPath();
+    ctx.moveTo(x0, yb);
+    ctx.quadraticCurveTo((x0 + x1) / 2 + remue, yb + s * 0.75 * bourre, x1, yb);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    if (bourre > 0.15) {
+      ctx.fillStyle = 'rgba(190,110,40,0.55)';
+      ctx.beginPath();
+      ctx.ellipse((x0 + x1) / 2 + remue, yb + s * 0.25 * bourre, s * 0.22 * bourre, s * 0.13 * bourre, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  },
+
   gagsDuCorps(ctx, e, t) {
     ctx.save();
     const s = e.size, r = e.def.render;
@@ -3235,6 +3269,10 @@ const FishBody = {
         if (e._chew > 0) this.drawMouthful(ctx, e, t);
         ctx.restore();
       }
+      // La POCHE du Pélican, gonflée sous le bec dessiné quand elle est pleine
+      // (`_chew` : il vient d'attraper ; `_poche` : il a raté). Au repos, le
+      // bec du dessin suffit ; c'est le remplissage qui fait le gag.
+      if (e.def.pouch && gag) this.pocheDessinee(ctx, e, t);
       // La lampe, hors du voile du corps, sur l'ancre `lampe` du dessin.
       if (r === 'lantern') {
         const sp = Sprites.get(e.def.sprite);

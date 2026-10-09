@@ -199,8 +199,13 @@ const Sprites = {
       for (const i of liste) if (reindex[i] != null) s.add(reindex[i]);
       return s.size ? s : null;
     };
+    // LE DÉCOR DESSINÉ (`role: 'decor'`) : le rocher de la Murène, par exemple.
+    // Il fait partie du document mais pas du CORPS : il ne compte ni dans la
+    // largeur qui donne l'échelle, ni dans la colonne qui le plierait.
+    const decor = new Set();
+    shapes.forEach((sh, i) => { if (sh.role === 'decor') decor.add(i); });
     let minX = Infinity, maxX = -Infinity;
-    for (const sh of shapes) for (const p of sh.points) {
+    for (const sh of shapes) if (sh.role !== 'decor') for (const p of sh.points) {
       if (p[0] < minX) minX = p[0];
       if (p[0] > maxX) maxX = p[0];
     }
@@ -253,6 +258,8 @@ const Sprites = {
       // fichier. Il passe par `vises()` comme les autres listes d'indices :
       // une forme écartée par le filtre ci-dessus décale toutes les suivantes.
       masques: vises(d.masques),
+      decor: decor.size ? decor : null,
+      horsDecor: decor.size ? new Set(shapes.map((_, i) => i).filter(i => !decor.has(i))) : null,
       oeil: d.points && d.points.eye,
       // La lampe du Lanterne : le moteur la dessine (elle clignote, elle pêche).
       lampe: d.points && d.points.lampe,

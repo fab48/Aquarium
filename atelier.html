@@ -2514,14 +2514,17 @@ function sectionApparence() {
     <select id="selRole">
       ${[['', 'aucun — calque ordinaire'],
          ['becHaut', '🦆 bec — mandibule du haut'],
-         ['becBas', '🦆 bec — mandibule du bas']].map(([v, t]) =>
+         ['becBas', '🦆 bec — mandibule du bas'],
+         ['decor', '🪨 décor fixe — ne nage pas (rocher, trou…)']].map(([v, t]) =>
         `<option value="${v}"${(sh.role || '') === v ? ' selected' : ''}>${t}</option>`).join('')}
     </select>`
     + A(`Un rôle donne au calque un <b>geste du visage commun</b> plutôt qu'une animation
         de nage. Les deux mandibules d'un <b>bec</b> s'ouvrent autour de l'ancre de
         bouche, chacune de son côté, au rythme de l'expression — et le bec procédural
         s'efface, sinon il y en aurait deux l'un sur l'autre. L'angle se règle dans
-        l'onglet <b>Visage</b>.`)
+        l'onglet <b>Visage</b>. Un calque de <b>décor fixe</b> (le rocher de la Murène)
+        reste en place : ni nage, ni étirement, ni jaillissement, et il ne compte pas
+        dans la taille de la créature. S'il y en a un, il remplace le rocher du jeu.`)
     + `<label>Remplissage</label>
     <div class="rangee">
       ${champCouleur('id="cFill"', (sh.fill && sh.fill[0] === '#') ? sh.fill : '#888888')}

@@ -1000,6 +1000,9 @@ const FishBody = {
     }
     ctx.restore();
 
+    // Passe « décor seul » (cf. `draw`) : le visage viendra avec le corps.
+    if (e._sansVisage) return;
+
     // --- Visage commun, calé sur les ANCRES du dessin ---
     // L'œil et la bouche sont posés SÉPARÉMENT, chacun sur son ancre. Caler le
     // seul œil et laisser la bouche à sa place par défaut ne marche pas : le
@@ -1097,6 +1100,7 @@ const FishBody = {
     const queue = sp.tailBlend != null && (!sp.queueCalques || sp.queueCalques.has(idx));
     return {
       queue,
+      fixe: forme.role === 'decor',          // le décor ne se déforme jamais
       etendue: queue ? Math.max(1, sp.tailBlend - sp.minX) : 1,
       ondes: (sp.tailOndes || 0) * Math.PI * 2,
       amp: forme.amp || 15,
@@ -1191,7 +1195,7 @@ const FishBody = {
   },
 
   deformer(x, y, sp, anim, apps, d) {
-    if (anim.repos) return [x, y];
+    if (anim.repos || d.fixe) return [x, y];
     const lissage = (v) => { const c = U.clamp(v, 0, 1); return c * c * (3 - 2 * c); };
     const amp = d.amp;
     if (d.queue) {
@@ -3213,8 +3217,15 @@ const FishBody = {
       ctx.translate(s * 0.5 * jaillit, -s * 0.5 * jaillit);
       gueule = Math.max(jaillit, e._gueule || 0);
     } else if (r === 'eel') {
-      // Le corps glisse hors du trou ; la queue y reste (trou de 0,72·size).
-      ctx.translate(s * 0.9 * jaillit, 0);
+      // ELLE S'ALLONGE : la queue reste au fond du trou, la tête file en avant
+      // d'un bloc et le corps s'étire entre les deux, par sa colonne — la tête
+      // n'est pas déformée, l'œil et la bouche la suivent. Un peu plus fine
+      // quand elle est tendue. Une scène déjà posée (`_colonne`) l'emporte.
+      if (jaillit > 0.01 && !e._colonne) {
+        const E = jaillit * 1.1, f = 1 - jaillit * 0.18;
+        e._colonne = { dx: [0, E * 0.3, E * 0.62, E, E], sy: [1, f, f, 1, 1], k: 1 };
+        e._colonneGag = true;
+      }
       gueule = jaillit;
     } else if (r === 'gardeneel') {
       const sortie = 1 - U.clamp(e._rentre ?? 0, 0, 1);
@@ -3252,8 +3263,19 @@ const FishBody = {
     // encore chargé, `drawSprite` retombe tout seul sur le rendu par défaut.
     if (e.def.sprite) {
       const r = e.def.render, s = e.size;
-      // Ce qui entoure le corps et reste en place : le rocher, le trou.
-      if (r === 'eel') this.rocherMurene(ctx, e);
+      const sp0 = Sprites.get(e.def.sprite);
+      // Ce qui entoure le corps et reste en place : le rocher, le trou. Un
+      // rocher DESSINÉ (calques `role: 'decor'`) remplace celui du moteur ; il
+      // est peint à part, hors des gags du corps qui suivent.
+      if (sp0 && sp0.decor) {
+        const m = sp0.masques;
+        sp0.masques = m ? new Set([...m, ...sp0.horsDecor]) : sp0.horsDecor;
+        e._sansVisage = true;
+        this.drawSprite(ctx, e, t);
+        e._sansVisage = false;
+        sp0.masques = m ? new Set([...m, ...sp0.decor]) : sp0.decor;
+        this._masquesRendus = m;
+      } else if (r === 'eel') this.rocherMurene(ctx, e);
       if (r === 'gardeneel') {
         ctx.fillStyle = 'rgba(60,52,40,0.55)';
         ctx.beginPath(); ctx.ellipse(0, s * 0.55, s * 0.45, s * 0.18, 0, 0, Math.PI * 2); ctx.fill();
@@ -3266,6 +3288,7 @@ const FishBody = {
         if (gag.gueule > 0.45) { e.expression = 'eating'; e._held = true; }
         this.drawSprite(ctx, e, t);
         e.expression = expr; e._held = tenu;
+        if (e._colonneGag) { e._colonne = null; e._colonneGag = false; }
         if (e._chew > 0) this.drawMouthful(ctx, e, t);
         ctx.restore();
       }
@@ -3283,6 +3306,7 @@ const FishBody = {
             (sp.lampe.y - sp.cy) * k + Math.cos(t * 1.9 + e.phase) * s * 0.05);
         }
       }
+      if (sp0 && sp0.decor) sp0.masques = this._masquesRendus;
       if (chore) ctx.restore();
       return;
     }

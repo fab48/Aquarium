@@ -1702,7 +1702,15 @@ const GAGS = {
       e._crispe = U.clamp(e._arT / 1.1, 0, 1) * 0.7;
       if (e._arT < 1.1) return;
       // PTUI. Visée anticipée : là où l'oiseau SERA quand le jet arrivera.
-      const bx = e.x + (e._facing >= 0 ? 1 : -1) * e.size * 0.9, by = e.y - e.size * 0.3;
+      // Le jet part de la BOUCHE : celle du dessin s'il y en a un (sa grande
+      // gueule en galoche est loin du museau procédural), sinon la place d'avant.
+      const dir = e._facing >= 0 ? 1 : -1;
+      const sp = e.def.sprite && Sprites.get(e.def.sprite);
+      let bx = e.x + dir * e.size * 0.9, by = e.y - e.size * 0.3;
+      if (sp && sp.bouche) {
+        const k = FishBody.echelleSprite(sp, e);
+        bx = e.x + dir * (sp.bouche.x - sp.cx) * k; by = e.y + (sp.bouche.y - sp.cy) * k;
+      }
       let T = U.clamp(Math.hypot(c.x - bx, c.y - by) / 650, 0.28, 0.75);
       const vx = (c.x + c.vx * T - bx) / T;
       const g = 420;

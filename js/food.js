@@ -145,38 +145,77 @@ const Food = {
 
     for (const b of this.bones) {
       if (!Camera.isVisible(b.x, b.y)) continue;
-      const sx = Camera.sx(b.x), sy = Camera.sy(b.y);
-      const k = b.k || 1;                      // échelle : un cachalot laisse une CARCASSE
       ctx.globalAlpha = U.clamp(1 - (b.age - 35) / 10, 0, 1);
-      // colonne vertébrale + arêtes. Le nombre de côtes suit la taille : une
-      // grande arête avec trois côtes ressemble à une petite mal zoomée.
-      const cotes = Math.round(U.clamp(k * 1.6, 1, 7));
-      ctx.strokeStyle = '#e8e4d8'; ctx.lineWidth = Math.max(1.5, 2 * Math.sqrt(k));
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(sx - 8 * k, sy); ctx.lineTo(sx + 6 * k, sy);
-      for (let i = 0; i < cotes; i++) {
-        const u = cotes === 1 ? 0.5 : i / (cotes - 1);
-        const cx = sx + U.lerp(-6 * k, 4 * k, u);
-        const h = 4 * k * (0.55 + 0.45 * Math.sin(u * Math.PI));   // fuselé aux deux bouts
-        ctx.moveTo(cx, sy - h); ctx.lineTo(cx, sy + h);
-      }
-      ctx.stroke();
-      // queue en triangle
-      ctx.beginPath();
-      ctx.moveTo(sx - 8 * k, sy); ctx.lineTo(sx - 12 * k, sy - 4 * k);
-      ctx.moveTo(sx - 8 * k, sy); ctx.lineTo(sx - 12 * k, sy + 4 * k);
-      ctx.stroke();
-      // tête de squelette avec œil en croix
-      ctx.fillStyle = '#e8e4d8';
-      ctx.beginPath(); ctx.arc(sx + 10 * k, sy, 4.5 * k, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = '#4a5560'; ctx.lineWidth = Math.max(1, 1.3 * Math.sqrt(k));
-      ctx.beginPath();
-      ctx.moveTo(sx + 9 * k, sy - 2.5 * k); ctx.lineTo(sx + 12.5 * k, sy + 1 * k);   // œil ✕
-      ctx.moveTo(sx + 12.5 * k, sy - 2.5 * k); ctx.lineTo(sx + 9 * k, sy + 1 * k);
-      ctx.moveTo(sx + 8.5 * k, sy + 3 * k); ctx.lineTo(sx + 12 * k, sy + 3 * k);     // bouche plate
-      ctx.stroke();
+      ctx.save();
+      ctx.translate(Camera.sx(b.x), Camera.sy(b.y));
+      // Posée au sol, elle épouse la pente (même règle que le décor) ; en
+      // coulant elle se balance un peu. Son sens est tiré de sa position :
+      // toutes les arêtes tournées du même côté se liraient comme un tampon.
+      if (b.settled) ctx.rotate(Math.atan(World.slopeAt(b.x)));
+      else ctx.rotate(Math.sin(b.age * 1.7 + b.x) * 0.25);
+      if (Math.floor(b.x) % 2) ctx.scale(-1, 1);
+      this.drawArete(ctx, b.k || 1);
+      ctx.restore();
       ctx.globalAlpha = 1;
     }
   },
+
+  // L'ARÊTE, dans la DA des créatures : des formes PLEINES couleur os cernées
+  // d'encre — comme les dessins de l'atelier — et non plus des traits blancs
+  // plats. Le cerne vient de deux passes (encre large, os par-dessus), le
+  // procédé des silhouettes procédurales. Côtes courbes en peigne, queue en
+  // éventail, crâne avec sa mâchoire et l'œil en croix du KO. `k` = 1 pour
+  // un petit poisson ; un cachalot laisse une carcasse à sa mesure.
+  drawArete(ctx, k) {
+    const OS = '#f4eedc', OMBRE = '#d8cdb0', ENCRE = '#4f4a3e';
+    const r = Math.sqrt(k);
+    const cotes = Math.round(U.clamp(k * 1.6 + 1, 2, 7));
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    // La queue, en éventail, derrière tout le reste
+    ctx.beginPath();
+    ctx.moveTo(-8 * k, 0);
+    ctx.quadraticCurveTo(-11 * k, -2 * k, -13.5 * k, -5 * k);
+    ctx.quadraticCurveTo(-11.8 * k, 0, -13.5 * k, 5 * k);
+    ctx.quadraticCurveTo(-11 * k, 2 * k, -8 * k, 0);
+    ctx.closePath();
+    ctx.fillStyle = OS; ctx.fill();
+    ctx.strokeStyle = ENCRE; ctx.lineWidth = 1.1 * r; ctx.stroke();
+    // Colonne et côtes, en deux passes pour le cerne
+    const os = () => {
+      ctx.beginPath();
+      ctx.moveTo(-9 * k, 0); ctx.quadraticCurveTo(-2 * k, -1.2 * k, 5 * k, 0);
+      for (let i = 0; i < cotes; i++) {
+        const u = i / (cotes - 1), x = U.lerp(-6 * k, 3 * k, u) - 0.4 * k * Math.sin(u * Math.PI);
+        const h = 4.8 * k * (0.5 + 0.5 * Math.sin(u * Math.PI));   // fuselé aux deux bouts
+        ctx.moveTo(x, -0.5 * k); ctx.quadraticCurveTo(x - 0.6 * k, -h * 0.7, x - 2.2 * k, -h);
+        ctx.moveTo(x, 0.5 * k); ctx.quadraticCurveTo(x - 0.6 * k, h * 0.7, x - 2.2 * k, h);
+      }
+    };
+    os(); ctx.strokeStyle = ENCRE; ctx.lineWidth = 3.2 * r; ctx.stroke();
+    os(); ctx.strokeStyle = OS; ctx.lineWidth = 1.6 * r; ctx.stroke();
+    // Le crâne : arrondi derrière, museau devant, la mâchoire entrouverte
+    ctx.beginPath();
+    ctx.moveTo(2.2 * k, -0.5 * k);
+    ctx.quadraticCurveTo(2.6 * k, -4.4 * k, 6.8 * k, -4 * k);
+    ctx.quadraticCurveTo(10.5 * k, -3.2 * k, 11.2 * k, -0.4 * k);
+    ctx.lineTo(8.4 * k, 0.9 * k);                     // la commissure
+    ctx.lineTo(10.6 * k, 2.2 * k);                    // la mâchoire du bas
+    ctx.quadraticCurveTo(7.5 * k, 4.6 * k, 3.6 * k, 3.4 * k);
+    ctx.quadraticCurveTo(1.6 * k, 2.4 * k, 2.2 * k, -0.5 * k);
+    ctx.closePath();
+    ctx.fillStyle = OS; ctx.fill();
+    ctx.strokeStyle = ENCRE; ctx.lineWidth = 1.1 * r; ctx.stroke();
+    // l'orbite creuse, puis l'œil en croix du KO
+    ctx.fillStyle = OMBRE;
+    ctx.beginPath(); ctx.arc(6.3 * k, -1.5 * k, 1.9 * k, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = ENCRE; ctx.lineWidth = 0.9 * r;
+    ctx.beginPath();
+    ctx.moveTo(5.3 * k, -2.5 * k); ctx.lineTo(7.3 * k, -0.5 * k);
+    ctx.moveTo(7.3 * k, -2.5 * k); ctx.lineTo(5.3 * k, -0.5 * k);
+    ctx.stroke();
+    // un reflet sur le crâne, comme sur les corps dessinés
+    ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 0.7 * r;
+    ctx.beginPath(); ctx.arc(5.6 * k, -1 * k, 2.7 * k, -2.6, -1.7); ctx.stroke();
+  },
+
 };

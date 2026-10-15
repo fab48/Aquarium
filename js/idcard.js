@@ -1,6 +1,23 @@
-// Fiche d'identité d'une créature, affichée au survol quand le bouton 🔍 est actif.
+// Fiche d'identité d'une créature, affichée quand le bouton 🔍 est actif.
 // Reprend les champs des fiches du GDD §12 : zone, liberté, niveau trophique,
 // nourriture favorite, régime, plus l'état vivant de l'individu (faim, stade).
+//
+// LA FICHE EST UN PANNEAU DU HUD, SUR LE CÔTÉ — comme les barres de zone et de
+// profondeur — et non plus une bulle posée près de la créature. Posée près de
+// l'animal elle le masquait, se décalait pour éviter sa voisine, devait être
+// agrandie à la main au doigt, et clignotait dès que le poisson bougeait. Un
+// panneau HTML ancré à un bord n'a aucun de ces problèmes : le navigateur
+// replie le texte, la mise en page ne dépend pas de la créature, et rien n'est
+// redessiné tant que rien ne change (cf. `update`).
+//
+// DE QUI PARLE-T-ELLE ? Une seule fiche à la fois :
+//   1. la créature survolée (souris, avec l'hystérésis de `Input.pickAt`) ou
+//      ÉPINGLÉE par un tap (au doigt `Input.hovered` EST l'épingle) ;
+//   2. à défaut, la créature SUIVIE par la caméra (double-clic, cerceau doré).
+// La survolée passe devant la suivie, qui revient d'elle-même dès que le curseur
+// la quitte : on n'a pas à lâcher sa créature pour en lire une autre.
+// Le sujet est signalé sur le canvas par un cerceau fin (`dessinerCerceau`) —
+// doré pour la suivie (c'est le cerceau de la caméra), blanc pour la survolée.
 
 const IdCard = {
   MOVEMENT_LABEL: {
@@ -8,6 +25,17 @@ const IdCard = {
     wideband: 'Libre en largeur', free: 'Libre partout', crawl: 'Rampe sur le fond',
     drift: 'Dérive passive',
   },
+
+  // Rangées, dans l'ordre d'affichage. Les libellés sont fixes : le panneau
+  // construit ses <dt> une fois et ne remplace plus que les valeurs.
+  ROWS: ['Ici', 'Vit', 'Déplacement', 'Niveau', 'Mange', 'Favori ⭐', 'Mangé par', 'État'],
+
+  // Une fiche garde l'écran HOLD secondes après la perte du sujet (le curseur
+  // qui glisse d'un poisson à l'autre ne doit pas la faire clignoter), puis
+  // s'efface en fondu (CSS). Les valeurs changeantes — position, état, faim —
+  // sont relues à REFRESH secondes d'intervalle, pas à chaque frame.
+  HOLD: 0.4,
+  REFRESH: 0.25,
 
   trophicLabel(def) {
     if (def.refuge) return 'Décor vivant (refuge)';
@@ -45,150 +73,6 @@ const IdCard = {
     return parts.length ? parts.join(' · ') : '—';
   },
 
-  // `eviter` : rectangle d'une fiche déjà dessinée, que celle-ci contourne.
-  // `epinglee` : fiche de la créature SUIVIE (double-clic) — liseré doré, comme
-  // le cerceau qui l'entoure, pour qu'on comprenne pourquoi elle ne bouge pas.
-  // Renvoie son propre rectangle, pour que l'appelant l'enchaîne.
-  // Au doigt (Input.touchMode), la fiche entière est agrandie d'un facteur :
-  // dessinée à l'échelle souris, elle est illisible sur un téléphone. Tout le
-  // dessin se fait dans un repère réduit puis le contexte est mis à l'échelle —
-  // aucun autre chiffre de mise en page ne change.
-  draw(ctx, e, eviter = null, epinglee = false) {
-    const K = Input.touchMode ? 1.35 : 1;
-    if (K === 1) return this._draw(ctx, e, eviter, epinglee, 1);
-    ctx.save(); ctx.scale(K, K);
-    const ev2 = eviter && { x: eviter.x / K, y: eviter.y / K, w: eviter.w / K, h: eviter.h / K };
-    const r = this._draw(ctx, e, ev2, epinglee, K);
-    ctx.restore();
-    return { x: r.x * K, y: r.y * K, w: r.w * K, h: r.h * K };
-  },
-
-  _draw(ctx, e, eviter, epinglee, K) {
-    const def = e.def;
-    // Largeur portée de 264 à 292 et colonne des libellés de 84 à 76 : la ligne
-    // « Vit » (zone horizontale + profondeur) était tronquée à « Rivage → Grand
-    // large · 3 2… », ce qui lui retirait justement l'information ajoutée.
-    const pad = 12, W = 292, LH = 17, COL = 76;
-    // La phrase est repliée à la largeur de la fiche AVANT de calculer sa
-    // hauteur : sinon elle déborde du cadre sur les espèces bavardes.
-    const phrase = def.phrase ? this.replier(ctx, def.phrase, W - pad * 2, '12.5px') : [];
-    const VW = Camera.vw / K, VH = Camera.vh / K;   // l'écran vu du repère réduit
-
-    const rows = [
-      ['Ici', World.labelZoneX(e.x) + ' · ' + World.zoneAt(e.y).label
-            + ` · ${Math.round((e.y - CONFIG.SURFACE_Y) / CONFIG.PX_PER_METER)} m`],
-      ['Vit', this.habitatOf(e)],
-      ['Déplacement', this.MOVEMENT_LABEL[def.movement] ?? def.movement],
-      ['Niveau', this.trophicLabel(def)],
-      ['Mange', this.dietOf(def)],
-      ['Favori ⭐', def.favoriteFood ? FOOD_TYPES[def.favoriteFood].label : '—'],
-      ['Mangé par', this.predatorsOf(e.speciesId).join(', ') || 'personne'],
-      ['État', this.stateLabel(e)],
-    ];
-
-    // Position écran de la créature (le contexte HUD est en px CSS, pas zoomé —
-    // divisée par K pour rester exacte dans le repère réduit)
-    const cx = (e.x - Camera.x) * Camera.zoom / K;
-    const cy = (e.y - Camera.y) * Camera.zoom / K;
-    const H = pad * 2 + 36 + rows.length * LH + 14
-            + (phrase.length ? 10 + phrase.length * 15 : 0);
-    // ÉCART À LA CRÉATURE. 26 px fixes suffisaient pour une sardine, pas pour
-    // un cachalot : la fiche se posait SUR l'animal qu'elle décrit, et on ne le
-    // voyait plus. L'écart suit donc le rayon dessiné à l'écran, plus une marge
-    // confortable — c'est le sujet qu'on veut regarder, pas le panneau.
-    const rayon = e.size * (def.spanRatio || 1.05) * Camera.zoom / K;
-    const ecart = rayon + 34;
-    let bx = cx + ecart, by = cy - H / 2;
-    if (bx + W > VW - 8) bx = cx - W - ecart;
-    // Si les deux côtés débordent (grosse créature au centre d'un petit écran),
-    // on la pose AU-DESSUS ou EN DESSOUS plutôt que par-dessus.
-    if (bx < 8 && cx + ecart + W > VW - 8) {
-      bx = U.clamp(cx - W / 2, 8, Math.max(8, VW - W - 8));
-      by = cy + rayon + 20 + H <= VH - 8 ? cy + rayon + 20 : cy - rayon - 20 - H;
-    }
-    // Bornée dans les DEUX axes : une créature près du bord gauche (ou hors
-    // champ, cas de la fiche épinglée quand la caméra n'a pas fini de la
-    // rattraper) envoyait sa fiche à un x négatif, donc invisible.
-    bx = U.clamp(bx, 8, Math.max(8, VW - W - 8));
-    by = U.clamp(by, 8, VH - H - 8);
-    // Deux fiches à l'écran (l'épinglée + le survol) : la seconde se décale
-    // au-dessus ou en dessous de la première plutôt que de la recouvrir.
-    if (eviter && bx < eviter.x + eviter.w && bx + W > eviter.x
-        && by < eviter.y + eviter.h && by + H > eviter.y) {
-      const dessous = eviter.y + eviter.h + 10;
-      by = dessous + H <= VH - 8 ? dessous : Math.max(8, eviter.y - H - 10);
-    }
-
-    // Trait de rattachement à la créature
-    ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(bx < cx ? bx + W : bx, cy); ctx.stroke();
-    ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI * 2); ctx.stroke();
-
-    // Cadre
-    ctx.fillStyle = 'rgba(8,26,44,0.92)';
-    ctx.strokeStyle = epinglee ? 'rgba(255,215,94,0.85)' : 'rgba(255,255,255,0.28)';
-    ctx.lineWidth = epinglee ? 2.5 : 1.5;
-    this.roundRect(ctx, bx, by, W, H, 10);
-    ctx.fill(); ctx.stroke();
-
-    // Titre
-    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    ctx.fillStyle = '#ffd75e';
-    ctx.font = 'bold 15px "Segoe UI", system-ui, sans-serif';
-    ctx.fillText(def.name, bx + pad, by + pad);
-    if (e.stage !== 'adult') {
-      ctx.fillStyle = '#8fd8f5'; ctx.font = '12px "Segoe UI", system-ui, sans-serif';
-      ctx.fillText(e.stage === 'fry' ? '(alevin)' : '(œuf)', bx + pad + ctx.measureText(def.name).width + 8, by + pad + 3);
-    }
-    if (epinglee) {
-      ctx.textAlign = 'right';
-      ctx.font = '13px "Segoe UI", system-ui, sans-serif';
-      ctx.fillText('🎯', bx + W - pad, by + pad);
-      ctx.textAlign = 'left';
-    }
-    // Vraie espèce, en sous-titre — suivie du faux nom latin, qui glisse la
-    // vraie information sous la blague (« Scarus petomanus »).
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.font = 'italic 11.5px "Segoe UI", system-ui, sans-serif';
-    const sousTitre = def.realName || '';
-    ctx.fillText(sousTitre, bx + pad, by + pad + 19);
-    if (def.latin) {
-      ctx.fillStyle = 'rgba(143,216,245,0.6)';
-      this.fitText(ctx, '· ' + def.latin, bx + pad + ctx.measureText(sousTitre).width + 7,
-                   by + pad + 19, W - pad * 2 - ctx.measureText(sousTitre).width - 7);
-    }
-
-    // Lignes
-    let y = by + pad + 40;
-    ctx.font = '12px "Segoe UI", system-ui, sans-serif';
-    for (const [k, v] of rows) {
-      ctx.fillStyle = 'rgba(255,255,255,0.5)';
-      ctx.fillText(k, bx + pad, y);
-      ctx.fillStyle = 'rgba(255,255,255,0.92)';
-      this.fitText(ctx, v, bx + pad + COL, y, W - pad * 2 - COL);
-      y += LH;
-    }
-
-    // Jauge de faim (0 = repu à gauche, 1 = affamé à droite)
-    const gw = W - pad * 2, gy = y + 4;
-    ctx.fillStyle = 'rgba(255,255,255,0.15)';
-    this.roundRect(ctx, bx + pad, gy, gw, 6, 3); ctx.fill();
-    ctx.fillStyle = e.hunger > 0.7 ? '#ff7a6b' : (e.hunger > 0.4 ? '#ffc75e' : '#7fe08a');
-    this.roundRect(ctx, bx + pad, gy, gw * (1 - e.hunger), 6, 3); ctx.fill();
-
-    // La phrase, tout en bas : c'est le seul endroit où elle apparaît. Jamais
-    // en bulle — l'aquarium raconte par le visage, et le budget de bulles est
-    // déjà tenu à ~250/min.
-    if (phrase.length) {
-      let py = gy + 16;
-      ctx.fillStyle = 'rgba(255,215,94,0.9)';
-      ctx.font = 'italic 12.5px "Segoe UI", system-ui, sans-serif';
-      for (const ligne of phrase) { ctx.fillText(ligne, bx + pad, py); py += 15; }
-    }
-
-    return { x: bx, y: by, w: W, h: H };
-  },
-
   stateLabel(e) {
     if (e.stage === 'egg') return 'œuf en incubation';
     const s = {
@@ -201,40 +85,149 @@ const IdCard = {
     return e.wellFed >= 0.6 ? s + ' · prêt à se reproduire ❤' : s;
   },
 
-  // Tronque proprement si le texte dépasse
-  fitText(ctx, txt, x, y, max) {
-    let t = String(txt);
-    if (ctx.measureText(t).width > max) {
-      while (t.length > 1 && ctx.measureText(t + '…').width > max) t = t.slice(0, -1);
-      t += '…';
-    }
-    ctx.fillText(t, x, y);
+  // --- Les CHAMPS, indépendants de l'affichage --------------------------------
+  // Tout ce qui ne dépend que de l'ESPÈCE est calculé une fois et mémoïsé :
+  // « Mangé par » balaie toute la table SPECIES, « Vit » parcourt le relief.
+  _statique: {},
+
+  statique(e) {
+    const memo = this._statique[e.speciesId];
+    if (memo) return memo;
+    const def = e.def;
+    return (this._statique[e.speciesId] = {
+      nom: def.name,
+      // Vraie espèce, en sous-titre — suivie du faux nom latin, qui glisse la
+      // vraie information sous la blague (« Scarus petomanus »).
+      reel: def.realName || '',
+      latin: def.latin || '',
+      // La phrase n'apparaît QUE ici : jamais en bulle — l'aquarium raconte par
+      // le visage, et le budget de bulles est déjà tenu à ~250/min.
+      phrase: def.phrase || '',
+      vit: this.habitatOf(e),
+      deplacement: this.MOVEMENT_LABEL[def.movement] ?? def.movement,
+      niveau: this.trophicLabel(def),
+      mange: this.dietOf(def),
+      favori: def.favoriteFood ? FOOD_TYPES[def.favoriteFood].label : '—',
+      mangePar: this.predatorsOf(e.speciesId).join(', ') || 'personne',
+    });
   },
 
-  // Replie un texte sur plusieurs lignes, sans couper les mots. Sert à la
-  // phrase, qui est la seule ligne de la fiche à ne pas tenir sur une seule.
-  replier(ctx, txt, max, police) {
-    const avant = ctx.font;
-    ctx.font = 'italic ' + police + ' "Segoe UI", system-ui, sans-serif';
-    const lignes = [];
-    let ligne = '';
-    for (const mot of String(txt).split(' ')) {
-      const essai = ligne ? ligne + ' ' + mot : mot;
-      if (ligne && ctx.measureText(essai).width > max) { lignes.push(ligne); ligne = mot; }
-      else ligne = essai;
-    }
-    if (ligne) lignes.push(ligne);
-    ctx.font = avant;
-    return lignes;
+  // Les champs d'une créature, dans l'ordre de `ROWS`. Seuls « Ici », « État »,
+  // le stade et la faim dépendent de l'individu.
+  champs(e) {
+    const s = this.statique(e);
+    return {
+      nom: s.nom,
+      stade: e.stage === 'fry' ? '(alevin)' : (e.stage === 'egg' ? '(œuf)' : ''),
+      reel: s.reel, latin: s.latin ? '· ' + s.latin : '',
+      phrase: s.phrase,
+      faim: e.hunger,
+      rows: [
+        World.labelZoneX(e.x) + ' · ' + World.zoneAt(e.y).label
+          + ` · ${Math.round((e.y - CONFIG.SURFACE_Y) / CONFIG.PX_PER_METER)} m`,
+        s.vit, s.deplacement, s.niveau, s.mange, s.favori, s.mangePar,
+        this.stateLabel(e),
+      ],
+    };
   },
 
-  roundRect(ctx, x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
+  // --- Le PANNEAU --------------------------------------------------------------
+  panel: null, _e: null, _on: false, _perdu: 0, _t: 0, _suivie: null, _cote: null,
+
+  init() {
+    const p = this.panel = document.getElementById('idcard');
+    if (!p) return;
+    const $ = s => p.querySelector(s);
+    this.el = {
+      nom: $('.ic-nom'), stade: $('.ic-stade'), reel: $('.ic-reel'), latin: $('.ic-latin'),
+      rows: $('.ic-rows'), faim: $('.ic-faim-v'), phrase: $('.ic-phrase'),
+    };
+    this.dd = [];
+    for (const k of this.ROWS) {
+      const dt = document.createElement('dt'), dd = document.createElement('dd');
+      dt.textContent = k;
+      this.el.rows.append(dt, dd);
+      this.dd.push(dd);
+    }
+  },
+
+  // Le sujet de cette frame, ou null (cf. l'en-tête : survolée/épinglée d'abord,
+  // suivie à défaut). Rien ne s'affiche sans la loupe.
+  sujet() {
+    if (!Input.hoverInfo) return null;
+    const h = Input.hovered;
+    if (h && !h.dead) return h;
+    const f = Camera.follow;
+    return f && !f.dead ? f : null;
+  },
+
+  // N'écrit dans le DOM que ce qui a CHANGÉ : un `textContent` identique
+  // relancerait quand même la mise en page.
+  _poser(el, txt) {
+    if (el._txt === txt) return;
+    el._txt = txt; el.textContent = txt;
+  },
+
+  rendre(e) {
+    const c = this.champs(e), el = this.el;
+    this._poser(el.nom, c.nom);
+    this._poser(el.stade, c.stade);
+    this._poser(el.reel, c.reel);
+    this._poser(el.latin, c.latin);
+    this._poser(el.phrase, c.phrase);
+    el.phrase.hidden = !c.phrase;
+    for (let i = 0; i < c.rows.length; i++) this._poser(this.dd[i], c.rows[i]);
+    // Jauge de faim (0 = repu à gauche, 1 = affamé à droite) : pleine quand il
+    // est repu. Largeur par `transform`, qui ne déclenche aucune mise en page.
+    el.faim.style.transform = `scaleX(${Math.max(0, 1 - c.faim).toFixed(3)})`;
+    const couleur = c.faim > 0.7 ? '#ff7a6b' : (c.faim > 0.4 ? '#ffc75e' : '#7fe08a');
+    if (el.faim._c !== couleur) { el.faim._c = couleur; el.faim.style.background = couleur; }
+  },
+
+  // Appelé une fois par frame, AVANT le dessin du monde (le cerceau en dépend).
+  update(dt) {
+    const p = this.panel;
+    if (!p) return;
+    const e = this.sujet();
+    if (e) {
+      this._perdu = 0;
+      const change = e !== this._e;
+      this._e = e;
+      this._t += dt;
+      if (change || this._t >= this.REFRESH) { this._t = 0; this.rendre(e); }
+      // Doré = c'est la créature que la caméra suit (même teinte que son cerceau)
+      const suivie = e === Camera.follow;
+      if (suivie !== this._suivie) { this._suivie = suivie; p.classList.toggle('suivie', suivie); }
+      if (!this._on) {
+        this._on = true;
+        p.classList.add('on'); p.setAttribute('aria-hidden', 'false');
+      }
+    } else if (this._on) {
+      this._perdu += dt;
+      if (this._perdu >= this.HOLD) {
+        this._on = false;
+        p.classList.remove('on'); p.setAttribute('aria-hidden', 'true');
+      }
+    }
+    // La légende est ouverte : la fiche se range à côté d'elle (CSS)
+    const cote = !!(typeof Legend !== 'undefined' && Legend.visible);
+    if (cote !== this._cote) { this._cote = cote; p.classList.toggle('a-cote', cote); }
+  },
+
+  // Cerceau fin autour de la créature dont parle la fiche. À appeler dans le
+  // repère MONDE. Pas pour la suivie : son cerceau doré, pointillé, est déjà
+  // dessiné par la boucle principale. Il s'estompe avec la fiche qui s'éteint.
+  dessinerCerceau(ctx) {
+    const e = this._e;
+    if (!this._on || !e || e.dead || e === Camera.follow) return;
+    const [x, y] = Camera.toScreen(e.x, e.y);
+    // Au moins 15 px ÉCRAN : une crevette de 7 px de monde aurait un cerceau
+    // invisible, comme sa zone de survol l'était avant `RAYON_SURVOL`.
+    const r = Math.max(e.size * (e.def.spanRatio || 1.05) * 1.35, 15 / Camera.zoom);
+    ctx.globalAlpha = this._perdu > 0 ? Math.max(0, 1 - this._perdu / this.HOLD) : 1;
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 1.75 / Camera.zoom;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 1;
   },
 };

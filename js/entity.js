@@ -93,6 +93,9 @@ class Entity {
     // les fermetures locales qu'elles remplacent étaient recréées à chaque move()
     // (~1000 par frame). Déclaré ici pour figer la forme de l'objet.
     this._axAcc = 0; this._ayAcc = 0;
+    // Saisie par le joueur (cf. saisie.js) : `_saisi` = tenue à la main,
+    // `_lache` = retombée en cours après le relâché.
+    this._saisi = false; this._lache = null;
   }
 
   // Steering "vitesse désirée" : vise droit sur la cible au lieu d'accélérer
@@ -284,6 +287,17 @@ class Entity {
       }
       return;
     }
+
+    // SAISIE PAR LE JOUEUR (cf. saisie.js). Tenue à la main ou en train de
+    // retomber après le relâché, la créature sort de la simulation : ni faim,
+    // ni pensée, ni gag, ni prédateur — `Saisie.pilote` fait tout, jusqu'à la
+    // rendre à `think`/`move` sur une position valide. Placé AVANT la faim :
+    // « pas de faim pendant la saisie » est une promesse, pas un arrondi.
+    // Une galipette en cours (GAGS.dauphin) se referme d'elle-même : sans ça
+    // `_galVol` et l'angle piloté survivraient à la saisie et le dauphin
+    // reposé reprendrait son arc balistique là où on l'a posé.
+    if ((this._saisi || this._lache) && this._galPh) GAGS._galFin(this);
+    if ((this._saisi || this._lache) && Saisie.pilote(this, dt, t)) return;
 
     // Faim. Métabolisme : les nageurs rapides brûlent plus, les embusqués
     // (murène, ver-tapis) qui attendent sans bouger beaucoup moins.
@@ -559,7 +573,9 @@ class Entity {
     // beau réveiller, `think` rendormait DANS LA MÊME FRAME et le frein du
     // dormeur clouait la remontée sur place — mesuré : la Baleine réussissait
     // 3 souffles pour 9 cycles lancés, le reste avortait au garde-fou.
-    const respire = this._surfacing || this._replonge;
+    // La galipette du dauphin (`_galPh`, GAGS.dauphin) compte aussi : la nuit,
+    // un dauphin s'endormait en plein élan (3 scènes avortées sur 8 mesurées).
+    const respire = this._surfacing || this._replonge || this._galPh;
     if (def.sleeps && !respire && this.state === 'wander' && Math.random() < dt * 0.01) {
       this.state = 'sleep'; this.stateTimer = U.rand(12, 25); return;
     }
@@ -689,7 +705,10 @@ class Entity {
               this.emote('proud', 1.4, false);
               if ((this._tocCd ?? 0) <= 0 && GAGS._enVue(this)) {
                 this._tocCd = Ecosystem.cadence(this, CADENCE.toc);
-                Particles.shout(this.x + this.size, this.y - this.size, 'TOC !', '#fff', 26);
+                // Au point d'IMPACT (le crabe), pas derrière le requin : le
+                // marteau est à l'avant, et `this.x + size` tombait sur sa
+                // queue dès qu'il nageait vers la gauche.
+                Particles.shout(p.x, Math.min(this.y, p.y) - this.size, 'TOC !', '#fff', 26);
               }
             }
             return;
@@ -1272,6 +1291,9 @@ class Entity {
     // Le caca part un moment APRÈS le repas (mis en file par onAte / Ecosystem.eat),
     // pour que le lien de cause à effet se voie.
     if (this._poopIn == null) return;
+    // Pas de caca en pleine galipette (GAGS.dauphin) : la scène a son visage,
+    // et le minuteur attend — il reprend là où il s'est arrêté, sous l'eau.
+    if (this._galPh) return;
     this._poopIn -= dt;
     if (this._poopIn > 0.35) return;
 
@@ -1496,6 +1518,11 @@ class Entity {
   }
 
   breathe(dt) {
+    // EN PLEINE GALIPETTE (GAGS.dauphin), le bond EST sa respiration : le
+    // cycle de remontée est suspendu (sinon le filet « au-dessus du plafond »
+    // ci-dessous le mettrait en `_replonge`, qui borne la percée à un quart de
+    // longueur), et la jauge est pleine.
+    if (this._galPh) { this._air = Math.max(this._air ?? 0, 18); return; }
     this._air = (this._air ?? U.rand(8, 25)) - dt;
     // Filet de bulles permanent, échappé de l'évent. LES TROIS CADENCES DE
     // BULLES DE CETTE MÉTHODE ONT ÉTÉ DIVISÉES PAR TROIS : mesurées ensemble à
@@ -1687,7 +1714,7 @@ class Entity {
     }
 
     for (const o of Ecosystem.neighbors(this.x, this.y)) {
-      if (o === this || o.dead || o._matingWith) continue;
+      if (o === this || o.dead || o._matingWith || o._saisi || o._lache) continue;
       if (o.speciesId !== this.speciesId || o.stage !== 'adult') continue;
       if (o.wellFed < 1 || (o._mateCd ?? 0) > 0) continue;
       const near = (this.size + o.size) * 1.8;
@@ -1746,6 +1773,37 @@ class Entity {
       return;
     }
 
+    // GALIPETTE (GAGS.dauphin) : du lancement hors de l'eau jusqu'à la
+    // freinée qui suit le plongeon, la scène pilote ENTIÈREMENT le corps — un
+    // vrai arc BALISTIQUE (gravité, pas un ressort), et plus aucune contrainte
+    // de strate : la bande de profondeur et le plafond de surface le
+    // rabattraient sous l'eau en une frame (le bug de « la remontée »).
+    //   - sous la surface avant le bond : vitesse constante (il file) ;
+    //   - au-dessus : gravité seule ;
+    //   - dès qu'il est RENTRÉ : l'eau le freine en exponentielle, ce qui
+    //     évite le blocage net à 500 px/s que lui imposerait le plafond
+    //     `maxSpeed` du déplacement ordinaire.
+    // Le rivage reste une barrière dure, en vol comme les sauteurs (la phase
+    // aérienne court-circuite tout le reste).
+    if (this._galVol) {
+      const v = this._galVol;
+      if (this.y <= CONFIG.SURFACE_Y) { this.vy += v.g * dt; v.air = true; }
+      else if (v.air) {
+        v.entre = true;
+        const k = Math.exp(-3.4 * dt);
+        this.vx *= k; this.vy *= k;
+      }
+      this.x += this.vx * dt; this.y += this.vy * dt;
+      const bord = this.limiteLarge();
+      if (this.x < bord) { this.x = bord; this.vx = Math.abs(this.vx); }
+      if (this.x > CONFIG.WORLD_WIDTH - 100) { this.x = CONFIG.WORLD_WIDTH - 100; this.vx = -Math.abs(this.vx); }
+      const sol = World.floorY(this.x) - this.size * 0.5;
+      if (this.y > sol) { this.y = sol; this.vy = Math.min(0, this.vy); }
+      this.speedNow = Math.hypot(this.vx, this.vy);
+      this.angle = Math.atan2(this.vy, this.vx || 1) * 0.6;
+      return;
+    }
+
     // --- Créatures aériennes (Moustachu Volant) : volent AU-DESSUS de la surface,
     // gérées en y monde direct (pas de depthBand classique). ---
     if (def.aerial) {
@@ -1753,8 +1811,11 @@ class Entity {
       // comme une pierre, s'étale à plat ventre sur l'eau et flotte, sonné,
       // en dérivant. Il se réveille au bout de son minuteur, s'ébroue et
       // repart trempé et furieux — à moins que l'archer n'arrive avant.
-      if (this._abattu > 0) {
-        this._abattu -= dt;
+      // `_telescope` : MÊME chute, posée par le bond d'un dauphin (GAGS.dauphin) —
+      // un drapeau à part, pour que l'Archer (qui ne retient que les `_abattu`)
+      // ne transforme pas un télescopage en repas : cet oiseau-là ne meurt pas.
+      if (this._abattu > 0 || this._telescope > 0) {
+        if (this._abattu > 0) this._abattu -= dt; else this._telescope -= dt;
         const flotte = CONFIG.SURFACE_Y + 2;
         if (this.y < flotte) {
           this.vy += 900 * dt; this.vx *= 0.99;
@@ -1772,8 +1833,8 @@ class Entity {
         this.x = U.clamp(this.x, World.shoreX, CONFIG.WORLD_WIDTH - 50);
         this.speedNow = 0;
         this.angle = U.angleLerp(this.angle, 0.45, dt * 6);        // de guingois
-        if (this._abattu <= 0) {
-          this._abattu = 0; this.wet = 3;
+        if (!(this._abattu > 0) && !(this._telescope > 0)) {
+          this._abattu = 0; this._telescope = 0; this.wet = 3;
           this.state = 'wander'; this.target = null; this.release();
           this.vy = -230;
           this.emote('angry', 2.5);
@@ -2196,6 +2257,12 @@ class Entity {
       const fonce = this._farcePh === 'bouh';
       maxSpeed = fonce ? (def.sprintSpeed || def.speed * 2) : def.speed * 0.5;
       this.steerVers(this._farceX, this._farceY, maxSpeed, fonce ? 5 : 2);
+    } else if (this._galX != null) {
+      // Dauphin qui PREND SON ÉLAN pour une galipette (GAGS.dauphin) : il file
+      // vers son point de départ, sous la surface, à bonne vitesse (il doit
+      // rattraper un oiseau qui vole : mesuré à 60 px/s, 150 ne suffisait pas).
+      maxSpeed = def.speed * 2;
+      this.steerVers(this._galX, this._galY, maxSpeed, 3);
     } else if (this.state === 'migrate' && this._nursery) {
       maxSpeed = def.speed * 1.35;   // en route vers la frayère
       this.steerVers(this._nursery.x, this._nursery.y, maxSpeed, 2.2);
@@ -2581,6 +2648,10 @@ class Entity {
     ctx.save();
     ctx.translate(sx, sy);
 
+    // Dans la main du joueur (halo + gigotement HORIZONTAL), ou colosse qui
+    // secoue la tête devant un poids qu'on ne lui retirera pas (cf. saisie.js).
+    if (this._saisi || this._secousseFin > t) Saisie.deformer(ctx, this, t);
+
     // Trop nourri : il tremble de plus en plus fort à mesure qu'il approche
     // du point de rupture. C'est l'avertissement avant le BOUM.
     if (this._gonfle > 0) {
@@ -2608,6 +2679,8 @@ class Entity {
     // plus où le poisson regarde, il faut viser explicitement.
     let dirX = this.vx, dirY = this.vy;
     if (this._faceAt) { dirX = (this._faceAt.x - this.x) * 4; dirY = (this._faceAt.y - this.y) * 4; }
+    // Tenu à la main : on le promène, on ne le met pas la tête en bas.
+    if (this._saisi) dirY *= 0.3;
     const flipX = this.orientation(dirX, t);
 
     // Créatures posées sur le fond : elles épousent la pente du sable, comme le
@@ -2651,7 +2724,14 @@ class Entity {
     // Une créature fixe ne bascule jamais : sinon le rocher de la murène, dessiné
     // dans son repère, se retrouve penché ou à l'envers.
     if (this.def.movement === 'fixed') tilt = 0;
-    this._tilt = U.lerp(this._tilt ?? tilt, tilt, this._faceAt ? 0.25 : 0.08);
+    // GALIPETTE (GAGS.dauphin) : en l'air l'angle est PILOTÉ par la scène —
+    // celui de la trajectoire plus les tours de la vrille, cumulés sans jamais
+    // être ramenés dans ±π (un lissage et une bride casseraient la rotation :
+    // la tête en bas est ici voulue). Posé tel quel : `tilt` s'applique dans
+    // le repère MIROITÉ, donc une valeur croissante fait plonger le nez vers
+    // l'avant du bond, à droite comme à gauche.
+    if (this._galAng != null) this._tilt = tilt = this._galAng;
+    else this._tilt = U.lerp(this._tilt ?? tilt, tilt, this._faceAt ? 0.25 : 0.08);
     // `_tilt` est calculé sur |dirX| : c'est déjà l'angle « non miroité ». Il
     // s'applique donc TEL QUEL dans les deux cas. Avec un signe inversé (l'ancien
     // code), un poisson tourné à gauche s'inclinait à l'envers — visible dès que

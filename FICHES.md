@@ -6,7 +6,7 @@ et plafonds sont relevés dans le code, pas souhaités.
 
 Les espèces encore à inventer sont dans `IDEES.md` §1.
 
-*Dernière mise à jour : 5 septembre 2026 (zones horizontales).*
+*Dernière mise à jour : 10 octobre 2026 (audit Archer/Marteau avec dessins).*
 
 ---
 
@@ -98,7 +98,7 @@ la tortue.
 
 ### Dauphin Farceur — *Dauphin* — *Delphinus blagueurus*
 - **Phrase** — « BOUH ! …hihihi ! »
-- **Action** — en trois temps : approche discrète, jaillissement « BOUH ! », et il se plie de rire en tournant sur lui-même.
+- **Action** — deux numéros. **La farce** : approche discrète, jaillissement « BOUH ! », et il se plie de rire en tournant sur lui-même. **Les galipettes** : il prend de l'élan sous la surface, se cambre et se comprime (l'anticipation), puis jaillit en flèche — 1,5 à 3 longueurs au-dessus de l'eau, vrai arc balistique — et fait **1 à 3 tours complets** repliés en boule avant de replonger nez le premier (« WOUHOU ! » à l'apex, splash et ride à l'entrée). Sur sa trajectoire, un oiseau en vol est **télescopé** : assommé, projeté, plumes, il tombe à plat ventre sur l'eau sans mourir (« BONK ! »), le dauphin fait la tête surprise puis rit. Il peut viser exprès l'oiseau en vue le plus proche ; deux oiseaux au plus par bond.
 - **Mange** — Poisson Confetti · plancton · **Favori**** — Micro-crevettes
 - **Mangé par** — personne
 - T3 prédateur moyen · taille 42 · zone **Rivage → Grand large** · frayère **haut-fond** · plafond 10, plancher 4
@@ -423,8 +423,15 @@ la tortue.
 
 ## Les deux arrivées du 22 septembre 2026 (2)
 
-Pas encore de dessin de référence : silhouettes procédurales (`render: 'archer'`
-et `'hammer'` dans `fishbody.js`).
+Dessinés depuis : `Assets/archer.json` (à main levée dans l'atelier) et
+`Assets/marteau.json` (décalqué sur la vignette du requin), tous deux activés par
+le manifeste `Assets/sprites.json`. Ils n'ont **pas de repère de planche** — les
+deux planches de design datent d'avant eux (`Assets/Reperes/` n'en a pas pour
+eux, et `decoupe_planche.py` non plus). Les silhouettes procédurales
+(`render: 'archer'` et `'hammer'` dans `fishbody.js`) restent le repli tant que
+le dessin n'est pas chargé. Le jet de l'Archer part de **la bouche du dessin**
+(ancre `mouth`, inclinaison comprise — `GAGS._boucheArcher`), le « TOC ! » du
+Marteau éclate **au point d'impact**, pas derrière lui.
 
 ### Poisson Archer Tireur — *Poisson-archer* — *Toxotes crachatus*
 - **Phrase** — « Pas bouger… pas bouger… PTUI ! »
@@ -440,21 +447,23 @@ et `'hammer'` dans `fishbody.js`).
   de ce genre). Quand il plonge sur lui, l'archer lui **crache au visage** :
   quatre fois sur cinq le cormoran repart sonné et trempé, et il laisse les
   archers tranquilles 90 s (la rancune).
-- T3 · taille 15 · zone **toutes, sous la surface** (8–180 px) · frayère
+- T3 · taille 15 · zone **Rivage → Mer, sous la surface** (0–5 m) · frayère
   **haut-fond** · plafond 8, plancher 3 · scène **bruyante** (`CADENCE.crachat`,
-  0,7/min nominal, ~0,3 réalisé, jouée devant le public)
+  0,6/min nominal, ~0,5/min réalisé sur 3 × 12 min, jouée devant le public ; la
+  riposte, 1,4/min, n'a sa bulle qu'une fois sur dix)
 
 ### Requin Marteau Toc-Toc — *Requin-marteau* — *Sphyrna toctoc*
 - **Phrase** — « Toc toc ! Qui est là ? Plus personne. »
 - **Action** — il fouille le fond et, au-dessus d'un rampant, il ne mord pas :
   il **plonge et l'assomme d'un coup de tête** (flag `marteau`). La proie voit
-  les étoiles, un temps (`_toc`, 0,9 s), puis il l'avale. Raté, c'est lui qui a
-  la tête dans le sable. Silhouette : une barre en fuseau au bout du museau, un
+  les étoiles, un temps (`_toc`, 0,9 s), puis il l'avale. Raté (`missChance`
+  0,08, ~5–10 % des coups), c'est lui qui a la tête dans le sable. Une proie
+  réfugiée contre une anémone, il y renonce. Silhouette : une barre en fuseau au bout du museau, un
   œil à chaque extrémité.
 - **Mange** — Crabe Disco, Bernard-l'Ermite · plancton
 - **Mangé par** — personne (sommet de chaîne)
 - T4 · taille 46 (sous le seuil des colosses : il doit raser le sable) · zone
-  **Mer → Grand large** · frayère **haut-fond** · plafond 3 · bulle « TOC ! »
+  **Rivage → Grand large** (6–48 m) · frayère **haut-fond** · plafond 3 · bulle « TOC ! »
   bornée à 0,4/min, le coup lui-même suit la faim et reste silencieux
 
 Deux corrections ailleurs dans la foulée : le **Cormoran** mange désormais

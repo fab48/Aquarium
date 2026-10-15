@@ -72,6 +72,10 @@ une ligne là-bas, puis une ligne ici et une dans `js/legend.js`.
 | fait « BOUH ! » | `surprise` (gueule ouverte) | gag du Dauphin |
 | s'approche en douce d'un banc | `smug` | gag du Dauphin |
 | se tord de rire après sa farce | `laughing` | gag du Dauphin |
+| se dresse et se comprime avant le bond (galipette) | `proud` tenu + canal `_crispe` | `GAGS.dauphin` — `_galipette` |
+| fait ses tours en l'air | `happy` (le visage tourne avec le corps) + boule `_galTuck` | `GAGS.dauphin` — `_galipette` |
+| vient de télescoper un oiseau en plein vol | `surprise` (0,6 s) puis `laughing` | `GAGS._galTelescope` |
+| l'oiseau télescopé | `dizzy` tenu (chute à plat ventre), `angry` au réveil | `entity.js` — `_telescope` |
 | fait semblant de charger | `wink` | `entity.js` — `trickster` |
 | ressort trempé d'un plongeon raté | `sad` | `entity.js` — `aerial` |
 | gênée d'avoir raté son coup (murène) | `blush` | `entity.js` — `ambush` |
@@ -83,10 +87,15 @@ une ligne là-bas, puis une ligne ici et une dans `js/legend.js`.
 | a abattu son oiseau | `proud` | gag du Poisson Archer |
 | son jet lui est retombé dessus | `ashamed` + goutte | gag du Poisson Archer |
 | l'oiseau s'est réveillé avant son arrivée | `sad` | gag du Poisson Archer |
+| crache au visage du Cormoran qui plonge sur lui | `smug` | `GAGS._riposte` (Poisson Archer) |
 | abattu, flotte à plat ventre | `dizzy` (tenu) | `Entity.move` — `_abattu` |
 | se réveille sur l'eau, trempé | `angry` | `Entity.move` — `_abattu` |
 | vient d'assommer un crabe | `proud` | `entity.js` — `marteau` |
 | a raté, la tête dans le sable | `dizzy` | `entity.js` — `marteau` |
+| sa proie s'est réfugiée contre une anémone : il renonce | `sad` | `entity.js` — `marteau` |
+| **saisi à la main** (appui long du joueur) | `scared` tenu par `hold()` + gigotement horizontal ; un **oiseau** proteste en `angry` | `Saisie.pilote` |
+| vient d'être lâché, puis retombe | `surprise` ; `scared` en l'air ; `dizzy` au ventre à plat sur la plage (et un coup sur trois dans l'eau) | `Saisie._chute` |
+| colosse qu'on tente de saisir | `surprise` + petit tremblement | `Saisie.secouer` |
 
 ---
 
@@ -97,6 +106,8 @@ Réservés à ce qu'un visage ne peut pas dire.
 | Signe | Sens |
 |---|---|
 | `BOUH !` | cri du Dauphin Farceur (gros texte + traits de cri) |
+| `WOUHOU !` | le Dauphin en pleine galipette, à l'apex (une seule bulle par bond ; régime « scène », 0,8/min pour tout l'aquarium) |
+| `BONK !` | le même bond, mais un oiseau est sur la trajectoire : la bulle part au heurt, et remplace « WOUHOU ! » |
 | `PROUT !` | le Pétomane se soulage, depuis sa queue |
 | `❗` | un prédateur vient de repérer une proie |
 | `💥` | une proie vient de se faire attraper |
@@ -111,8 +122,10 @@ Réservés à ce qu'un visage ne peut pas dire.
 | `z` | endormi |
 | `♪ ♫` | le Crabe Disco danse |
 | `!` | a peur |
-| `PTUI !` | le Poisson Archer crache sur un oiseau (régime bruyant) — et sur le Cormoran qui plonge sur lui, une fois sur quatre avec la bulle |
+| `PTUI !` | le Poisson Archer crache sur un oiseau (régime bruyant) — et sur le Cormoran qui plonge sur lui, une fois sur dix avec la bulle, et seulement à l'écran |
 | `TOC !` | le Requin Marteau assomme (bulle bornée à 0,4/min ; le coup lui-même suit la faim, silencieux) |
+| `TROP LOURD !` | un colosse qu'on essaie d'attraper (une fois par appui, déclenchée par le joueur : hors budget) |
+| `!` (une bulle, à la main) | la saisie : posée par `Saisie.saisir`, pas filtrée par `VFX_GROUPE` — c'est le retour du geste ; `HÉ !` pour un oiseau |
 
 **Conséquences de jeu.** Un gag peut coûter quelque chose : subir un prout
 augmente la faim de la victime et casse sa jauge de reproduction. C'est ce qui

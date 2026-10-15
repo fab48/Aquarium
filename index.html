@@ -18,13 +18,26 @@
   <!-- Le PENDANT VERTICAL, construit par le même code (`Main.initBarres`) et
        stylé par la même classe : c'est la même barre tournée de 90°. -->
   <div id="depth-bar" class="hud-bar vertical"><div id="depth-marker" class="hud-marker"></div></div>
+  <!-- LA FICHE D'IDENTITÉ (bouton 🔍), sur le côté comme les deux barres. Le
+       balisage est fixe : `IdCard` ne remplace que des textes et la jauge. Le
+       panneau ne capte aucun évènement (hérité de #hud) : le curseur qui le
+       traverse continue de survoler ce qu'il y a dessous. -->
+  <aside id="idcard" aria-hidden="true">
+    <div class="ic-titre">
+      <b class="ic-nom"></b><small class="ic-stade"></small><span class="ic-cible" title="Suivie par la caméra">🎯</span>
+    </div>
+    <div class="ic-sous"><i class="ic-reel"></i><span class="ic-latin"></span></div>
+    <dl class="ic-rows"></dl>
+    <div class="ic-faim" title="Faim : pleine = repu"><span class="ic-faim-v"></span></div>
+    <p class="ic-phrase"></p>
+  </aside>
   <div id="clock">☀️</div>
   <div id="food-bar">
     <button class="food-btn active" data-food="generic" title="Graines standard">🌾</button>
     <button class="food-btn" data-food="plancton_dore" title="Plancton doré">✨</button>
     <button class="food-btn" data-food="micro_crevettes" title="Micro-crevettes">🦐</button>
     <button class="food-btn" data-food="vers_de_sable" title="Vers de sable">🪱</button>
-    <button id="info-btn" title="Fiches d'identité au survol">🔍</button>
+    <button id="info-btn" title="Fiche d'identité de la créature survolée, touchée ou suivie">🔍</button>
     <button id="legend-btn" title="Légende des bulles et des expressions">❔</button>
   </div>
   <!-- RECOMMENCER : volontairement À L'ÉCART de la barre d'action. C'est la

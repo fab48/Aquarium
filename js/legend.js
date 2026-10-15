@@ -41,6 +41,10 @@ const Legend = {
     ['PTUI !', 'le Poisson Archer crache un jet d’eau sur un oiseau : touché, il tombe à l’eau, sonné — et l’archer file le gober'],
     ['un oiseau à plat ventre sur l’eau', 'abattu par un crachat : s’il se réveille avant l’archer, il repart trempé et furieux'],
     ['TOC !', 'le Requin Marteau assomme un crabe d’un coup de tête dans le sable, avant de le manger'],
+    ['WOUHOU !', 'le Dauphin Farceur prend son élan, jaillit hors de l’eau et fait ses galipettes — un à trois tours, nez le premier à la retombée'],
+    ['BONK !', 'en plein bond, le dauphin télescope un oiseau : plumes, l’oiseau tombe à plat ventre, sonné (il ne meurt pas) — le dauphin fait la tête surprise, puis rit'],
+    ['un anneau qui se remplit', 'appui long sur une créature : elle sera saisie. Glissez pour la promener, levez le doigt pour la lâcher'],
+    ['TROP LOURD !', 'un colosse ne se laisse pas attraper : il secoue seulement la tête'],
   ],
 
   // Chaque action du jeu a son émotion attitrée. Tenir cette table à jour :
@@ -72,6 +76,7 @@ const Legend = {
     ['timide (hippocampe, curseur proche)', 'blush'],
     ['hypnotisé par une lampe de poisson-lanterne', 'happy — il nage droit sur la lumière sans plus rien voir'],
     ['le Calamar Géant se sait observé', 'blush — il rentre ses bras en fuseau et n’ose plus bouger'],
+    ['saisi à la main (appui long)', 'scared — œil énorme, bouche en cri, il gigote ; un oiseau, lui, proteste (angry). Lâché, il surprend puis retombe : éclaboussure et ventre à plat'],
   ],
 
   visible: false,

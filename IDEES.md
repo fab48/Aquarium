@@ -44,9 +44,12 @@ Aspirateur, Rascasse Épineuse, Oursin Pic-Pic.
 
 ### Ce qui reste à inventer
 
-- **Requin-marteau** — resté optionnel : `CLAUDE.md` prévient que concentrer
-  plusieurs prédateurs sur une même proie la fait s'effondrer, et le large en
-  compte déjà six.
+- *(plus rien de côté)* — le **Requin-marteau**, longtemps resté optionnel
+  parce que concentrer plusieurs prédateurs sur une même proie la fait
+  s'effondrer, est arrivé le 22 septembre 2026 avec le **Poisson Archer** :
+  ses deux seules proies sont des rampants de fond que personne d'autre n'allait
+  chercher, plafond 3 et métabolisme 0,7 (cf. `FICHES.md` et `CLAUDE.md`). Le
+  roster compte **53 espèces**.
 
 ### Six espèces d'ambiance n'ont pas de gag
 
@@ -85,8 +88,12 @@ Plutôt que d'en créer trois de plus — ce sont des **rôles**, pas des poisso
 
 ### Attractions et spectacles
 
-- **Galipettes du Dauphin hors de l'eau**, avec **télescopage d'oiseaux** en
-  vol (à articuler avec `aerial`, `snatch` et la phase aérienne des sauteurs).
+- ~~**Galipettes du Dauphin hors de l'eau**, avec **télescopage d'oiseaux** en
+  vol~~ — **fait** (`GAGS.dauphin`, `_galipette`) : élan, cabré, détente, 1 à 3
+  tours complets sur un arc balistique (`Entity.move`, `_galVol`), plongeon nez
+  le premier ; l'oiseau sur la trajectoire est assommé (`_telescope`), jamais
+  tué. Reste à faire : `L'heure du spectacle` ci-dessous les enchaînerait en
+  duo avec l'orque.
 
 - **L'heure du spectacle** — à heure fixe du cycle jour/nuit, dauphin et orque se
   rejoignent et enchaînent des sauts synchronisés (`jumps`). Les autres espèces
@@ -137,14 +144,29 @@ Plutôt que d'en créer trois de plus — ce sont des **rôles**, pas des poisso
   ailleurs. Aujourd'hui ce n'est qu'un flag `ink`.
 - **Le rot d'encre.** L'encre doit sortir comme un **rot** mis en scène
   (inspiration, rot, nuage), pas comme un nuage silencieux.
-- **Les oursins sont agglutinés sur la plage.** À mesurer (positions, bande de
-  profondeur, `sitesHabitat`) avant de régler — cf. les règles d'entassement du
-  CLAUDE.md.
-- **Les arêtes** (`Food.bones`) : améliorer leur dessin.
-- **Poisson Archer et Requin Marteau** : vérifier que leurs gags se jouent bien
-  et à la bonne cadence (audit « 53 sur 53 vivantes » à refaire, scène par scène).
-- **Fiche d'identité de la loupe sur le côté**, comme la barre de zone, plutôt
-  qu'au survol de la créature. À arbitrer : lisibilité sur mobile, fiche épinglée.
+- ~~**Les oursins sont agglutinés sur la plage.**~~ — **fait** : leur bande
+  (1 400 px de fond) est saturée de décor, la recherche de place fuyait vers la
+  seule poche vide, côté plage, et `desempile` les recadrait hors de leur bande.
+  Place la plus proche à marge dégressive, bornes par bande, œuf dans le plus
+  grand vide, tas des sauvegardes défait à la restauration — cf. CLAUDE.md,
+  « Une bande étroite ET saturée de décor ».
+- ~~**Les arêtes** (`Food.bones`)~~ — **fait** : crâne à orbite vide et mâchoire,
+  colonne en vertèbres, côtes qui rapetissent vers une queue en éventail, cerne
+  d'encre et reflet ; 12 variantes tirées d'une graine, ombre sur le sable,
+  dissolution qui s'enfonce dans le sable. Pré-rendues (un `drawImage` chacune,
+  ~3× moins cher que le tracé vectoriel). Cf. CLAUDE.md, `food.js`.
+- ~~**Poisson Archer et Requin Marteau**~~ — **fait** (audit du 10 octobre 2026,
+  avec leurs dessins actifs ; détail dans `CLAUDE.md`). 53 espèces sur 53
+  vivantes sur 6 × 12 min, jet qui part de la bouche dessinée, plus de flèche
+  gravée après une riposte interrompue, « TOC ! » au point d'impact, ratés du
+  Marteau à ~5 %, « PTUI ! » ramené sous 0,7/min. **Reste à décider par
+  l'auteur** : une pose `cabre` plus douce pour l'Archer (à pleine visée il est
+  dressé à ~80°), et un repère de planche pour les deux (aucune planche ne les
+  couvre ; `archer.json` a été fait à main levée, `marteau.json` décalqué sur le
+  requin).
+- ~~**Fiche d'identité de la loupe sur le côté**~~ — **fait** (panneau `#idcard`
+  sur le flanc droit, bandeau en bas sous 600 px ; survolée/épinglée, sinon
+  suivie ; cerceau fin sur le sujet). Cf. CLAUDE.md § Contrôles.
 
 ---
 
@@ -153,9 +175,14 @@ Plutôt que d'en créer trois de plus — ce sont des **rôles**, pas des poisso
 - **Canne à pêche** — depuis la surface, lancer une ligne et attraper certains
   poissons de surface. Nouvel outil dans `input.js`, à articuler avec le clic
   « nourrir » existant.
-- **Attraper un poisson à la main** — le joueur saisit une créature (glisser ou
-  maintien), la déplace et la relâche. Pas de la canne : contact direct, avec
-  tactile en tête (cf. `Input.touch*`) ; prévoir la réaction (visage, gigotement).
+- ~~**Attraper un poisson à la main**~~ — **fait** (`js/saisie.js`). Appui long
+  (~0,4 s, un anneau se remplit) sur une créature, souris ou doigt : elle est
+  saisie, suit le curseur au ressort, gigote (horizontalement), et retombe au
+  relâché — éclaboussure et ventre à plat dans l'eau, bonds jusqu'à la mer sur la
+  plage. Un clic bref nourrit toujours ; colosses et décor vivant ne se saisissent
+  pas (« TROP LOURD ! »). Reste ouvert : une **canne à pêche** pour la surface
+  (ci-dessus), et un éventuel **ramassage vers l'inventaire** si la couche
+  économique (§5) arrive.
 
 ---
 
@@ -243,10 +270,10 @@ la population par rapport à sa fourchette saine, en une barre à trois zones
 
 ---
 
-## 6. Le roster (51 espèces)
+## 6. Le roster (53 espèces)
 
-Le tableau ci-dessous est celui des **27 espèces d'origine** ; les 24 ajoutées
-depuis (§1) sont décrites une par une dans **`FICHES.md`**, qui fait autorité.
+Le tableau ci-dessous est celui des **27 espèces d'origine** ; les 26 ajoutées
+depuis (§1, puis le Poisson Archer et le Requin Marteau) sont décrites une par une dans **`FICHES.md`**, qui fait autorité.
 Treize des espèces ci-dessous n'apparaissaient dans aucune liste de souhaits, et
 ce sont elles qui tiennent l'équilibre : elles sont en **gras**.
 

@@ -90,6 +90,14 @@ const Ecosystem = {
     this.desempile();
   },
 
+  // Portion de littoral où une créature POSÉE peut vivre : celle dont le fond
+  // tombe dans sa bande de profondeur, avec le plancher d'eau de tout ce qui se
+  // pose (`size * 3 + 40`). C'est la formule des rampants (`bornesReptation`,
+  // qui ne lit que `def` et est mémoïsée sur la fiche) : une seule source.
+  bornesFond(def) {
+    return Entity.prototype.bornesReptation.call({ def });
+  },
+
   // DÉSEMPILEMENT DES CRÉATURES POSÉES. Elles arrivent par trois chemins qui
   // s'ignorent — la répartition régulière du groupe, les sites d'habitat, et le
   // recadrage aux bornes — et rien ne garantissait le résultat FINAL : relevé
@@ -101,14 +109,29 @@ const Ecosystem = {
   // voisins trop proches, chacun de la moitié du manque. Deux ou trois passes
   // suffisent à répartir une file entière, et ça ne coûte rien — c'est fait une
   // seule fois, sur une centaine d'individus.
-  desempile() {
+  //
+  // `restauration` : appelée par `Save.restaurer`. Une espèce posée ne bouge
+  // jamais, donc un tas déjà gravé dans une sauvegarde y reste à vie — le
+  // correctif de spawn ne répare que les mondes neufs. On ne repose alors QUE
+  // ceux que la passe a déplacés, en leur gardant leur profondeur dans le sable
+  // (la sauvegarde ne retient pas `_sable`) : aligner tout le monde sur la ligne
+  // de contour défairait le quinconce.
+  desempile(restauration = false) {
     for (const id in SPECIES) {
       const def = SPECIES[id];
       if (!POSEES_AU_FOND.has(def.render) && def.movement !== 'fixed') continue;
       const L = this.entities.filter(e => !e.dead && e.speciesId === id);
       if (L.length < 2) continue;
+      if (restauration) {
+        for (const e of L) { e._x0 = e.x; e._dy0 = e.y - (World.floorY(e.x) - def.size * 0.4); }
+      }
       const marge = Math.max(64, def.size * 3.4);
-      const xMin = World.shoreX + 90, xMax = CONFIG.WORLD_WIDTH - 120;
+      // Les bornes sont celles de SA bande de profondeur (`bornesFond`), pas le
+      // seul rivage : un oursin dont le fond valide commence à x = 1 100 était
+      // recadré sur x = 1 070 — hors de sa bande, dans le ressac — et c'est
+      // contre cette borne que le tas se formait.
+      const [bMin, bMax] = this.bornesFond(def);
+      const xMin = Math.max(World.shoreX + 90, bMin), xMax = Math.min(CONFIG.WORLD_WIDTH - 120, bMax);
       for (let passe = 0; passe < 4; passe++) {
         L.sort((a, b) => a.x - b.x);
         let bouge = false;
@@ -122,11 +145,35 @@ const Ecosystem = {
         }
         if (!bouge) break;
       }
+      // Dernier recours : les passes symétriques ne défont PAS un tas collé à une
+      // borne (le voisin de gauche est recadré, donc il ne cède pas, et la moitié
+      // du manque se perd à chaque passe). Un balayage aller-retour garantit
+      // l'écart minimal ; s'il n'y a pas la place, on répartit à parts égales.
+      L.sort((a, b) => a.x - b.x);
+      if ((L.length - 1) * marge > xMax - xMin) {
+        L.forEach((e, i) => { e.x = xMin + (xMax - xMin) * i / (L.length - 1); });
+      } else {
+        for (let i = 0; i < L.length; i++) {
+          const mini = i ? L[i - 1].x + marge : xMin;
+          if (L[i].x < mini) L[i].x = mini;
+        }
+        for (let i = L.length - 1; i >= 0; i--) {
+          const maxi = i < L.length - 1 ? L[i + 1].x - marge : xMax;
+          if (L[i].x > maxi) L[i].x = maxi;
+        }
+      }
       // Chacun se repose sur le sable à sa nouvelle place, et se réancre.
       for (const e of L) {
-        e.y = World.floorY(e.x) - def.size * 0.4 + (e._sable || 0);
-        e.anchorX = e.x; e.anchorY = e.y;
         delete def._bornesRep;
+        if (restauration) {
+          const bouge = Math.abs(e.x - e._x0) >= 0.5;
+          if (bouge) e.y = World.floorY(e.x) - def.size * 0.4 + e._dy0;
+          delete e._x0; delete e._dy0;
+          if (!bouge) continue;
+        } else {
+          e.y = World.floorY(e.x) - def.size * 0.4 + (e._sable || 0);
+        }
+        e.anchorX = e.x; e.anchorY = e.y;
       }
     }
   },
@@ -308,20 +355,46 @@ const Ecosystem = {
           const marge = 70 + def.size * 1.5;
           const occupe = this.entities.filter(o => !o.dead && o.speciesId !== speciesId
             && (SPECIES[o.speciesId].movement === 'fixed' || SPECIES[o.speciesId].refuge));
-          const libre = px => px >= xMin && px <= xMax
-            && occupe.every(o => Math.abs(o.x - px) >= marge)
-            && World.depthAt(px) >= def.depthBand[0] && World.depthAt(px) <= def.depthBand[1];
-          if (!libre(sx)) {
-            let trouve = null;
-            for (let d = marge * 0.5; d < 1400 && trouve === null; d += marge * 0.35) {
-              if (libre(sx + d)) trouve = sx + d;
-              else if (libre(sx - d)) trouve = sx - d;
+          // Les congénères déjà posés comptent aussi : sans eux, tous ceux qui
+          // se faisaient déloger visaient la MÊME place libre.
+          const congeneres = this.entities.filter(o => !o.dead && o.speciesId === speciesId);
+          const margeC = Math.max(64, def.size * 3.4);        // celle de `desempile`
+          const fondMin2 = Math.max(def.depthBand[0], def.size * 3 + 40);
+          const libre = (px, m, mc) => px >= xMin && px <= xMax
+            && World.depthAt(px) >= fondMin2 && World.depthAt(px) <= def.depthBand[1]
+            && occupe.every(o => Math.abs(o.x - px) >= m)
+            && congeneres.every(o => Math.abs(o.x - px) >= mc);
+          // LA PLACE LA PLUS PROCHE DE L'INTENTION, AVEC UNE MARGE QUI SE DESSERRE.
+          // Chercher jusqu'à 1 400 px une place à pleine marge faisait fuir tout
+          // le monde vers la seule poche vide de la bande : pour l'oursin (bande
+          // de 1 400 px, saturée de décor), c'était le haut-fond contre la
+          // plage — 40 % des oursins à moins de 500 px du rivage, au contact les
+          // uns des autres. Une place un peu serrée à côté vaut mieux qu'une
+          // place large à l'autre bout : les paliers cèdent d'abord la marge vis-
+          // à-vis du DÉCOR, puis celle vis-à-vis des congénères.
+          const PALIERS = [[1, 1], [0.7, 1], [0.5, 1], [0.35, 1], [0, 1], [0, 0.7]];
+          const PORTEE = 400;
+          let trouve = null;
+          for (const [k, kc] of PALIERS) {
+            const m = marge * k, mc = margeC * kc;
+            if (libre(sx, m, mc)) { trouve = sx; break; }
+            for (let d = marge * 0.35; d < PORTEE && trouve === null; d += marge * 0.35) {
+              if (libre(sx + d, m, mc)) trouve = sx + d;
+              else if (libre(sx - d, m, mc)) trouve = sx - d;
             }
-            // Un petit décalage final : la recherche en spirale part du même
-            // pas pour tous, donc plusieurs individus atterrissaient EXACTEMENT
-            // sur le même x et s'empilaient à la verticale.
-            if (trouve !== null) sx = trouve + U.rand(-marge * 0.28, marge * 0.28);
+            if (trouve !== null) break;
           }
+          if (trouve === null) {
+            // Rien à portée, même serré : la bande elle-même est loin. On prend la
+            // place valide la plus proche, où qu'elle soit.
+            for (let d = marge * 0.35; d < 1400 && trouve === null; d += marge * 0.35) {
+              if (libre(sx + d, 0, 0)) trouve = sx + d;
+              else if (libre(sx - d, 0, 0)) trouve = sx - d;
+            }
+          }
+          // Un petit décalage final, seulement si on a bougé : plusieurs individus
+          // atterrissaient EXACTEMENT sur le même x et s'empilaient à la verticale.
+          if (trouve !== null) sx = trouve !== sx ? trouve + U.rand(-marge * 0.1, marge * 0.1) : sx;
         }
         const e = new Entity(speciesId, sx, y + U.rand(-50, 50), { groupId });
         // Les espèces de fond se posent sur le sable dès le départ (sinon on les
@@ -618,6 +691,9 @@ const Ecosystem = {
       const a = attrait[p];
       for (const e of this.bySpecies[p] || []) {
         if (e.dead) continue;
+        // Dans la main du joueur (ou en train de retomber) : intouchable, le
+        // temps de la saisie — cf. saisie.js.
+        if (e._saisi || e._lache) continue;
         // `snatch` : le Pélican ne cueille qu'EN PLEIN VOL. Une proie retombée
         // à l'eau ne l'intéresse pas — c'est tout ce qui le distingue du Fou
         // Moustachu, qui plonge dedans.
@@ -653,7 +729,7 @@ const Ecosystem = {
       // Espèce devenue rare : on la laisse tranquille (report de prédation).
       if ((this.counts[p] || 0) <= this.refugeFloor(p)) continue;
       for (const e of this.bySpecies[p] || []) {
-        if (e.dead || e.stage === 'egg') continue;
+        if (e.dead || e.stage === 'egg' || e._saisi || e._lache) continue;
         if (U.dist2(pred.x, pred.y, e.x, e.y) < r2) out.push(e);
       }
     }
@@ -702,6 +778,10 @@ const Ecosystem = {
   },
 
   eat(pred, prey) {
+    // Garde-fou de la saisie : un prédateur qui avait déjà sa cible arrive au
+    // contact d'une proie que le joueur tient (ou qui retombe) — il n'avale
+    // rien. `Saisie.saisir` lui retire sa cible, ceci couvre le dernier pas.
+    if (prey._saisi || prey._lache) return;
     // LA GRANDE SCÈNE DE LA MORT, version gueule ouverte (décision d'auteur :
     // même mangée). Si la proie a un clip « mort », le prédateur SE FIGE et
     // la regarde jouer sa grande scène, les yeux dessus — puis il revient
@@ -849,7 +929,14 @@ const Ecosystem = {
   // naissent au même endroit, elles y restent COLLÉES à vie — relevé avant
   // correction : 86 paires d'oursins et 38 d'étoiles à moins de 40 px, les plus
   // proches à 1 px l'une de l'autre. Tout se joue donc à la ponte.
-  placeLibreAuFond(speciesId, x, marge) {
+  //
+  // `etale` : la place la MOINS PEUPLÉE des environs plutôt que la première
+  // libre. Une spirale « le moins loin possible » collait chaque portée contre
+  // ses parents, donc la lignée grossissait en tas autour de l'endroit où elle
+  // était déjà — et seulement là. Pour une espèce posée (qui ne bougera plus
+  // jamais), on regarde ±900 px et on prend le plus grand vide, avec une légère
+  // préférence pour la proximité : l'œuf part dans le courant, il ne s'empile pas.
+  placeLibreAuFond(speciesId, x, marge, etale = false) {
     // On balaie `entities`, PAS `bySpecies` : cet index exclut les œufs
     // (`buildGrid` les saute) et n'est reconstruit qu'une fois par frame. Deux
     // œufs pondus dans la même frame se posaient donc exactement au même
@@ -858,6 +945,21 @@ const Ecosystem = {
     const memes = [];
     for (const o of this.entities) if (!o.dead && o.speciesId === speciesId) memes.push(o);
     const libre = cx => memes.every(o => Math.abs(o.x - cx) >= marge);
+    if (etale) {
+      const [bMin, bMax] = this.bornesFond(SPECIES[speciesId]);
+      const lo = Math.max(World.shoreX + 90, bMin), hi = Math.min(CONFIG.WORLD_WIDTH - 120, bMax);
+      let best = null, bestScore = -Infinity;
+      for (let d = -900; d <= 900; d += marge * 0.5) {
+        const cx = x + d;
+        if (cx < lo || cx > hi) continue;
+        let proche = Infinity;
+        for (const o of memes) proche = Math.min(proche, Math.abs(o.x - cx));
+        if (proche < marge) continue;
+        const score = Math.min(proche, marge * 3) - Math.abs(d) / 25;
+        if (score > bestScore) { bestScore = score; best = cx; }
+      }
+      if (best !== null) return best;
+    }
     if (libre(x)) return x;
     // Spirale autour du point voulu : on s'éloigne le moins possible, et des
     // DEUX côtés — chercher toujours du même côté aligne toute la portée.
@@ -952,7 +1054,7 @@ const Ecosystem = {
       // Posée au fond : elle ne pourra plus jamais bouger, donc sa place se
       // décide MAINTENANT, à bonne distance de ses congénères.
       const marge = 60 + parent.def.size * 2.2;
-      const spot = this.placeLibreAuFond(parent.speciesId, ox, marge);
+      const spot = this.placeLibreAuFond(parent.speciesId, ox, marge, true);
       if (spot === null) return;                 // le fond est plein : pas de ponte
       egg.x = spot;
       egg.y = World.floorY(spot) - parent.def.size * 0.4 + sableOffset(egg);

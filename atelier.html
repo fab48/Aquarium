@@ -448,7 +448,7 @@ let colEdit = null, colPoint = -1, colHandles = [];
 let clipSel = '';            // le clip ouvert dans la timeline
 let demo = '';               // l'aperçu par défaut en cours (cabre, crash…)
 let attrape = null;     // ce que la souris tient en ce moment
-let filtreTxt = '';     // filtre du rail — 51 espèces, on ne les parcourt plus à l'œil
+let filtreTxt = '';     // filtre du rail — 53 espèces, on ne les parcourt plus à l'œil
 // Le bandeau du bas : les humeurs, ou le MÊME dessin sur plusieurs individus.
 // C'est le seul endroit où se juge une couleur tirée au sort.
 let bandeauMode = 'cles';
@@ -723,7 +723,7 @@ function gabarit(genre) {
 // ---------------------------------------------------------------------------
 // Rail des espèces
 // ---------------------------------------------------------------------------
-// Le rail listait les 51 espèces dans l'ordre de `SPECIES`, ce qui ne dit rien
+// Le rail listait les 53 espèces dans l'ordre de `SPECIES`, ce qui ne dit rien
 // de l'état d'avancement : on cherchait « celles qu'il reste à faire » à l'œil,
 // une par une. Il les RANGE désormais par état, et un filtre coupe la liste dès
 // qu'on sait ce qu'on cherche.
@@ -1059,6 +1059,7 @@ function poser(expr, t, ind = 0, joue = false) {
   // queue des vignettes (`FishBody.raideur` lit `_etire`). La vue Scènes les
   // repose ensuite, sur le seul acteur du grand aperçu.
   e._crispe = 0; e._etire = 0; e._smear = 0; e._chocT = null; e._ecraseT = 0;
+  e._galTuck = 0; e._galAng = null;     // la galipette du dauphin (GAGS.dauphin)
   e._poseMain = null; e._poseTete = null;
   return e;
 }
@@ -1309,6 +1310,21 @@ function jouerGag(e, u, t) {
   else if (r === 'lantern') { e._lureOn = u < 2; e._fondu = u < 2 ? 1 : 1 - k * 0.9; }
   else if (r === 'octopus') e._invisible = k;
   else if (r === 'bird' && e.def.pouch) e._poche = k;
+  else if (e.speciesId === 'dauphin') {
+    // LA GALIPETTE (GAGS.dauphin), sans eau ni gravité : la charge (cabré),
+    // puis deux tours complets repliés en boule, nez le premier à l'arrivée.
+    // `_galAng` est lu par `dessiner` (le jeu le lit dans `Entity.draw`).
+    const c = u < 0.7 ? u / 0.7 : 0;
+    e._crispe = c * c * 0.88;
+    const p = U.clamp((u - 0.7) / 1.7, 0, 1);
+    if (u >= 0.7 && u < 2.4) {
+      const w = p * p * (3 - 2 * p);
+      e._galAng = -0.9 + (0.9 + 1.0) * p + Math.PI * 4 * w;       // trajectoire + 2 tours
+      e._galTuck = Math.pow(Math.max(0, Math.sin(Math.PI * U.clamp((p - 0.08) / 0.78, 0, 1))), 0.8);
+      e._etire = Math.max(0, 1 - (u - 0.7) * 2.2); e._smear = e._etire * 0.85;
+    } else { e._galAng = null; e._galTuck = 0; }
+    e.expression = u < 0.7 ? 'proud' : 'happy'; e._held = true; e.exprTimer = 9;
+  }
   if (e.def.gonflable) e._piquantGonfle = k;   // le Fugu : appliqué par l'aperçu, cf. rendu
 }
 
@@ -1443,6 +1459,9 @@ function dessiner() {
     // Le GONFLEMENT du Fugu est appliqué par `Entity.draw`, pas par le dessin :
     // l'aperçu du gag le reproduit ici, sinon on ne le verrait jamais.
     if (demo === 'gag' && acteur.def.gonflable) { const pk = acteur._piquantK(); ctx.scale(pk, pk); }
+    // La galipette du dauphin : l'angle du corps est piloté par la scène
+    // (`Entity.draw` le lit en jeu), posé ici avant les déformations.
+    if (demo === 'gag' && acteur._galAng != null) ctx.rotate(acteur._galAng);
     FishBody.deformationScene(ctx, acteur, t);
     FishBody.smear(ctx, acteur, t);
     FishBody.rendreScene(ctx, acteur, t);
@@ -4663,7 +4682,7 @@ document.querySelectorAll('#barre button[data-outil]').forEach(b =>
 cablerBarres();
 
 // --- Commandes permanentes (hors panneau, donc câblées une seule fois) -------
-// Le filtre : à 51 espèces réparties en cinq rubriques, chercher « la murène »
+// Le filtre : à 53 espèces réparties en cinq rubriques, chercher « la murène »
 // à l'œil coûtait plus cher que de la taper.
 $('#filtre').addEventListener('input', e => { filtreTxt = e.target.value; rail(); });
 // L'aide occupait les deux tiers de la colonne. Elle est indispensable la

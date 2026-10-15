@@ -298,6 +298,10 @@ const SPECIES = {
     // LA FARCE, jouée en trois temps pour qu'on la COMPRENNE (GDD §12) :
     // 1. il se glisse en douce sous un banc (ralenti, l'air de rien)
     // 2. il jaillit avec un « BOUH ! », le banc explose en tous sens
+    // Et les GALIPETTES (GAGS._galipette) : élan, cabré, bond hors de l'eau,
+    // 1 à 3 tours complets, plongeon — avec télescopage d'oiseaux en vol.
+    // Rien à déclarer ici : la scène lit `breathes`/`souffle` (il a respiré en
+    // sautant) et les oiseaux (`aerial`), et n'ajoute aucun flag.
     gag: (e, dt, t) => GAGS.dauphin(e, dt, t),
   },
 
@@ -970,7 +974,12 @@ const SPECIES = {
     // rampants à plafond 14, et à quatre, gros mangeurs, ils vidaient le
     // Bernard-l'Ermite jusqu'à son plancher en quatre minutes.
     schooling: false, groupSize: [2, 2], popCap: 3, metabolism: 0.7,
-    prey: ['crabe', 'bernard'], marteau: true, missChance: 0.2, senseRange: 1100, grazes: true,
+    // missChance 0,08 : le raté est son gag (la tête dans le sable) mais il
+    // coûte 2,5 à 4 s d'étourdissement et un second coup de tête. Mesuré à
+    // 22 % avec 0,2 (9 ratés sur 41 coups, 3 × 12 min) alors que le contrat
+    // du CLAUDE.md est « moins de 10 % » : 0,2 est un taux de raté de gag
+    // fréquent, pas d'un requin qui fait son métier.
+    prey: ['crabe', 'bernard'], marteau: true, missChance: 0.08, senseRange: 1100, grazes: true,
     colors: ['#8e9aa6'],
     bodyRatio: 0.34, tail: 'shark', fin: true, render: 'hammer', boucheStyle: 'gueule',
     sizeVar: 0.08,

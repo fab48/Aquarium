@@ -44,11 +44,13 @@ const CADENCE = {
   echo:       0.4,
   fusee:      0.4,
   baille:     0.4,
-  crachat:    0.7,   // le Poisson Archer abat un oiseau. Nominal relevé : mesuré
+  crachat:    0.6,   // le Poisson Archer abat un oiseau. Nominal relevé : mesuré
                      //   à 0,4, il ne partait que 0,14/min — un archer sur deux
                      //   se fait manger par le Cormoran avant la fin de son
                      //   cooldown (~20 min par individu), et il ne tire que
-                     //   s'il a un oiseau à portée.
+                     //   s'il a un oiseau à portée. Puis 0,7 → 0,6 (10 octobre) :
+                     //   avec le public toujours là, 3 × 12 min de simulation
+                     //   donnent 0,53/min réalisé, au-dessus de la cible.
   toc:        0.4,   // la bulle « TOC ! » du Requin Marteau (le coup, lui, suit la chasse)
   // SCÈNE
   ninja:      1,     // était à 21/min
@@ -59,11 +61,30 @@ const CADENCE = {
   demenage:   0.8,
   ventouse:   0.8,
   glouglou:   1,
+  galipette:  0.8,   // le bond du Dauphin, vrille et télescopage compris : une
+                     //   scène visible, silencieuse hors d'une seule bulle.
+                     //   Mesuré à 0,9 nominal : 0,7 / 0,8 / 0,8 / 1,1 par minute
+                     //   sur quatre graines de 10 min — d'où 0,8.
   soin:       1.2,   // un peu plus : il rend un service à l'écosystème
   figure:     4,     // par BANC, pas par individu (cf. `cadenceBanc`)
   // VIVANT
   perle:      2,
   chapardage: 1,
+};
+
+// LA GALIPETTE DU DAUPHIN (GAGS.dauphin) — les réglages d'une scène qui se
+// joue en l'air, donc en unités PHYSIQUES : gravité en px/s², hauteur en
+// multiples de la longueur du corps (2 × size). Une hauteur lisible, c'est
+// 1,5 à 3 longueurs au-dessus de la ligne d'eau ; la gravité est celle qui
+// donne 1,3 à 1,8 s de temps de vol — assez pour 1 à 3 tours que l'œil suit,
+// pas assez pour que le bond se traîne.
+const GALIPETTE = {
+  g: 640,                       // gravité de la phase aérienne
+  hMin: 130, hMax: 250,         // apex au-dessus de l'eau (≈ 1,5 à 3 longueurs de 84)
+  profondeur: 560,              // colonne d'eau exigée sous l'élan ET la retombée
+  elan: [225, 255],             // profondeur du point de départ du bond
+  oiseaux: ['goeland', 'moustachu', 'cormoran', 'pelican'],
+  maxTouches: 2,                // la foule se borne : deux oiseaux par bond
 };
 
 const GAGS = {
@@ -265,10 +286,21 @@ const GAGS = {
 
   // 3. il se plie de rire sur place, en tournant sur lui-même
   dauphin(e, dt, t) {
-    e._farceCd = (e._farceCd ?? Ecosystem.cadence(e, CADENCE.bouh)) - GAGS._tic(e, dt);
+    // `_tic` encaisse la coupe franche du peps (`_pepsCoup`) : UN SEUL appel
+    // par frame, partagé par les deux scènes du dauphin — le second aurait
+    // trouvé le canal déjà vidé.
+    const tic = GAGS._tic(e, dt);
+    e._farceCd = (e._farceCd ?? Ecosystem.cadence(e, CADENCE.bouh)) - tic;
+    // La GALIPETTE a son propre cooldown, étalé au premier tirage (sinon tous
+    // les dauphins démarrent la partie avec le même et la scène n'existerait
+    // qu'après plusieurs minutes). Une scène en cours pilote tout, y compris
+    // le visage : la farce attend.
+    e._galCd = (e._galCd ?? Ecosystem.cadence(e, CADENCE.galipette) * U.rand(0.1, 1)) - tic;
+    if (e._galPh) { GAGS._galipette(e, dt, t); return; }
     const ph = e._farcePh;
 
     if (!ph) {
+      if (e._galCd <= 0 && GAGS._galDepart(e, dt)) return;
       if (e._farceCd > 0 || e.state === 'hunt' || e.state === 'flee') return;
       if (!GAGS._enVue(e)) return;               // le public d'abord
       // Il cherche une victime, et un DORMEUR vaut dix fois mieux qu'un banc
@@ -345,6 +377,336 @@ const GAGS = {
     if (e._farceT > 2.4) {
       e._farcePh = null; e._farceCible = null; e._farceRoll = 0;
       e._farceCd = Ecosystem.cadence(e, CADENCE.bouh);
+    }
+  },
+
+  // ===========================================================================
+  // LA GALIPETTE (et le télescopage d'oiseaux) — la seconde scène du Dauphin.
+  // ===========================================================================
+  // « Ils sautent hors de l'eau, tout le monde le sait. » Cinq temps :
+  //   élan     — il file sous la surface vers son point de départ (~240 px de
+  //              fond), à bonne vitesse ;
+  //   charge   — il s'arrête net, se COMPRIME et se dresse (`_crispe`, le
+  //              cabré — l'anticipation, l'air fier tenu) : on comprend
+  //              qu'il va se passer quelque chose ;
+  //   bond     — la détente : `_etire` + `_smear` d'un coup, il file droit
+  //              vers la surface et la crève à ~60° ;
+  //   vrille   — au-dessus de l'eau, un VRAI arc balistique (gravité, pas un
+  //              ressort ; cf. Entity.move, `_galVol`) pendant lequel le
+  //              corps fait 1 à 3 tours COMPLETS sur lui-même, replié en boule
+  //              (`_galTuck`), la tête en bas étant ici voulue ;
+  //   plongeon — la rotation s'achève pile quand il retouche l'eau, nez en
+  //              premier, étiré comme une flèche : splash, ride, bulles.
+  //
+  // Le TÉLESCOPAGE n'est pas une option mais une suite possible : un oiseau
+  // qui se trouve sur la trajectoire est heurté — assommé (il tombe à plat
+  // ventre comme un oiseau abattu par l'Archer, `_telescope`), jamais tué, et
+  // le dauphin fait la tête surprise puis rit. Trois choses l'encadrent :
+  // deux oiseaux au plus par bond, un oiseau déjà sonné n'est pas retouché, et
+  // le dauphin ne mange pas : la prédation n'est pas touchée (l'oiseau
+  // télescopé ne porte pas `_abattu`, donc l'Archer ne le prend pas pour un
+  // repas). Une seule bulle par bond : « WOUHOU ! » à l'apex, ou « BONK ! » à
+  // l'impact — le reste se lit sur les visages et les plumes.
+  //
+  // Départ : en vue (le public d'abord), cooldown de `CADENCE.galipette`,
+  // jamais deux dauphins à la fois, jamais sans 560 px d'eau sous l'élan et la
+  // retombée et 420 px de couloir libre. Il peut VISER l'oiseau le plus proche
+  // en vue (hauteur lisible, à portée horizontale) ; sinon, galipette simple.
+  _galOiseau(e) {
+    let best = null, bd = Infinity;
+    for (const id of GALIPETTE.oiseaux) {
+      for (const o of Ecosystem.bySpecies[id] || []) {
+        if (o.dead || o.stage === 'egg' || o._abattu > 0 || o._telescope > 0) continue;
+        if (o.state === 'dizzy' || o.state === 'hunt') continue;   // un piqueur n'y sera plus
+        const h = CONFIG.SURFACE_Y - o.y;
+        if (h < 70 || h > 235) continue;                           // hauteur atteignable
+        const dx = Math.abs(o.x - e.x);
+        if (dx < 100 || dx > 650) continue;
+        if (!GAGS._enVue(o, 60)) continue;
+        if (dx < bd) { bd = dx; best = { o, h }; }
+      }
+    }
+    return best;
+  },
+
+  // Les tours suivent la hauteur : plus de temps de vol, plus de tours.
+  _galTours(H) {
+    const r = Math.random();
+    return H < 165 ? (r < 0.85 ? 1 : 2) : H < 205 ? (r < 0.5 ? 1 : 2) : (r < 0.5 ? 2 : 3);
+  },
+
+  _galDepart(e, dt) {
+    // Le test est rejoué deux fois par seconde, pas à chaque frame : il balaie
+    // les oiseaux et les colosses.
+    e._galRetry = (e._galRetry ?? 0) - dt;
+    if (e._galRetry > 0) return false;
+    e._galRetry = 0.5;
+    if (e.stage !== 'adult' || e.state !== 'wander') return false;
+    if (e._surfacing || e._replonge || e._saisi || e._ecraseT > 0 || e._chew > 0
+        || e._freeze > 0 || e._lureT > 0 || e._matingWith) return false;
+    // Un dauphin qui a faim chasse : la prochaine frame de `think` lui
+    // donnerait l'état `hunt` (au-delà de 0,45) et la scène avorterait sous
+    // l'eau — du travail pour rien, et des demi-élans qui se voient.
+    if (e.hunger > 0.38) return false;
+    if (e.y > CONFIG.SURFACE_Y + 1000) return false;
+    if (!GAGS._enVue(e)) return false;                    // le public d'abord
+    for (const o of Ecosystem.bySpecies.dauphin || []) {  // un seul congénère en scène
+      if (o !== e && !o.dead && (o._galPh || o._farcePh)) return false;
+    }
+    const cible = Math.random() < 0.75 ? GAGS._galOiseau(e) : null;
+    const lim = e.limiteLarge();
+    let dir;
+    if (cible) dir = cible.o.x >= e.x ? 1 : -1;
+    else if (e.x < lim + 1100) dir = 1;                   // jamais vers la plage
+    else if (e.x > CONFIG.WORLD_WIDTH - 1100) dir = -1;
+    else dir = e._facing < 0 ? -1 : 1;
+    // Le fond sous l'élan ET sous la retombée : le plongeon fait ~150 px de
+    // profondeur de plus, et la barrière du rivage est dure en vol.
+    const xb = cible ? cible.o.x + dir * 120 : e.x + dir * 450;
+    const xe = U.clamp(xb, lim, CONFIG.WORLD_WIDTH - 120);
+    const prof = (x) => World.floorY(x) - CONFIG.SURFACE_Y;
+    if (Math.min(prof(e.x), prof((e.x + xe) / 2), prof(xe)) < GALIPETTE.profondeur) return false;
+    if (dir < 0 && e.x - lim < 400) return false;
+    if (GAGS._couloirLibre(e, dir) < 420) return false;
+
+    const H = cible ? U.clamp(cible.h * 1.15 + 25, GALIPETTE.hMin, GALIPETTE.hMax)
+                    : U.rand(GALIPETTE.hMin, GALIPETTE.hMax);
+    const n = GAGS._galTours(H);
+
+    e._galPh = 'elan'; e._galT = 0; e._galDir = dir; e._galH = H; e._galN = n;
+    e._galCible = cible ? cible.o : null;
+    e._galTouches = 0; e._galBulle = false; e._galRit = 0;
+    e._galAirT = 0; e._galEntreT = 0; e._galSorti = false; e._galApex = false; e._galPlonge = false;
+    e._galPy = CONFIG.SURFACE_Y + U.rand(GALIPETTE.elan[0], GALIPETTE.elan[1]);
+    e._galPx = e.x;
+    e._galX = e.x; e._galY = e._galPy;
+    // Le cooldown repart DÈS le départ : une scène avortée compte aussi, sinon
+    // un dauphin qui échoue à chaque essai rejouerait sa tentative sans fin.
+    e._galCd = Ecosystem.cadence(e, CADENCE.galipette);
+    return true;
+  },
+
+  // Remet TOUT à zéro, quelle que soit la phase : les canaux de scène
+  // (`_crispe`/`_etire`/`_smear`) ne doivent jamais rester gravés sur lui.
+  _galFin(e) {
+    e._galPh = null; e._galVol = null; e._galX = null; e._galY = null;
+    e._galAng = null; e._galTuck = 0; e._galCible = null; e._galRit = 0;
+    e._crispe = 0; e._etire = 0; e._smear = 0;
+    if (e.jumpState === 'air') e.jumpState = 'water';
+    if (e._faceAt && e._faceAt._gal) e._faceAt = null;
+    // Les tours cumulés ne doivent pas rester dans `_tilt` : le lissage du
+    // rendu le ramènerait vers l'horizontale en REFAISANT les tours à l'envers
+    // (interruption en plein vol, p. ex. une saisie).
+    if (e._tilt != null) e._tilt = Math.atan2(Math.sin(e._tilt), Math.cos(e._tilt));
+    e.release();
+  },
+
+  _galLance(e) {
+    const g = GALIPETTE.g, dir = e._galDir, S = CONFIG.SURFACE_Y;
+    let H = e._galH;
+    const D = Math.max(60, e.y - S);
+    let vh = dir * U.rand(190, 270);
+    // La visée est RÉSOLUE ICI, avec les positions du moment (l'oiseau a volé
+    // pendant l'élan et la charge). Un oiseau n'est pas à altitude constante
+    // (±70 px/s en vertical, mesuré) : la hauteur du bond est ajustée à la
+    // hauteur PRÉDITE de l'oiseau au moment de le croiser, et le croisement
+    // est placé à l'apex (là où le dauphin monte à peine, donc où une erreur
+    // de hauteur pardonne) ou sur la montée s'il vole plus bas. Hors de la
+    // plage de vitesses crédibles, c'est une galipette simple.
+    const c = e._galCible;
+    let vise = false;
+    if (c && !c.dead && !(c._abattu > 0) && !(c._telescope > 0) && c.state !== 'dizzy') {
+      let T = 1.0, hb = S - c.y;
+      for (let k = 0; k < 4; k++) {
+        hb = S - (c.y + (c.vy || 0) * T);               // hauteur prédite à T
+        H = U.clamp(hb + 8, GALIPETTE.hMin, GALIPETTE.hMax);
+        const vy = Math.sqrt(2 * g * H);
+        const ta = hb >= H ? vy / g : (vy - Math.sqrt(vy * vy - 2 * g * Math.max(0, hb))) / g;
+        T = D / vy + ta;
+      }
+      const besoin = (c.x + (c.vx || 0) * T - e.x) / T;
+      if (hb > 40 && hb <= GALIPETTE.hMax + 10 && Math.sign(besoin) === dir
+          && Math.abs(besoin) >= 110 && Math.abs(besoin) <= 400) {
+        vh = besoin; vise = true;
+        e._galH = H; e._galN = GAGS._galTours(H);       // les tours suivent la nouvelle hauteur
+      }
+    }
+    if (!vise) e._galCible = null;
+    const vy = Math.sqrt(2 * g * e._galH);
+    e._galAng0 = e._tilt ?? 0;
+    e._galAng = e._galAng0;               // la prise de contrôle de l'angle, sans à-coup
+    e._galTair = 2 * vy / g;
+    e._galT = 0; e._galAirT = 0;
+    e._galVol = { g, air: false, entre: false };
+    e._galX = null; e._galY = null; e._faceAt = null; e._freeze = 0;
+    e.vx = vh; e.vy = -vy;                // d'un coup : le ressort CLAQUE
+    e.jumpState = 'air';                  // exempte du plafond et de l'échouage
+    e._crispe = 0; e._etire = 1; e._smear = 0.9;
+    e.evenement('saut');                  // le dessin peut avoir SA cabriole
+    e.emote('happy', e._galTair + 1.0, false);   // tient tout le vol, retombée douce après
+    e._galPh = 'vol';
+  },
+
+  // Le heurt d'un oiseau : assommé, projeté, plumes — jamais mortel.
+  _galTelescope(e, o) {
+    e._galTouches++;
+    o._telescope = U.rand(3.5, 6);        // chute À PLAT VENTRE puis il flotte
+    o.assomme(null, true);                // vrille + yeux KO (état `dizzy`)
+    o.stateTimer = o._telescope + 0.2;    // `dizzy` dure jusqu'au réveil du vol
+    o.vx = e.vx * 0.5 + U.rand(-35, 35);
+    o.vy = Math.min(e.vy * 0.5, -40);     // projeté, puis il retombe
+    (o._evite || (o._evite = {})).dauphin = Main.time + 90;   // la rancune
+    for (let i = 0; i < 7; i++) {          // les plumes, réutilisation de `scale`
+      Particles.spawn({ type: 'scale', x: o.x + U.rand(-8, 8), y: o.y + U.rand(-8, 8),
+        color: i % 3 ? '#f7f3ea' : '#d9d2c2', r: U.rand(2.2, 3.6), rot: Math.random() * 6,
+        vx: U.rand(-90, 90) + e.vx * 0.2, vy: U.rand(-110, -10), life: U.rand(0.9, 1.5) });
+    }
+    e.choc(0.55, 'x');                    // le heurt : il se tasse comme de la gelée
+    e.vx *= 0.9;
+    e.emote('surprise', 0.6, false);      // la tête surprise…
+    e._galRit = 0.6;                      // …puis il rit (cf. _galipette)
+    if (!e._galBulle) {
+      e._galBulle = true;
+      Particles.shout(o.x, o.y - o.size * 1.2, 'BONK !', '#fff', e.size);
+    }
+  },
+
+  _galipette(e, dt, t) {
+    const ph = e._galPh, dir = e._galDir;
+    e._galT += dt;
+
+    // --- Sous l'eau : élan et charge. Toute interruption referme la scène. ---
+    if (ph === 'elan' || ph === 'charge') {
+      if (e.state !== 'wander' || e._saisi || e._ecraseT > 0 || e._surfacing || e._replonge) {
+        GAGS._galFin(e);
+        return;
+      }
+      if (ph === 'elan') {
+        const c = e._galCible;
+        if (c && (c.dead || c._abattu > 0 || c._telescope > 0 || c.state === 'dizzy'
+                  || Math.abs(c.x - e.x) > 1100)) e._galCible = null;
+        if (e._galCible) {
+          // Le point de départ SUIT l'oiseau : une seconde de vol et ~240 px
+          // de course, derrière lui dans le sens du bond.
+          e._galPx = U.clamp(c.x + (c.vx || 0) * 1.0 - dir * 240,
+                             e.limiteLarge() + 260, CONFIG.WORLD_WIDTH - 250);
+        }
+        e._galX = e._galPx; e._galY = e._galPy;
+        if (U.dist2(e.x, e.y, e._galX, e._galY) < 50 * 50 || e._galT > 7) {
+          e._galPh = 'charge'; e._galT = 0; e._galX = null; e._galY = null;
+        }
+        return;
+      }
+      // charge : il s'arrête, se comprime, se dresse nez en l'air
+      e._freeze = 0.3;
+      const k = U.clamp(e._galT / 0.75, 0, 1);
+      e._crispe = k * k * 0.88;
+      e.hold('proud');
+      e._faceAt = { x: e.x + dir * 300, y: e.y - 280, _gal: true };
+      if (e._galT >= 0.75) GAGS._galLance(e);
+      return;
+    }
+
+    // --- Bond, vrille, plongeon : la balistique est dans Entity.move. ---
+    const v = e._galVol;
+    if (!v || e._saisi || e.dead) { GAGS._galFin(e); return; }
+    // Rien d'autre ne le décide en l'air : ni sieste (la nuit), ni chasse, ni
+    // fuite. Un `dizzy` posé par quelqu'un d'autre est laissé tel quel.
+    if (e.state !== 'wander' && e.state !== 'dizzy') {
+      e.state = 'wander'; e.target = null; e.targetFood = null; e.release();
+    }
+    e._freeze = 0;
+    if (v.air) e._galAirT += dt;
+    const u = v.air ? U.clamp(e._galAirT / e._galTair, 0, 1) : 0;
+
+    // Sortie de l'eau : une gerbe, une seule fois.
+    if (v.air && !e._galSorti) {
+      e._galSorti = true;
+      Particles.splash(e.x);
+      Particles.burst(e.x, CONFIG.SURFACE_Y, '#cfe9ff', 8);
+    }
+    // L'apex : le moment clé de la scène — la bulle. Visé sur un oiseau, c'est
+    // le heurt qui parlera (« BONK ! ») ; sinon le cri de joie.
+    if (v.air && !e._galApex && e.vy >= 0) {
+      e._galApex = true;
+      if (!e._galBulle && !e._galCible) {
+        e._galBulle = true;
+        Particles.shout(e.x, e.y - e.size * 1.5, 'WOUHOU !', '#fff', e.size);
+      }
+    }
+
+    // L'angle du corps : la trajectoire (nez vers l'avant du bond, vers le haut
+    // à la montée, vers le bas à la retombée) PLUS les tours de la vrille.
+    // `fpa` positif = nez en bas dans le repère miroité, donc la rotation
+    // croissante est une galipette AVANT à droite comme à gauche. Les tours
+    // sont cumulés tels quels et valent exactement 2πn à la retombée : le
+    // corps y est identique à la trajectoire, aucun saut visible.
+    const fpa = Math.atan2(e.vy, Math.max(40, Math.abs(e.vx)));
+    let ang;
+    if (!v.air) {
+      // Avant la sortie : on rejoint la trajectoire en 0,2 s depuis l'angle du
+      // cabré (clampé à la bride de visée), sans à-coup.
+      ang = fpa + (e._galAng0 - fpa) * (1 - U.clamp(e._galT / 0.2, 0, 1));
+    } else if (!v.entre) {
+      const w = U.clamp((u - 0.05) / 0.9, 0, 1);
+      const s = w * w * (3 - 2 * w);
+      ang = fpa + Math.PI * 2 * e._galN * s;
+    } else {
+      // Rentré : il se redresse doucement, l'eau a pris sa vitesse.
+      ang = fpa * (1 - U.clamp(e._galEntreT / 0.7, 0, 1));
+    }
+    e._galAng = ang;
+
+    // Squash & stretch : la boule au milieu des tours, la flèche au départ
+    // (le ressort qui claque) et à l'entrée (nez le premier).
+    e._galTuck = (v.air && !v.entre)
+      ? Math.pow(Math.max(0, Math.sin(Math.PI * U.clamp((u - 0.08) / 0.78, 0, 1))), 0.8) : 0;
+    let etire = Math.max(0, 1 - e._galT * 2.2);
+    if (v.air && !v.entre) etire = Math.max(etire, U.clamp((u - 0.8) / 0.2, 0, 1) * 0.8);
+    if (v.entre) etire = Math.max(0, (e._etire ?? 0) * Math.exp(-6 * dt));
+    e._etire = etire;
+    e._smear = etire * 0.85;
+
+    // Le télescopage : tout oiseau dans l'ellipse du corps, deux au plus.
+    if (v.air && !v.entre && e._galTouches < GALIPETTE.maxTouches) {
+      for (const id of GALIPETTE.oiseaux) {
+        for (const o of Ecosystem.bySpecies[id] || []) {
+          if (o.dead || o.stage === 'egg' || o._abattu > 0 || o._telescope > 0 || o.state === 'dizzy') continue;
+          const R = e.size * 0.95 + o.size * 0.65;
+          if (U.dist2(e.x, e.y, o.x, o.y) > R * R) continue;
+          GAGS._galTelescope(e, o);
+          if (e._galTouches >= GALIPETTE.maxTouches) break;
+        }
+        if (e._galTouches >= GALIPETTE.maxTouches) break;
+      }
+    }
+    // …puis il rit, une fois la surprise passée.
+    if (e._galRit > 0) {
+      e._galRit -= dt;
+      if (e._galRit <= 0) e.emote('laughing', 1.8, false);
+    }
+
+    // Retombée : la gerbe, la ride, les bulles du plongeon, et il a respiré.
+    if (v.entre) {
+      if (!e._galPlonge) {
+        e._galPlonge = true;
+        Particles.splash(e.x);
+        Particles.splash(e.x + dir * e.size * 0.6);
+        for (let i = 0; i < 4; i++) {
+          Particles.bubble(e.x + U.rand(-8, 8), CONFIG.SURFACE_Y + 14 + i * 12, U.rand(2.5, 5));
+        }
+        e._air = U.rand(25, 40);
+        if (!e._galTouches) e.emote('proud', 1.4, false);
+        // Visé et manqué : pas d'apex criant, c'est ici que part la bulle.
+        if (!e._galBulle) {
+          e._galBulle = true;
+          Particles.shout(e.x, e.y - e.size * 1.5, 'WOUHOU !', '#fff', e.size);
+        }
+      }
+      e._galEntreT += dt;
+      if (Math.hypot(e.vx, e.vy) < 120 || e._galEntreT > 1.0) GAGS._galFin(e);
+    } else if (e._galT > 9) {
+      GAGS._galFin(e);                       // garde-fou : jamais suspendu
     }
   },
 
@@ -1613,6 +1975,12 @@ const GAGS = {
     // quinze premières minutes de la partie.
     e._crachatCd = (e._crachatCd ?? Ecosystem.cadence(e, CADENCE.crachat) * U.rand(0.05, 1))
                  - GAGS._tic(e, dt);
+    // Le demi-tour de la riposte ne dure que le temps du tir : après, il fuit
+    // dans le sens où il nage, et pas à reculons (cf. `_riposte`).
+    if (e._riposteFace > 0) {
+      e._riposteFace -= dt;
+      if (e._riposteFace <= 0 && !e._arPh) e._faceAt = null;
+    }
     // Sa proie s'est réveillée avant qu'il arrive : elle est repartie en l'air.
     if (e.state === 'hunt' && e.target && !(e.target._abattu > 0)) {
       e.state = 'wander'; e.target = null;
@@ -1636,7 +2004,7 @@ const GAGS = {
   // tirer. Quatre fois sur cinq, le plongeur prend le jet en pleine figure, repart
   // sonné et trempé, et l'archer s'en sort. Ce n'est pas une scène de
   // calendrier : elle suit la chasse, donc elle reste silencieuse (le jet, pas
-  // de bulle) sauf une fois sur quatre.
+  // de bulle) sauf une fois sur dix, devant le public.
   _riposte(e, dt) {
     e._riposteCd = (e._riposteCd ?? 0) - dt;
     if (e._riposteCd > 0 || e.state === 'dizzy') return;
@@ -1647,15 +2015,22 @@ const GAGS = {
       e._riposteCd = U.rand(6, 10);
       if (Math.random() < 0.2) return;             // trop tard : il a paniqué
       const T = 0.18, g = 420;
-      const bx = e.x, by = e.y - e.size * 0.3;
+      // Le jet part de la BOUCHE, tournée vers le plongeur : il peut arriver
+      // par-derrière, et un jet sorti du museau d'un poisson qui regarde ailleurs
+      // lui traverserait le corps. Il se retourne le temps du tir (`_riposteFace`).
+      const [bx, by] = GAGS._boucheArcher(e, c.x >= e.x ? 1 : -1, c);
+      e._faceAt = { x: c.x, y: c.y }; e._riposteFace = 0.35;
       const vx = (c.x - bx) / T, vy = (c.y - by) / T - 0.5 * g * T;
       for (let i = 0; i < 5; i++) {
         const k = 1 - i * 0.05;
         Particles.spawn({ type: 'jet', de: e.id, x: bx, y: by, vx: vx * k, vy: vy * k, g,
           r: 3.2 - i * 0.3, life: T * 2 });
       }
-      if (Math.random() < 0.25) Particles.shout(e.x, e.y - e.size * 1.6, 'PTUI !', '#dff4ff', 22);
-      e._faceAt = null;
+      // La bulle est RARE (une fois sur dix) et réservée à ce qu'on regarde :
+      // la riposte arrive ~1,4 fois par minute, soit plus que la scène
+      // elle-même. À une sur quatre, elle doublait le budget de « PTUI ! »
+      // (1,0/min mesuré pour une cible de 0,3–0,5).
+      if (Math.random() < 0.1 && GAGS._enVue(e)) Particles.shout(e.x, e.y - e.size * 1.6, 'PTUI !', '#dff4ff', 22);
       e.emote('smug', 1.6);
       c.assomme(null, true);
       c.wet = 3;
@@ -1683,9 +2058,38 @@ const GAGS = {
     return best;
   },
 
+  // Où est la BOUCHE de l'archer, en coordonnées monde, pour que le jet en
+  // sorte vraiment. Trois choses la déplacent, et la première seule ne
+  // suffisait pas : l'ancre du dessin (sa grande gueule est loin du museau
+  // procédural), le SENS de nage, et l'INCLINAISON — quand il vise un oiseau
+  // haut dans le ciel il est dressé à 40-60°, et la bouche monte de la moitié
+  // de sa longueur : un jet parti du centre sortait du ventre. `vers` : la
+  // cible, dont on déduit l'inclinaison que `Entity.draw` va prendre (l'angle
+  // d'un `_faceAt`, bridé comme lui par le gabarit) plutôt que celle qui
+  // traîne encore du frame précédent — le lissage ne la rattrape qu'en 8 frames.
+  _boucheArcher(e, dir, vers) {
+    const sp = e.def.sprite && Sprites.get(e.def.sprite);
+    let u = e.size * 0.9, v = -e.size * 0.3;        // la silhouette procédurale
+    if (sp && sp.bouche) {
+      const k = FishBody.echelleSprite(sp, e);
+      u = (sp.bouche.x - sp.cx) * k; v = (sp.bouche.y - sp.cy) * k;
+    }
+    let a = e._tilt || 0;
+    if (vers) {
+      const visee = U.clamp(1.7 - e.def.size * 0.045, 0.32, 1.4);
+      a = U.clamp(Math.atan2(vers.y - e.y, Math.abs(vers.x - e.x)), -visee, visee);
+    }
+    const c = Math.cos(a), s = Math.sin(a);
+    return [e.x + dir * (u * c - v * s), e.y + u * s + v * c];
+  },
+
   _archerFin(e) {
     e._arPh = null; e._arCible = null; e._faceAt = null;
-    e._diveTargetY = null; e._crispe = 0;
+    // LES DEUX CANAUX, pas un seul : le cormoran qui plonge (ou n'importe quel
+    // choc) peut interrompre la scène PENDANT le vol du jet, alors que `_etire`
+    // vaut encore 0,5 — et rien d'autre ne le remet à zéro. Mesuré avant :
+    // un archer resté étiré (flèche gravée) plus de six minutes.
+    e._diveTargetY = null; e._crispe = 0; e._etire = 0;
     e.release();
   },
 
@@ -1704,13 +2108,7 @@ const GAGS = {
       // PTUI. Visée anticipée : là où l'oiseau SERA quand le jet arrivera.
       // Le jet part de la BOUCHE : celle du dessin s'il y en a un (sa grande
       // gueule en galoche est loin du museau procédural), sinon la place d'avant.
-      const dir = e._facing >= 0 ? 1 : -1;
-      const sp = e.def.sprite && Sprites.get(e.def.sprite);
-      let bx = e.x + dir * e.size * 0.9, by = e.y - e.size * 0.3;
-      if (sp && sp.bouche) {
-        const k = FishBody.echelleSprite(sp, e);
-        bx = e.x + dir * (sp.bouche.x - sp.cx) * k; by = e.y + (sp.bouche.y - sp.cy) * k;
-      }
+      const [bx, by] = GAGS._boucheArcher(e, c.x >= e.x ? 1 : -1, c);
       let T = U.clamp(Math.hypot(c.x - bx, c.y - by) / 650, 0.28, 0.75);
       const vx = (c.x + c.vx * T - bx) / T;
       const g = 420;

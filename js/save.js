@@ -67,8 +67,12 @@ const Save = {
         if (!groupes.has(e.groupId)) groupes.set(e.groupId, groupes.size);
         g = groupes.get(e.groupId);
       }
+      // Une créature tenue à la main (ou en chute) est écrite sur une position
+      // VALIDE : restaurée dans l'air ou sur la plage, le plafond de surface et
+      // le mur de rivage la téléporteraient au premier tick (cf. saisie.js).
+      const pos = (e._saisi || e._lache) ? Saisie.positionSure(e) : null;
       (pop[e.speciesId] || (pop[e.speciesId] = []))
-        .push([Math.round(e.x), Math.round(e.y), e.stage === 'adult' ? 1 : 0, g]);
+        .push([Math.round(pos ? pos[0] : e.x), Math.round(pos ? pos[1] : e.y), e.stage === 'adult' ? 1 : 0, g]);
     }
     const data = {
       v: this.VERSION,
@@ -156,6 +160,11 @@ const Save = {
       if (Ecosystem.countSpecies(speciesId) < 2) Ecosystem.spawnGroups(speciesId, 1);
       repeuplees++;
     }
+
+    // Les créatures posées ne bougent jamais : un tas gravé par une ancienne
+    // version (les oursins agglutinés au rivage) resterait à vie. On le défait
+    // à la restauration — seuls ceux qui se touchent sont déplacés.
+    Ecosystem.desempile(true);
 
     Main.time = Number.isFinite(d.t) ? d.t : 0;
     if (Array.isArray(d.cam)) {

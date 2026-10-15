@@ -67,9 +67,11 @@ Son script était aussi à l'envers — l'élément partait `hidden` et n'était
 qu'en local, donc la moindre erreur avant cette ligne le laissait invisible
 partout. C'est le masquage qui est conditionnel, pas l'affichage.
 
-**Le rail de gauche** liste les 51 espèces — il lit `SPECIES`, donc toute espèce
-ajoutée au jeu y apparaît d'elle-même. Un 🎨 signale les 30 qui ont leur dessin
-dans la planche de design (§1 bis). Pastille verte = un dessin est actif,
+**Le rail de gauche** liste les 53 espèces — il lit `SPECIES`, donc toute espèce
+ajoutée au jeu y apparaît d'elle-même. Un 🎨 signale les 51 qui ont leur dessin
+dans la planche de design (§1 bis) ; le Poisson Archer et le Requin Marteau, plus
+récents que les planches, n'en ont pas — ils sont dessinés (`archer.json`,
+`marteau.json`) et rangés sous « dessin actif ». Pastille verte = un dessin est actif,
 orange = brouillon non enregistré, grise = silhouette procédurale.
 
 Il ne les liste plus dans l'ordre de `SPECIES`, qui ne dit rien de
@@ -80,7 +82,7 @@ la liste, tenue à jour toute seule, des espèces qui n'ont encore rien. On la
 cherchait jusqu'ici à l'œil, une espèce après l'autre.
 
 Un **filtre** coupe la liste dès qu'on sait ce qu'on cherche (nom rigolo, nom
-latin ou identifiant) : à 51 espèces réparties en cinq rubriques, taper
+latin ou identifiant) : à 53 espèces réparties en cinq rubriques, taper
 « murène » coûte moins cher que de la repérer.
 
 La rubrique **« dessins non rattachés »** liste tout fichier présent dans
@@ -103,7 +105,7 @@ d'où le recadrage automatique au changement).
 | Bouton | Ce qu'il fait |
 |---|---|
 | Nouveau dessin | document vide, pour dessiner de zéro |
-| Partir de la silhouette du jeu | rejoue la silhouette procédurale et la convertit en formes éditables — utilisable sur les 51 espèces, sans aucun outil externe |
+| Partir de la silhouette du jeu | rejoue la silhouette procédurale et la convertit en formes éditables — utilisable sur les 53 espèces, sans aucun outil externe |
 | Importer un SVG… | n'importe quel dessin vectoriel (Illustrator, Inkscape, le poseur d'ancrages) |
 | Importer un JSON… | un document d'atelier déjà commencé |
 
@@ -133,7 +135,8 @@ du design, elle, est **référencée par son chemin** (§1 bis).
 
 ## 1 bis. Les planches du design, posées toutes seules
 
-Deux planches couvrent maintenant **les 51 espèces** — `Design Final.png`, cinq
+Deux planches couvrent maintenant **51 espèces sur 53** (le Poisson Archer et le
+Requin Marteau sont arrivés après, sans repère) — `Design Final.png`, cinq
 colonnes de six pour les 30 premières, et `Design Final page2.png`, cinq colonnes
 de cinq pour les 21 qui n'avaient encore aucun dessin de référence. Chacune
 déclare dans `decoupe_planche.py` sa grille, l'ordre de ses cases et le sens de
@@ -304,7 +307,7 @@ embarquée, donc on ne la retrouve plus.
   qui ondulait.
 - **🙂 Visage** — tout ce qui concerne le visage commun, qui était jusqu'ici
   éparpillé (la taille de l'œil au milieu des ancres) ou inexistant (sa forme,
-  ses couleurs). C'est pourtant le seul élément que les 51 espèces partagent.
+  ses couleurs). C'est pourtant le seul élément que les 53 espèces partagent.
   Trois réglages :
   - **taille** de l'œil et de la bouche. L'ancre `eye` est un **cercle** dont on
     tire la poignée ; la bouche a le sien, qui la règle **indépendamment** —

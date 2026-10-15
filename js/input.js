@@ -1,5 +1,6 @@
 // Entrées. Séparation stricte des rôles pour ne pas mélanger nourrir et explorer :
-//   clic GAUCHE      = nourrir / bulles (jamais de déplacement de caméra)
+//   clic GAUCHE      = nourrir / bulles (jamais de déplacement de caméra) ;
+//                      APPUI LONG sur une créature = la saisir (cf. saisie.js)
 //   clic MOLETTE     = déplacer la vue (drag)
 //   souris aux BORDS = défilement automatique de la vue
 //   molette          = zoom · shift+molette = pan vertical
@@ -62,6 +63,9 @@ const Input = {
       } else if (e.button === 0) {
         // Clic gauche : uniquement nourrir / faire des bulles
         this.holding = true; this.holdTimer = 0; this.moved = false;
+        // Le point d'appui, sans attendre un pointermove : la saisie (cf.
+        // saisie.js) vise ce qui est sous le curseur dès la première frame.
+        this.mx = e.clientX; this.my = e.clientY;
       }
     });
 
@@ -161,6 +165,9 @@ const Input = {
     }
     if (this.pointers.size !== 1) return;
     this.mx = e.clientX; this.my = e.clientY;
+    // Une créature tenue au doigt (cf. saisie.js) : le doigt la PROMÈNE, il ne
+    // déplace pas la vue — `mx`/`my` suffisent, Saisie.update la suit.
+    if (typeof Saisie !== 'undefined' && Saisie.tient()) return;
     // Un tap qui dérive de plus de 14 px devient un déplacement de la vue
     if (!this.touchPan && Math.hypot(e.clientX - this._downX, e.clientY - this._downY) > 14) {
       this.touchPan = true; this.holding = false;
@@ -279,7 +286,9 @@ const Input = {
     if (this.holding && !this.touchPan && !this.pinch) {
       this.holdTimer += dt;
       // Clic (ou doigt) maintenu → bulles continues (GDD §8)
-      if (this.holdTimer > 0.35) {
+      // Pas de bulles quand l'appui vise une créature : c'est la saisie qui
+      // s'amorce (anneau), tient la créature ou secoue un colosse — cf. saisie.js.
+      if (this.holdTimer > 0.35 && !(typeof Saisie !== 'undefined' && Saisie.occupe())) {
         const [wx, wy] = Camera.toWorld(this.mx, this.my);
         if (World.isUnderwater(wx, wy) && Math.random() < 0.7) Particles.bubble(wx, wy);
       }

@@ -1981,6 +1981,12 @@ const FishBody = {
       ctx.scale((1 - crispe * 0.16) / ressort, (1 + crispe * 0.1) * ressort);
     }
     if (etire > 0.01) ctx.scale(1 + etire * 0.4, 1 - etire * 0.24);
+    // LA BOULE (`_galTuck`, 0→1) — le corps se REPLIE pendant les tours de la
+    // galipette (GAGS.dauphin) : plus court, plus rond, à volume presque
+    // conservé. Un corps rigide qui tourne se lit comme un bâton lancé ; c'est
+    // le ramassé qui fait la vrille.
+    const boule = U.clamp(e._galTuck ?? 0, 0, 1);
+    if (boule > 0.01) ctx.scale(1 - boule * 0.2, 1 + boule * 0.17);
     if (e._chocT != null) {
       const k = (e._chocAmp ?? 1) * Math.exp(-5 * e._chocT) * Math.cos(11 * e._chocT);
       if (e._chocAxe === 'y') ctx.scale(1 + k * 0.35, 1 - k * 0.42);

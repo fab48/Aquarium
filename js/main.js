@@ -47,6 +47,7 @@ const Main = {
 
     Input.init(this.canvas);
     Legend.init();
+    IdCard.init();
     this.initBarres();
     this.initResetBtn();
 
@@ -88,18 +89,24 @@ const Main = {
     this.lastFrame = ts;
     this.time += dt;
     const t = this.time;
+    const tSim = performance.now();     // compteur de la touche F (cf. fps.js)
 
     Input.update(dt);
     Camera.update(dt);
+    IdCard.update(dt);        // la fiche de la loupe (panneau HTML, cf. idcard.js)
     // Position MONDE du curseur, calculée une seule fois par frame : chaque
     // petit poisson la recalculait (en allouant un tableau) dans move(), et
     // chaque créature au repos dans updateEyeLook().
     Input.wmx = Input.mx / Camera.zoom + Camera.x;
     Input.wmy = Input.my / Camera.zoom + Camera.y;
+    // La saisie (cf. saisie.js) : après le curseur monde, avant l'écosystème —
+    // la créature tenue est déjà à sa place quand la grille est reconstruite.
+    Saisie.update(dt);
     Food.update(dt);
     Ecosystem.update(dt, t);
     Particles.update(dt);
     Save.update(dt);          // sauvegarde périodique (cf. save.js)
+    const tDessin = performance.now();
 
     const ctx = this.ctx;
     const s = this.dpr * Camera.zoom;
@@ -112,6 +119,7 @@ const Main = {
     // derrière un banc ou un rocher, on croit que le clic n'a rien fait.
     Food.drawGraines(ctx);
     Particles.draw(ctx);
+    Saisie.draw(ctx, t);        // l'anneau qui se remplit sous un appui long
 
     // Cerceau autour de la créature suivie, pour savoir qui la caméra piste
     if (Camera.follow && !Camera.follow.dead) {
@@ -124,20 +132,16 @@ const Main = {
       ctx.setLineDash([]);
     }
 
-    // Overlay HUD : en pixels écran (non zoomé)
+    // Cerceau fin autour de la créature dont parle la fiche (survolée ou
+    // épinglée ; la suivie a déjà le sien, doré, juste au-dessus).
+    IdCard.dessinerCerceau(ctx);
+
+    // Overlay HUD : en pixels écran (non zoomé). La fiche d'identité n'y est
+    // plus dessinée : c'est un panneau HTML sur le côté (cf. idcard.js).
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    // La fiche de la créature SUIVIE (double-clic) reste affichée tant que la
-    // loupe est active : on l'a choisie pour la regarder vivre, la perdre dès
-    // que le curseur glisse ailleurs n'avait aucun sens. Le survol en ajoute
-    // une seconde, décalée pour ne pas la recouvrir.
-    if (Input.hoverInfo) {
-      let zone = null;
-      const suivie = Camera.follow;
-      if (suivie && !suivie.dead) zone = IdCard.draw(ctx, suivie, null, true);
-      if (Input.hovered && Input.hovered !== suivie) IdCard.draw(ctx, Input.hovered, zone);
-    }
 
     this.updateHUD();
+    Fps.mesure(ts, tDessin - tSim, performance.now() - tDessin);
     this.adaptResolution(ts);
     requestAnimationFrame(ts2 => this.frame(ts2));
   },

@@ -74,6 +74,64 @@ html, body {
   left: -3px; height: 3px; width: 28px; margin-top: -1.5px;
   transition: top .1s linear;
 }
+/* LA FICHE D'IDENTITÉ (🔍) : un panneau ancré sur le bord DROIT, juste à gauche
+   de la jauge de profondeur — comme les deux barres, elle fait partie du HUD et
+   ne se pose plus sur l'aquarium. `pointer-events: none` (hérité de #hud) : le
+   curseur qui la traverse continue de survoler les créatures dessous.
+   Le texte est replié par le navigateur : « Mange » et « Mangé par » listent
+   jusqu'à cinq espèces, que le canvas devait tronquer. */
+#idcard {
+  position: absolute; right: 46px; top: 58px; width: 284px;
+  max-height: calc(100dvh - 150px); overflow: hidden; box-sizing: border-box;
+  padding: 11px 13px 12px; border-radius: 12px;
+  background: rgba(8,26,44,.92); border: 1.5px solid rgba(255,255,255,.28);
+  color: rgba(255,255,255,.92); font: 12px/1.35 "Segoe UI", system-ui, sans-serif;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,.4));
+  opacity: 0; transform: translateX(14px); visibility: hidden;
+  transition: opacity .25s ease, transform .25s ease, visibility 0s linear .25s,
+              right .2s ease;
+}
+#idcard.on {
+  opacity: 1; transform: none; visibility: visible;
+  transition: opacity .2s ease, transform .2s ease, visibility 0s, right .2s ease;
+}
+/* Doré : c'est la créature que la caméra suit (même teinte que son cerceau) */
+#idcard.suivie { border-color: rgba(255,215,94,.85); border-width: 2.5px; padding: 10px 12px 11px; }
+/* La légende (❔) occupe le même flanc : la fiche se range à sa gauche */
+#idcard.a-cote { right: 424px; }   /* légende : 34 + ~374 de large + 16 d'air */
+/* Trop étroit pour les deux côte à côte : la légende, ouverte exprès, gagne */
+@media (max-width: 760px) {
+  #idcard.a-cote { opacity: 0; visibility: hidden; }
+}
+#idcard .ic-titre { display: flex; align-items: baseline; gap: 8px; }
+#idcard .ic-nom { font-size: 15px; color: #ffd75e; }
+#idcard .ic-stade { font-size: 12px; color: #8fd8f5; }
+#idcard .ic-cible { display: none; margin-left: auto; font-size: 13px; }
+#idcard.suivie .ic-cible { display: inline; }
+#idcard .ic-sous { margin-top: 1px; font-size: 11.5px; color: rgba(255,255,255,.5); }
+#idcard .ic-latin { margin-left: 7px; color: rgba(143,216,245,.65); }
+#idcard .ic-rows {
+  /* Colonne des libellés à la largeur du plus long (« Déplacement ») : une
+     largeur fixe se faisait déborder par la police agrandie du tactile. */
+  display: grid; grid-template-columns: max-content 1fr; gap: 3px 9px;
+  margin: 9px 0 0; padding: 0;
+}
+#idcard dt { color: rgba(255,255,255,.5); }
+#idcard dd { margin: 0; overflow-wrap: anywhere; }
+#idcard .ic-faim {
+  margin-top: 9px; height: 6px; border-radius: 3px; overflow: hidden;
+  background: rgba(255,255,255,.15);
+}
+#idcard .ic-faim-v {
+  display: block; width: 100%; height: 100%; border-radius: 3px;
+  background: #7fe08a; transform-origin: left center;
+}
+#idcard .ic-phrase {
+  margin: 9px 0 0; font: italic 12.5px/1.3 "Segoe UI", system-ui, sans-serif;
+  color: rgba(255,215,94,.9);
+}
+#idcard .ic-phrase[hidden] { display: none; }
+
 #food-bar {
   position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
   display: flex; gap: 8px; pointer-events: auto;
@@ -182,4 +240,37 @@ html, body {
               font-size: 9px; line-height: 18px; letter-spacing: .02em; }
   #zone-bar .seg { line-height: 18px; }
   #zone-marker { height: 25px; }
+  /* Au doigt, la fiche est un peu plus grande (elle l'était déjà : ×1,35). */
+  #idcard { font-size: 13px; }
+  #idcard .ic-nom { font-size: 16px; }
+  #idcard .ic-sous { font-size: 12px; }
+  #idcard .ic-phrase { font-size: 13px; }
+}
+
+/* Petits écrans (téléphone en portrait, fenêtre étroite) : sur 375 px un flanc
+   de 284 px mangerait tout l'aquarium. La fiche passe donc en BANDEAU posé en
+   bas, au-dessus de la barre d'action, sur toute la largeur — à gauche de la
+   jauge de profondeur, qui reste libre. La légende, elle aussi plein flanc, la
+   remplace tant qu'elle est ouverte. */
+@media (max-width: 600px) {
+  #idcard {
+    left: 8px; right: 34px; top: auto; bottom: 68px; width: auto;
+    max-height: 48dvh; padding: 9px 11px 10px;
+    transform: translateY(12px);
+  }
+  #idcard.suivie { padding: 8px 10px 9px; }
+  #idcard.a-cote { right: 34px; opacity: 0; visibility: hidden; }
+  #idcard .ic-rows { gap: 2px 8px; margin-top: 7px; }
+  #idcard .ic-faim, #idcard .ic-phrase { margin-top: 7px; }
+}
+
+/* Écran bas (téléphone en paysage) : la fiche doit tenir dans les ~300 px
+   disponibles sans rien couper — on resserre l'interligne. */
+@media (max-height: 520px) {
+  #idcard { top: 50px; max-height: calc(100dvh - 70px); font-size: 11.5px; line-height: 1.25;
+            padding: 8px 11px 9px; }
+  #idcard .ic-nom { font-size: 14px; }
+  #idcard .ic-rows { gap: 1px 8px; margin-top: 6px; }
+  #idcard .ic-faim, #idcard .ic-phrase { margin-top: 6px; }
+  #idcard .ic-phrase { font-size: 11.5px; }
 }

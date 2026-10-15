@@ -6,7 +6,8 @@ cycle de vie, nourriture favorite). Le roster en compte aujourd'hui **53**, le
 GDD en décrivait 24, et les **deux planches de design** en couvrent 51
 (`Assets/Concepts/Design Final.png` puis `… page2.png`, découpées en repères
 par `decoupe_planche.py`) — le Poisson Archer et le Requin Marteau, arrivés
-après, n'ont pas encore de dessin de référence.
+après, n'ont pas de repère de planche mais ont leur dessin
+(`Assets/archer.json`, `Assets/marteau.json`, activés au manifeste).
 
 ## Stack
 
@@ -92,21 +93,47 @@ affiche autre chose que le jeu.
 Molette = zoom (centré curseur) · clic molette/droit = déplacer la vue · souris
 au bord de l'écran = défilement · clic gauche = nourrir/bulles (jamais de
 déplacement) · **double-clic sur une créature = la caméra la suit** (cerceau doré ;
-double-clic dans le vide ou déplacement manuel pour la relâcher) · bouton 🔍 =
-fiches d'identité au survol · bouton ❔ = légende.
+double-clic dans le vide ou déplacement manuel pour la relâcher) · **appui long
+(~0,4 s, sans bouger) sur une créature = la saisir** : un anneau se remplit, elle
+suit le curseur, on la relâche en levant le bouton (`js/saisie.js`) · bouton 🔍 =
+fiche d'identité **sur le côté** de la créature survolée, touchée ou suivie ·
+bouton ❔ = légende · **touche F = compteur de performance** en bas à droite
+(`js/fps.js` : fps, sim/dessin en ms, créatures, dpr et plafond de cadence
+d'`adaptResolution` — rien n'est mesuré tant qu'il est caché).
 
 **Tactile** (`Input.touchDown/touchMove/touchUp/tap`) : tap = nourrir · glissé
-1 doigt = déplacer la vue · pincement = zoom · double-tap = suivre · avec la
+1 doigt = déplacer la vue · pincement = zoom · double-tap = suivre · **appui long
+d'un doigt posé SUR une créature = la saisir** (le doigt la promène au lieu de
+déplacer la vue ; un second doigt la relâche et pince) · avec la
 loupe, tap sur une créature = fiche **épinglée** (pas de survol au doigt). Le
 défilement par les bords est coupé en mode tactile. Pièges vérifiés dans
 [PERFORMANCE.md](PERFORMANCE.md) §4 : `touch-action` ne s'hérite pas (posé sur
 `#game`), `setPointerCapture` peut jeter, et un doigt perdu sans `pointerup` se
 purge sur `lostpointercapture` — sinon pincement fantôme.
 
-Avec la loupe active, la créature **suivie garde sa fiche affichée** en
-permanence (liseré doré + 🎯, comme son cerceau) et le survol en ajoute une
-seconde, décalée pour ne pas la recouvrir (`IdCard.draw(ctx, e, eviter,
-epinglee)` renvoie son propre rectangle). Le rayon de survol a un **minimum en
+**La fiche d'identité est un panneau du HUD SUR LE CÔTÉ**, comme les deux barres
+(`#idcard`, `IdCard.update`, bouton 🔍) — plus une bulle posée près de la
+créature, qui la masquait, se décalait pour éviter sa voisine et clignotait dès
+que le poisson bougeait. Une **seule** fiche à la fois : la créature survolée
+(souris) ou **épinglée** (tap — au doigt `Input.hovered` EST l'épingle), à
+défaut la **suivie** (bordure dorée + 🎯, comme son cerceau). Le survol passe
+devant la suivie et celle-ci revient dès que le curseur la quitte : on n'a pas
+à lâcher sa créature pour en lire une autre. Le sujet est signalé sur le canvas
+par un cerceau fin (`IdCard.dessinerCerceau` : blanc pour la survolée, la suivie
+garde son cerceau doré pointillé). Ancrage : flanc **droit**, juste à gauche de
+la jauge de profondeur ; la légende ouverte la repousse à sa gauche ; sous
+600 px de large elle devient un **bandeau en bas**, au-dessus de la barre
+d'action (la légende la masque alors). La fiche garde l'écran 0,4 s après la
+perte du sujet (`IdCard.HOLD`) puis s'efface en fondu. Pas de canvas : le
+navigateur replie le texte (« Mange » / « Mangé par » listent jusqu'à cinq
+espèces) et rien n'est retouché tant que rien ne change — champs d'espèce
+mémoïsés (`IdCard.statique`), valeurs vivantes (position, état, faim) relues à
+4 Hz et écrites seulement si elles diffèrent, jauge par `transform`. Le panneau
+est `pointer-events: none` : le curseur qui le traverse continue de survoler ce
+qui est dessous. Pour mesurer son fondu, `transition: none` et des `update(dt)`
+manuels : un panneau d'aperçu masqué gèle rAF et les transitions CSS.
+
+Le rayon de survol a un **minimum en
 pixels écran** (`Input.RAYON_SURVOL`, 34 px) et une **hystérésis** : la créature
 déjà survolée est conservée dans un rayon 1,7× plus large. Sans ces deux règles
 une crevette (7 px de monde) se visait au pixel près et sa fiche clignotait dès
@@ -122,6 +149,8 @@ qu'elle bougeait.
 - `camera.js` — scroll bi-axial borné par le triangle (impossible d'atteindre les abysses près de la plage).
 - `particles.js` — socle feedback réutilisable : splash, nuage de sable, bulles, sillage, **bulles d'action comiques** (`Particles.comic/hearts/stars`).
 - `food.js` — graines (4 types dont favoris), arêtes des morts (charogne) et **cacas** (`Food.poops`). Le caca ressemble assez à une grosse graine pour qu'un poisson affamé s'y trompe — et il le paye (`Entity.malaise`).
+  **Les arêtes** (`Food.addBone(x, y, taille, graine?)`) sont des **sprites pré-rendus** : `spriteArete(variante, k, R)` dessine une fois (hors écran, `willReadFrequently:false`) chacune des 12 variantes × 6 paliers de taille × la résolution écran courante (`_resolutionArete`, hystérésis, cache vidé seulement quand R change), et le jeu ne fait plus qu'un `drawImage` + une ombre par arête (60 arêtes : 7,9 → 2,5 ms mesurés par différence). Variante, sens, écart de taille (±8 %) et phase de balancement sortent **d'une graine** par `_hashArete`, comme `Entity.color` de l'identifiant — rien à stocker, stable d'une frame à l'autre. Les détails suivent le palier (vertèbres dès 1, dents/opercule dès 1,8, fêlure dès 3). Le cerne et le cœur des traits ont un **plancher en pixels monde**, sinon une arête de 0,7 n'a plus que des fils.
+  Posée, elle épouse la pente du sable (`pente`, lissée par `rot`) et porte une ombre à plat ; sa ligne de sol suit sa taille (`pied`). Elle ne s'éteint pas d'un coup : sur ses 12 dernières secondes elle **s'enfonce dans le sable en rapetissant** (smoothstep, alpha 0 pile à 45 s — pas de claquement).
 - `fishbody.js` — rendu cartoon procédural. **Système yeux/SOURCILS/bouche commun** partagé par toutes les silhouettes.
 
 ### Émotions
@@ -521,7 +550,7 @@ Les VFX restent throttlés par individu (`_vfxCd`).
     est presque horizontale sur 2 400 px et ne suffit pas (mesuré : 196 px sous
     la surface sans elle, 91 avec, pour 80 visés).
 - `legend.js` — panneau HTML (bouton ❔) expliquant chaque bulle de BD et chaque expression. **À tenir à jour** quand on ajoute un gag ou une émotion.
-- `idcard.js` — fiche d'identité au survol (régime, prédateurs, jauge de faim). « Mangé par » est **déduit** des tables `prey`, donc rien à ressaisir en ajoutant une espèce.
+- `idcard.js` — fiche d'identité, panneau HTML sur le côté (`#idcard`) : `champs(e)` calcule les champs (régime, prédateurs, jauge de faim), `update(dt)` choisit le sujet et n'écrit dans le DOM que ce qui change (cf. « Contrôles »). « Mangé par » est **déduit** des tables `prey`, donc rien à ressaisir en ajoutant une espèce.
 - `ecosystem.js` — spawn par groupes, prédation, ponte, **grille spatiale** (`neighbors()` — à utiliser pour toute recherche de voisinage, jamais une boucle sur `entities`), plafonds de population (`popCap`), report de prédation (`refugeFloor`), immigration.
 
 ## Équilibre de l'écosystème
@@ -847,7 +876,7 @@ proie est d'abord assommée, mangée ensuite. Le détail est dans FICHES.md.
 - **La riposte et la rancune.** Le Cormoran mange l'Archer — c'est son seul
   prédateur. Sans défense, il en mangeait **1,38/min**, presque tout ce qui
   naissait. L'archer lui crache donc au visage quand il plonge sur lui
-  (`GAGS._riposte`, silencieuse sauf une fois sur quatre), et un cormoran
+  (`GAGS._riposte`, silencieuse sauf une fois sur dix, devant le public), et un cormoran
   sonné garde **rancune** 90 s (`pred._evite[espèce]`, lu par
   `nearestPreyFor` — générique, réutilisable). La riposte seule ne suffisait
   pas : il replongeait dès qu'il reprenait ses esprits. Après : **0,41/min**,
@@ -877,6 +906,82 @@ Deux corrections sont sorties de là :
 
 Validé sur 14,5 min : **53 espèces sur 53 vivantes**, Marteau 1 repas/min,
 bulle « TOC ! » 0,48/min.
+
+**Audit du 10 octobre 2026, AVEC les dessins actifs** (`archer.json`,
+`marteau.json` ; rendus vérifiés à gauche et à droite, sprite et silhouette
+procédurale, par la colonne et le visage commun). Les scènes se jouent et se
+voient — rien ne manquait côté `gagsDuCorps` : ni l'Archer ni le Marteau ne
+portent d'accessoire dans leur silhouette (leurs seuls canaux, `_crispe`,
+`_etire` et `choc`, sont génériques). Quatre choses se sont pourtant révélées :
+
+- **Le jet partait du centre du corps**, pas de la bouche. Corrigé :
+  `GAGS._boucheArcher(e, dir, vers)` — ancre `mouth` du dessin, sens de nage ET
+  inclinaison. Cette dernière compte : l'archer qui vise un oiseau à 190 px de
+  haut est dressé à ~45°, et la bouche monte de la moitié de sa longueur. On
+  lit l'inclinaison que `Entity.draw` va prendre (l'angle d'un `_faceAt`, bridé
+  par le gabarit) plutôt que `_tilt`, que le lissage ne rattrape qu'en huit
+  frames. La riposte au Cormoran en profite : l'archer se retourne le temps du
+  tir (`_riposteFace`, 0,35 s) — le plongeur arrive souvent par-derrière, et le
+  jet lui traversait le corps.
+- **Une flèche gravée dans le poisson.** `_archerFin` ne remettait à zéro que
+  `_crispe` ; si le Cormoran interrompait la scène pendant le VOL du jet
+  (`_etire` = 0,5), le canal restait à 0,5 pour toujours : un archer étiré
+  pendant plus de six minutes, relevé en simulation (7 119 frames sur une
+  seed). Les deux canaux sont remis à zéro ; vérifié par une scène interrompue
+  (`flee` et `dizzy` pendant le vol) avant/après : 0,5 → 0.
+- **« TOC ! » éclatait derrière le requin** (`this.x + this.size`, sans le sens)
+  dès qu'il nageait vers la gauche. Il part maintenant du point d'impact.
+- **Deux cibles de cadence dépassées.** `missChance` du Marteau à 0,2 donnait
+  **22 % de ratés** (9 coups sur 41, 3 × 12 min) pour un contrat de « moins de
+  10 % » : 0,08 → 1 raté sur 20 coups. Et « PTUI ! » à **0,67–1,00/min** pour
+  une cible de 0,3–0,5 : la riposte (1,4/min, soit plus que la scène) émettait
+  sa bulle une fois sur quatre. Elle est à une sur dix et réservée à ce qu'on
+  regarde (`_enVue`) ; `CADENCE.crachat` passe de 0,7 à 0,6.
+
+Mesuré après, 3 seeds × 12 min (`dt` 1/20, caméra sur tout le monde : le
+public est toujours là, donc c'est la borne haute des cadences) :
+**53 espèces sur 53 vivantes**, zéro mort de faim, zéro NaN, zéro nageur hors
+de l'eau (une seule frame sur 6 seeds, avant la correction), **résidus `_crispe`/`_etire`/`_smear` à 0**,
+aucun empilement exact (distance minimale entre archers 19–24 px au relevé,
+entre marteaux 120–250 px). Archer : 4 à 7 tirs par 12 min (**0,47/min**),
+15 touchés sur 17, **tous les oiseaux comestibles abattus ont été mangés**
+(14 sur 14 ; le Pélican, hors menu, tombe sans être mangé), 0,25–0,33 archer
+mangé par le Cormoran par minute (riposte : 12 à 21 par 12 min). Marteau :
+0,3–0,6 repas/min, « TOC ! » 0,17–0,33/min, 1 raté sur 20. Le renoncement sur
+proie réfugiée est vérifié (`isNearRefuge` forcé : « sad » puis `wander`, aucun
+auto-assommé, aucun re-ciblage en boucle).
+
+À savoir, sans que ce soit une panne : la **cohorte de départ** de l'Archer
+(8 adultes d'âge tiré dans [0 ; 0,6 × longévité]) s'éteint presque d'un bloc
+vers la 7ᵉ–10ᵉ minute — plancher de 2 à 4 individus sur 8, remonté par la ponte
+(8 à 11 œufs par 10 min) et l'immigration. Le Marteau (plafond 3) passe
+régulièrement à un seul individu en fin de fenêtre, et passe ~20 % de son temps
+en migration vers sa frayère `shallow`. Côté dessin : à pleine compression
+(`_crispe` 0,7) la visée + le cabré par défaut dressent l'archer à près de 80° ;
+si l'auteur veut plus doux, c'est une pose `cabre` à dessiner dans l'atelier
+(l'archer n'en a pas, il joue celle par défaut).
+
+### Les galipettes du Dauphin : un arc balistique, pas un ressort (octobre 2026)
+
+`GAGS._galipette` : élan → charge (cabré `_crispe`) → bond (`_etire` + `_smear`,
+vitesse posée d'un trait) → 1 à 3 tours → plongeon nez le premier. L'arc est un
+VRAI vol libre (`Entity.move`, `_galVol`, gravité 640 px/s²), sans strate ni
+plafond ; l'eau le freine en exponentielle à la rentrée, sinon `maxSpeed` le
+clouait net à 500 px/s. **L'angle est piloté** (`_galAng`, lu par `Entity.draw`)
+= trajectoire + 2π·n·smoothstep, CUMULÉ sans jamais être ramené dans ±π (un
+lissage ferait refaire les tours à l'envers) ; `tilt` vit dans le repère
+miroité, donc croissant = galipette AVANT des deux côtés (vérifié, sprite et
+silhouette procédurale, le visage tourne avec le corps). `_galTuck` replie le
+corps en boule. **Le télescopage pose `_telescope`, PAS `_abattu`** : l'Archer ne
+retient que les `_abattu`, un oiseau heurté n'est donc jamais un repas (20
+mangés en 70 min, tous abattus par l'Archer). La visée est résolue AU LANCEMENT
+sur la hauteur PRÉDITE de l'oiseau (il bouge de ±70 px/s : sans ça, tout
+ratait). Trois pièges : un dauphin affamé passe en `hunt` dans la foulée
+(départ interdit au-delà de 0,38), la nuit il s'endormait en plein élan
+(`respire` couvre `_galPh`), et le caca partait en plein bond. Mesuré sur
+7 × 10 min : **0,6 à 1,1 scène/min**, 0,8 en moyenne (nominal 0,9, ramené à 0,8), apex 1,5 à 3
+longueurs, vol 1,3–1,8 s, **0,64 oiseau télescopé/min**, 0 oiseau mort du heurt
+(un pélican est mort de vieillesse 9 s après), 0 NaN, 0 résidu de canal, **53 espèces sur 53 vivantes**.
 
 ### LA CADENCE DE L'AQUARIUM : peu de gags, et rares
 
@@ -1287,6 +1392,26 @@ refusait la ponte quand le score total dépassait un seuil — quand tous les
 herbiers étaient à portée du parent, la pénalité suffisait à tout bloquer et
 les hippocampes tombaient à 2 individus. Le refus ne porte que sur
 l'**occupation** du meilleur site.
+
+### Une bande étroite ET saturée de décor : le tas se forme à la borne (oursins)
+
+« Les oursins sont agglutinés sur la plage. » Leur bande `[80, 1000]` ne couvre
+que ~1 400 px de fond (x 1 100 → 2 500), déjà occupés par le décor fixe. La
+recherche d'une place « à 85 px de tout le décor » courait jusqu'à 1 400 px et
+trouvait la seule poche vide — côté plage —, puis `desempile` recadrait le tout
+sur `shoreX + 90`, **hors de leur propre bande**, où des passes symétriques ne
+défont pas un tas collé à une borne. Mesuré sur 30 mondes neufs, avant : 7,5
+oursins sur 16 à moins de 500 px du rivage, 6,4 paires à moins de 40 px
+(empilements exacts, 1,3 dans le ressac), écart max 399 px. Correctif générique
+pour toute espèce posée : place **la plus proche de l'intention, marge qui se
+desserre par paliers** (décor d'abord, congénères ensuite, portée 400 px) ;
+`desempile` borné par `bornesFond(def)` + balayage aller-retour ; l'œuf d'une
+espèce posée va dans **le plus grand vide à ±900 px** (`placeLibreAuFond(…,
+etale)`) ; et `Save.restaurer` rappelle `desempile(true)`, car un tas gravé dans
+une sauvegarde ne bouge plus jamais. Après : écart min 64 px, 0 empilement,
+0 dans le ressac, 3,6 sur 16 près du rivage, écart max 165 px — et sur 25 min
+avec descendance, 0 paire à moins de 64 px (oursin, coquillage, anémone,
+corail, rascasse).
 
 ### Les grands fonds
 
@@ -1736,15 +1861,20 @@ sable 12 % → 4,3 %.
   elle occupait les deux tiers de la colonne ; un calque s'**éteint**
   provisoirement (👁 / Isoler), réglage de travail jamais enregistré, mais qui
   doit passer par `decalerCalques()` comme toute autre liste d'indices ; et le
-  rail range les 51 espèces **par état** d'avancement, pas dans l'ordre de
+  rail range les 53 espèces **par état** d'avancement, pas dans l'ordre de
   `SPECIES`, avec un filtre — la rubrique « sans dessin de référence » est la
   liste, tenue à jour toute seule, de ce qu'il reste à dessiner (vide depuis
-  la seconde planche, elle contient de nouveau le Poisson Archer et le Requin
-  Marteau).
+  la seconde planche ; le Poisson Archer et le Requin Marteau l'ont habitée
+  jusqu'à ce que leurs dessins soient activés au manifeste — ils sont rangés
+  sous « dessin actif », sans pour autant avoir de repère de planche).
 - `decoupe_planche.py` — découpe les **deux planches** (`Assets/Concepts/Design
   Final.png`, 5×6, puis `… page2.png`, 5×5) en **un repère par espèce** dans
   `Assets/Reperes/`. Les **51 espèces** des planches en ont un ; les deux arrivées
-  suivantes (Archer, Marteau) attendent le leur. Chaque planche déclare sa
+  suivantes (Archer, Marteau) n'en ont pas — et n'en ont plus besoin : leurs
+  dessins existent (`archer.json` fait à main levée dans l'atelier, `marteau.json`
+  décalqué sur la vignette du requin, `fond.planche: 'requin'`). Pour leur donner
+  un repère, il faudrait une troisième planche et une troisième entrée de
+  `PLANCHES`. Chaque planche déclare sa
   grille, l'ordre de ses cases et le sens de ses dessins (`PLANCHES`) — l'atelier
   ne connaît que `Assets/Reperes/<espèce>.png`.
   La grille est un **repérage, pas une frontière** : les créatures débordent de
@@ -1977,6 +2107,11 @@ commandes canvas, pas leur rastérisation.
 
 Le rendu procédural n'est donc **pas** le goulot — passer à des sprites optimiserait la partie déjà la moins chère. Le coût est dans les recherches de voisinage. Utiliser systématiquement `Ecosystem.neighbors()` (grille spatiale) et `Ecosystem.bySpecies[id]` plutôt que de balayer `entities`.
 - `input.js` — molette (vertical) / shift+molette + drag (bi-axial), clic = nourrir + splash/sable, clic maintenu = bulles, souris rapide = remous + fuite des petits.
+- `saisie.js` — **attraper un poisson à la main** (objet `Saisie`, après `input.js` dans `boot.js`). Un appui maintenu ~0,4 s SANS BOUGER (12 px à la souris, 14 au doigt) sur une créature saisit ; le clic bref nourrit toujours, l'appui long dans le vide fait toujours des bulles (`Saisie.occupe()` ne les coupe que si une créature est visée). Cible : rayon de survol (`Input.RAYON_SURVOL`), la plus proche du curseur avec une préférence pour les petites (`score = distance + size/2`). Les colosses (`def.size ≥ 70`) ne se saisissent pas : tremblement + « TROP LOURD ! » une fois par appui ; décor vivant (`refuge`, `fixed`), œufs et agonisants non.
+  **La créature sort de la simulation** : `_saisi` (tenue) ou `_lache` (retombée) → `Entity.update` appelle `Saisie.pilote` AVANT la faim et rend la main (ni faim, ni pensée, ni gag ; `Ecosystem.nearestPreyFor/preyWithin/eat` la déclarent intouchable ; `_nettoyer` retire sa cible à ceux qui la chassaient et efface les phases de scène `_xxxPh`). Elle suit le curseur par un **ressort** (ω = 12, ζ = 0,82 — jamais de téléport), gigote **horizontalement** (`Entity.draw` → `Saisie.deformer`, halo compris) avec le visage `scared` (`angry` pour un oiseau, qui proteste). Une seule à la fois, 1,5 s avant d'en ressaisir une, relâchée d'office après 20 s ; la caméra suspend son suivi le temps de la saisie (sinon curseur et vue se disputent la créature) et le reprend au relâché.
+  **Le relâché ne laisse jamais échoué** (`Saisie._chute`) : dans l'eau, une décélération puis le rappel souple de `move` — et le mur dur du rivage n'a jamais l'occasion de la téléporter, elle le rejoint en nageant ; dans l'air, gravité, éclaboussure à la surface et ventre à plat (`Entity.choc`) ; au-dessus de la plage, des bonds vers la mer ; un rampant coule puis marche jusqu'à sa bande. Filet de sécurité à 14 s (`positionSure`, jamais déclenché en 3 min de simulation avec 30 saisies). La sauvegarde écrit la position `positionSure` d'une créature tenue (jamais dans l'air ni sur le sable), et `_porter`/`_chute` repoussent tout NaN sur la dernière position saine.
+  Hooks ailleurs : `Input.touchMove` (le doigt promène au lieu de défiler), bulles de `Input.update`, `Main.frame` (update/draw), `Save.ecrire`, `Entity` (update/draw/tryMate).
+  Vérifié (harnais Node sans DOM + navigateur) : clic bref nourrit, appui long saisit à 0,4 s, suivi sans panoramique au doigt, pincement relâche, ressaisie bloquée 1,5 s, 3 min de simulation avec 30 saisies aléatoires (air, plage, banc, colosses) : **53 espèces sur 53 vivantes**, 0 NaN, 0 mort de faim, 0 retombée forcée (la même graine sans saisie : 53/53, 567 individus contre 586).
 - `main.js` — boucle, cycle jour/nuit (`Main.nightAmount()`), HUD (les deux barres de position, heure).
 - `save.js` — sauvegarde/restauration (voir la section **Sauvegarde**). À ajouter à `js/boot.js`, comme tout nouveau fichier.
 

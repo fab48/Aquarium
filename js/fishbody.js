@@ -764,11 +764,21 @@ const FishBody = {
     // Le dégradé suit les deux pointes déformées : sinon il glisserait le long
     // de la bande dès qu'elle se déplace.
     const g = ctx.createLinearGradient(A[0], A[1], B[0], B[1]);
-    g.addColorStop(0, this.avecAlpha(c, 0));
-    g.addColorStop(0.22, this.avecAlpha(c, force * 0.8));
-    g.addColorStop(0.5, this.avecAlpha(c, force));
-    g.addColorStop(0.78, this.avecAlpha(c, force * 0.8));
-    g.addColorStop(1, this.avecAlpha(c, 0));
+    // Les trois teintes de la bande ne dépendent que de sa couleur et de sa
+    // force : construites une fois (regex + chaîne à chaque frame sinon). Rangées
+    // À CÔTÉ du réglage (WeakMap), jamais dedans : l'objet est celui du JSON que
+    // l'atelier réenregistre tel quel.
+    const cache = this._refletStops || (this._refletStops = new WeakMap());
+    let st = cache.get(r);
+    if (!st || st.c !== c || st.force !== force) {
+      st = { c, force, a0: this.avecAlpha(c, 0), a8: this.avecAlpha(c, force * 0.8), a1: this.avecAlpha(c, force) };
+      cache.set(r, st);
+    }
+    g.addColorStop(0, st.a0);
+    g.addColorStop(0.22, st.a8);
+    g.addColorStop(0.5, st.a1);
+    g.addColorStop(0.78, st.a8);
+    g.addColorStop(1, st.a0);
     ctx.fillStyle = g;
     // LA BANDE EST UNE LENTILLE, PAS UNE ELLIPSE, et c'est ce qui permet de la
     // TORDRE. Deux quadratiques entre les deux pointes : décaler leurs points de
@@ -847,10 +857,6 @@ const FishBody = {
     // bout de la queue ne parcourait que 5,5 px sur une silhouette de 48.
     const vigueur = (0.7 + allure * 0.6) * this.raideur(e);
 
-    ctx.save();
-    ctx.scale(k, k);
-    ctx.translate(-sp.cx, -sp.cy);          // l'ancre `center` devient l'origine
-
     // Tout ce dont la déformation a besoin, en un objet : chaque appendice a
     // son propre déphasage et sa propre vitesse, le calcul se fait donc au point
     // et non plus une fois pour tout le dessin.
@@ -894,8 +900,6 @@ const FishBody = {
     anim.col = (e._colonne && !repos) ? this.colonne(sp, e._colonne) : null;
     // Battement de nageoire : plus lent que celui de la queue, et déphasé.
     const battement = repos ? 0 : Math.sin(ph * 0.7 + e.phase + 1);
-    // Les reflets à reporter par-dessus tous les calques (`reflet.dessus`).
-    const tardifs = [];
     // LE BEC DESSINÉ. Deux calques marqués `role: 'becHaut'` / `'becBas'`
     // s'ouvrent autour de l'ancre de bouche, au rythme de l'EXPRESSION : le
     // dessinateur donne la forme, le socle commun donne le geste. Un bec tracé
@@ -905,15 +909,45 @@ const FishBody = {
     const kB = e.emoteK ? e.emoteK() : 1;
     const gB = this.geste(kB > 0.35 ? emB.mouth : this.EMOTIONS.idle.mouth,
                           t + (e.phase || 0));
-    const becAmp = (sp.bec && sp.bec.ouverture != null ? sp.bec.ouverture : 32) * Math.PI / 180;
-    const becPiv = sp.bouche || { x: sp.cx, y: sp.cy };
+    anim.battement = battement;
+    anim.t = t;
+    anim.becO = gB.o;
+    anim.becAmp = (sp.bec && sp.bec.ouverture != null ? sp.bec.ouverture : 32) * Math.PI / 180;
+    anim.becPiv = sp.bouche || { x: sp.cx, y: sp.cy };
+    // LE CORPS, en direct ou par son IMPOSTEUR (cf. `corpsEnCache`) : une image
+    // de la pose EXACTE, repeinte dès qu'elle s'écarte de la vraie de plus
+    // d'une fraction de pixel. Le visage, lui, est toujours dessiné en direct.
+    if (!this.corpsEnCache(ctx, e, sp, k, anim)) this.corpsDirect(ctx, e, sp, k, anim);
+
+    // Passe « décor seul » (cf. `draw`) : le visage viendra avec le corps.
+    if (e._sansVisage) return;
+    this.visageSprite(ctx, e, t, sp, k, anim);
+  },
+
+  // Les calques du dessin, déformés, dans le repère du DESSIN (l'appelant a posé
+  // l'échelle et l'origine). Extrait de `drawSprite` pour servir aussi bien au
+  // rendu direct qu'à l'imposteur — c'est le MÊME code, donc la même image.
+  peindreCorps(ctx, e, sp, anim) {
+    const repos = anim.repos, battement = anim.battement;
+    const becAmp = anim.becAmp, becPiv = anim.becPiv, gB = { o: anim.becO };
+    // Les reflets à reporter par-dessus tous les calques (`reflet.dessus`).
+    const tardifs = [];
+    // UN save/restore PAR CALQUE coûtait 16 % du dessin des créatures (mesuré
+    // au profileur, rendu logiciel) : `save` recopie tout l'état du contexte.
+    // Il ne sert qu'aux calques qui TOURNENT (pivot, bec) ; les autres posent
+    // eux-mêmes ce qu'ils changent — couleur avant chaque remplissage, trait
+    // avant chaque contour, alpha remis en sortie — et l'appelant enveloppe la
+    // passe entière dans son propre save/restore, donc rien ne fuit au-dehors.
+    let traitRond = false;
     sp.shapes.forEach((forme, i) => {
       // Calque éteint dans l'atelier : rien à peindre. Il reste dans la liste,
       // donc les indices que visent les appendices et la queue ne bougent pas —
       // le retirer les décalerait tous.
       if (sp.masques && sp.masques.has(i)) return;
       const apps = sp.appPar && sp.appPar[i];
-      ctx.save();
+      const tourne = (forme.pivot && !apps)
+                  || ((forme.role === 'becHaut' || forme.role === 'becBas') && !repos);
+      if (tourne) ctx.save();
       // Repli : un calque qui porte un `pivot` mais qu'aucun ancrage de nageoire
       // ne vise tourne en bloc, comme avant.
       if (forme.pivot && !apps) {
@@ -967,7 +1001,9 @@ const FishBody = {
       if (forme.stroke) {
         ctx.strokeStyle = forme.stroke;
         ctx.lineWidth = forme.lineWidth || 1;
-        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        // Posés une fois pour la passe — sauf dans un calque qui tourne, dont
+        // le restore les remettra à l'état d'avant.
+        if (!traitRond || tourne) { ctx.lineCap = 'round'; ctx.lineJoin = 'round'; traitRond = traitRond || !tourne; }
         ctx.stroke();
       }
       // EN DERNIER, et ce n'est pas un détail : le reflet a besoin d'un
@@ -985,7 +1021,7 @@ const FishBody = {
         else this.reflet(ctx, forme, sp, i, anim, apps);
       }
       ctx.globalAlpha = ga;
-      ctx.restore();
+      if (tourne) ctx.restore();
     });
     // Les reflets reportés, une fois tout le corps peint. Chacun retrouve son
     // propre contour déformé, donc il ne déborde toujours pas de SA forme.
@@ -998,11 +1034,447 @@ const FishBody = {
       this.reflet(ctx, forme, sp, i, anim, apps);
       ctx.restore();
     }
+  },
+
+  // --- L'IMPOSTEUR DU CORPS -----------------------------------------------------
+  // Mesuré sur un profil « petit PC » (rendu logiciel, CPU ×4) : un dessin coûte
+  // 3 à 6 fois sa silhouette procédurale, et ce coût ne dépend presque PAS de sa
+  // taille à l'écran — un krill de 4 px coûte autant qu'un thon de 22. C'est le
+  // nombre d'opérations qui paye (save/restore, chemin, remplissage, contour,
+  // découpe du reflet, dégradé), pas le nombre de pixels : dessinés, les
+  // créatures prenaient 70 à 80 % de la frame.
+  //
+  // L'imposteur : chaque créature garde une IMAGE de son corps, peinte par
+  // `peindreCorps` — le même code, donc exactement la même pose — et le jeu ne
+  // fait plus qu'un `drawImage` tant que la pose réelle ne s'en écarte pas de
+  // plus de `CACHE_TOLERANCE` pixels ÉCRAN. L'écart est BORNÉ, pas deviné : la
+  // sensibilité de chaque dessin à sa phase de nage, à son effort, à
+  // l'ouverture de sa coquille et de son bec est mesurée une fois en
+  // échantillonnant la vraie déformation (`infoCache`). Position, sens,
+  // inclinaison, demi-tour et gags de corps restent appliqués en direct par la
+  // transformation courante ; LE VISAGE N'EST JAMAIS EN CACHE (il est dessiné
+  // par-dessus, à chaque frame, avec ses émotions et son regard).
+  //
+  // Conséquence : un corps qui bouge vite à l'écran (un gros poisson de près)
+  // est repeint à chaque frame — on le dessine alors en direct, sans détour ;
+  // un petit, un lointain ou un décor vivant n'est repeint que de loin en loin.
+  //
+  // Hors jeu (atelier, export SVG, pliage hors écran), rien ne change : le
+  // cache ne s'applique qu'au canvas du jeu (`activerCache`, appelé par Main).
+  //
+  // SECOND ÉTAGE, pour les PETITS NAGEURS : la PLANCHE D'ANIMATION. Sur une
+  // machine lente la frame dure 50 ms, la queue d'un petit poisson avance d'un
+  // pixel et demi par frame, et l'imposteur ci-dessus serait repeint à chaque
+  // fois. Sous `PLANCHE_MAX` pixels de long, le corps est donc tiré d'une
+  // planche de `PLANCHE_PHASES` poses réparties sur UN battement de queue
+  // (par dessin × couleurs de l'individu × taille à l'écran × effort), peinte
+  // au fil de l'eau et partagée par tous les individus qui se ressemblent.
+  // Deux approximations, réservées à ce qui fait moins de 48 px : la phase est
+  // arrondie au seizième de battement, et les appendices battent sur un
+  // multiple ENTIER du rythme de la queue (sans quoi la pose ne reviendrait
+  // jamais). Le passage d'un étage à l'autre est un FONDU, jamais un saut.
+  CACHE_CORPS: false,
+  CACHE_TOLERANCE: 1,       // écart maximal toléré, en pixels écran
+  CACHE_SUR: 2,             // sur-échantillonnage : l'image est rééchantillonnée
+                            // à chaque frame (rotation, demi-tour) — à 1:1 elle
+                            // s'adoucit visiblement (planche-contact comparée)
+  CACHE_MAX: 320,           // côté maximal d'une image, en pixels
+  CACHE_BUDGET: 6e6,        // pixels d'images vivantes au plus (~24 Mo)
+  PLANCHE_MAX: 48,          // longueur à l'écran sous laquelle on passe en planche
+  PLANCHE_PHASES: 16,
+  PLANCHE_BUDGET: 8e6,      // pixels de planches au plus (~32 Mo)
+  _ctxJeu: null,
+  _imps: [], _impPool: [], _impPx: 0, _impBalaye: 0,
+  _planches: [], _planchePx: 0,
+  impStats: { image: 0, repeint: 0, direct: 0, planche: 0, peinte: 0 },
+
+  activerCache(ctx) { this._ctxJeu = ctx; this.CACHE_CORPS = true; },
+
+  // Le corps dessiné en direct, comme avant l'imposteur.
+  corpsDirect(ctx, e, sp, k, anim) {
+    ctx.save();
+    ctx.scale(k, k);
+    ctx.translate(-sp.cx, -sp.cy);          // l'ancre `center` devient l'origine
+    this.peindreCorps(ctx, e, sp, anim);
     ctx.restore();
+  },
 
-    // Passe « décor seul » (cf. `draw`) : le visage viendra avec le corps.
-    if (e._sansVisage) return;
+  corpsEnCache(ctx, e, sp, k, anim) {
+    if (!this.CACHE_CORPS || ctx !== this._ctxJeu) return false;
+    const st = this.impStats;
+    // Ce qui ne se met pas en image : une pose de scène (colonne), l'atelier
+    // (pose de repos, calques masqués), un dessin à décor (deux passes), et ce
+    // qui se peint calque par calque différemment d'une image aplatie — la
+    // transparence d'ensemble (traînées du smear, furtivité) et l'ombre portée.
+    if (anim.repos || anim.col || sp.decor || sp.masques
+        || ctx.globalAlpha < 0.99 || ctx.shadowBlur > 0) { st.direct++; return false; }
+    const t = anim.t;
+    if (t - this._impBalaye > 2) this.balayerImps(t);
+    const m = ctx.getTransform();
+    const pxU = Math.max(Math.hypot(m.a, m.b), Math.hypot(m.c, m.d)) * k;   // px écran par unité du dessin
+    if (!(pxU > 0) || !isFinite(pxU)) { st.direct++; return false; }
+    // La RÉSOLUTION des images suit l'échelle NOMINALE (dessin × zoom × dpr),
+    // pas la transformation du moment : un demi-tour regonfle la hauteur d'un
+    // tiers, et l'image changeait de taille — donc était repeinte, ou passait
+    // dans une autre planche — à chaque virage. Un vrai grossissement (le Fugu
+    // qui se gonfle) reste suivi au-delà de 40 %.
+    anim.pxR = Math.max(k * Main.dpr * Camera.zoom, pxU / 1.4);
+    const I = sp._imp || (sp._imp = this.infoCache(sp));
+    // La planche : un nageur (qui bouge d'au moins 2 px par radian de nage),
+    // petit à l'écran — avec hystérésis, pour ne pas hésiter à la frontière —
+    // et dont le corps ne dépend QUE de la nage (ni coquille, ni bec dessiné,
+    // ni guirlande qui clignote : chaque éclat ferait une planche de plus).
+    const long = sp.w * anim.pxR;
+    const nageur = !I.coquille && !sp.becDessine && !(I.lueur && e._clignote != null)
+                && I.sensPh * anim.pxR > 2;
+    const veut = nageur && long < this.PLANCHE_MAX * ((e._plk || 0) > 0.5 ? 1.1 : 0.9);
+    const dtP = U.clamp(t - (e._plT ?? t), 0, 0.1);
+    e._plT = t;
+    const plk = e._plk = e._plk == null ? (veut ? 1 : 0)
+                       : U.clamp(e._plk + (veut ? 1 : -1) * dtP * 4, 0, 1);
+    if (plk >= 0.999 && this.planche(ctx, e, sp, k, anim, I, pxU, 1)) { st.planche++; return true; }
+    const fait = this.imposteur(ctx, e, sp, k, anim, I, pxU);
+    if (plk > 0.001) {
+      // LE FONDU : l'autre rendu en dessous, la planche par-dessus, en
+      // transparence croissante ou décroissante (un quart de seconde).
+      if (!fait) this.corpsDirect(ctx, e, sp, k, anim);
+      this.planche(ctx, e, sp, k, anim, I, pxU, plk);
+      return true;
+    }
+    return fait;
+  },
 
+  // LA PLANCHE D'ANIMATION (cf. plus haut). `alpha` < 1 pendant un fondu.
+  planche(ctx, e, sp, k, anim, I, pxU, alpha) {
+    const Q = this.PLANCHE_PHASES;
+    const R0 = anim.pxR * this.CACHE_SUR;
+    const bT = Math.round(Math.log(R0) / Math.log(1.12));    // taille : paliers de 12 %
+    const R = Math.pow(1.12, bT);
+    // Effort : par demis CENTRÉS sur 0,75 / 1,25 / 1,75 — la croisière (≈ 1,3)
+    // tombait pile sur une frontière et changeait de planche sans arrêt.
+    const vq = Math.max(0.25, Math.round((anim.vigueur - 0.25) * 2) / 2 + 0.25);
+    const lu = I.lueur ? Math.round(this.lueurCle(e) * 20) / 20 : 1;
+    // Les couleurs PROPRES À L'INDIVIDU (teinte tirée au sort…) : deux
+    // individus qui se ressemblent partagent la même planche.
+    const sig = e._sigC || (e._sigC = sp.shapes.map((f, i) => this.couleurForme(f, e, i)).join(','));
+    const cle = bT + '|' + vq + '|' + lu + '|' + sig;
+    const toutes = sp._planches || (sp._planches = new Map());
+    const TAU = Math.PI * 2;
+    // La pose d'une case : phase de queue arrondie, appendices verrouillés,
+    // effort arrondi, sans le déphasage propre à l'individu.
+    const poseCase = (q) => {
+      const uq = q * TAU / Q;
+      return { ph: uq / anim.rQueue, u: uq, verrou: true, rQueue: anim.rQueue, phase: 0,
+               vigueur: vq, repos: false, qx: anim.qx, qy: anim.qy, coquille: 0, col: null,
+               battement: Math.sin(uq * Math.max(1, Math.round(0.7 / anim.rQueue)) + 1),
+               becO: 0, becAmp: anim.becAmp, becPiv: anim.becPiv, t: anim.t };
+    };
+    let pl = toutes.get(cle);
+    if (!pl) {
+      // Une case = la boîte de TOUTES les poses de la planche (relevée sur
+      // huit d'entre elles, plus une marge) : la boîte large d'`infoCache`,
+      // calculée pour l'effort maximal, la triplait.
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (let q = 0; q < Q; q += 2) {
+        const b = this.boitePose(sp, e, poseCase(q));
+        x0 = Math.min(x0, b.x0); y0 = Math.min(y0, b.y0); x1 = Math.max(x1, b.x1); y1 = Math.max(y1, b.y1);
+      }
+      const marge = 0.04 * Math.max(x1 - x0, y1 - y0) + 1;
+      x0 -= marge; y0 -= marge; x1 += marge; y1 += marge;
+      const cw = Math.ceil((x1 - x0) * R) + 2, ch = Math.ceil((y1 - y0) * R) + 2;
+      const cols = 4, rows = Math.ceil(Q / cols);
+      const taille = cw * cols * ch * rows;
+      if (this._planchePx + taille > this.PLANCHE_BUDGET) this.balayerPlanches(anim.t, taille);
+      if (this._planchePx + taille > this.PLANCHE_BUDGET) return false;
+      const cv = document.createElement('canvas');
+      cv.width = cw * cols; cv.height = ch * rows;
+      pl = { cv, c: cv.getContext('2d', { willReadFrequently: true }), cw, ch, cols, R, x0, y0,
+             rects: new Array(Q).fill(null), sp, cle, vu: 0 };
+      toutes.set(cle, pl);
+      this._planches.push(pl);
+      this._planchePx += taille;
+    }
+    pl.vu = anim.t;
+    // LA PHASE DE QUEUE de l'individu, arrondie au 1/Q de battement.
+    let u = (anim.ph * anim.rQueue + anim.phase) % TAU;
+    if (u < 0) u += TAU;
+    const q = Math.round(u / TAU * Q) % Q;
+    let r = pl.rects[q];
+    if (!r) {
+      const a = poseCase(q);
+      const cw = pl.cw, ch = pl.ch;
+      const ox = (q % pl.cols) * cw, oy = Math.floor(q / pl.cols) * ch;
+      const b = this.boitePose(sp, e, a);
+      const c = pl.c;
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      c.save();
+      c.beginPath(); c.rect(ox, oy, cw, ch); c.clip();      // jamais chez la voisine
+      c.setTransform(R, 0, 0, R, ox + 1 - pl.x0 * R, oy + 1 - pl.y0 * R);
+      this.peindreCorps(c, e, sp, a);
+      c.restore();
+      // Le rectangle UTILE de la case : on ne recopie pas le vide autour.
+      const x0 = U.clamp(Math.floor((b.x0 - pl.x0) * R), 0, cw), x1 = U.clamp(Math.ceil((b.x1 - pl.x0) * R) + 2, 0, cw);
+      const y0 = U.clamp(Math.floor((b.y0 - pl.y0) * R), 0, ch), y1 = U.clamp(Math.ceil((b.y1 - pl.y0) * R) + 2, 0, ch);
+      r = pl.rects[q] = { sx: ox + x0, sy: oy + y0, sw: Math.max(1, x1 - x0), sh: Math.max(1, y1 - y0),
+                          dx: pl.x0 + (x0 - 1) / R, dy: pl.y0 + (y0 - 1) / R };
+      this.impStats.peinte++;
+    }
+    const ga = ctx.globalAlpha;
+    if (alpha < 1) ctx.globalAlpha = ga * alpha;
+    ctx.save();
+    ctx.scale(k, k);
+    ctx.translate(-sp.cx, -sp.cy);
+    ctx.drawImage(pl.cv, r.sx, r.sy, r.sw, r.sh, r.dx, r.dy, r.sw / R, r.sh / R);
+    ctx.restore();
+    ctx.globalAlpha = ga;
+    return true;
+  },
+
+  // Les planches qu'on n'a pas regardées depuis 4 s s'en vont ; au-delà du
+  // budget, les plus anciennes d'abord.
+  balayerPlanches(t, besoin = 0) {
+    this._planches.sort((a, b) => b.vu - a.vu);
+    let px = 0;
+    const garde = [];
+    for (const pl of this._planches) {
+      const taille = pl.cv.width * pl.cv.height;
+      if (t - pl.vu < 4 && px + taille + besoin <= this.PLANCHE_BUDGET) { garde.push(pl); px += taille; continue; }
+      if (pl.sp._planches) pl.sp._planches.delete(pl.cle);
+      pl.cv.width = pl.cv.height = 1;
+    }
+    this._planches = garde;
+    this._planchePx = px;
+  },
+
+  // Le premier étage : l'image propre à l'individu, à la pose EXACTE à
+  // `CACHE_TOLERANCE` près.
+  imposteur(ctx, e, sp, k, anim, I, pxU) {
+    const st = this.impStats;
+    const t = anim.t;
+    const vig = Math.max(1, anim.vigueur);
+    // Le mouvement de CETTE frame : s'il dépasse déjà la tolérance, l'image
+    // serait repeinte à chaque frame — autant dessiner en direct.
+    const prec = e._impPh;
+    e._impPh = anim.ph;
+    if (prec != null && I.sensPh * vig * pxU * Math.abs(anim.ph - prec) > this.CACHE_TOLERANCE) {
+      st.direct++; return false;
+    }
+    const R = anim.pxR * this.CACHE_SUR;
+    // Garde-fou de taille, sur la boîte LARGE (déformation maximale comprise).
+    if ((I.x1 - I.x0) * R > this.CACHE_MAX || (I.y1 - I.y0) * R > this.CACHE_MAX) { st.direct++; return false; }
+    let imp = e._imp;
+    const lu = I.lueur ? this.lueurCle(e) : 0;
+    let repeint = !imp || imp.sp !== sp || Math.abs(R / imp.R - 1) > 0.15 || Math.abs(lu - imp.lu) > 0.04;
+    if (!repeint) {
+      const ecart = pxU * (I.sensPh * Math.max(vig, imp.vig) * Math.abs(anim.ph - imp.ph)
+                         + I.sensV * Math.abs(anim.vigueur - imp.vig0)
+                         + I.sensC * Math.abs(anim.coquille - imp.coq)
+                         + I.sensB * Math.abs(anim.becO - imp.bec));
+      repeint = ecart > this.CACHE_TOLERANCE;
+    }
+    if (repeint) {
+      // La boîte de CETTE pose (points déformés, contours, halos) : l'image la
+      // serre au plus près. La boîte large d'`infoCache` doublait la surface à
+      // peindre, à effacer et à recopier. Les points calculés ici servent
+      // ensuite au tracé lui-même (`anim.pts`, lu par `tracerForme`).
+      const b = this.boitePose(sp, e, anim);
+      const W = Math.ceil((b.x1 - b.x0) * R) + 2, H = Math.ceil((b.y1 - b.y0) * R) + 2;
+      if (!imp) {
+        if (this._impPx + W * H > this.CACHE_BUDGET) { anim.pts = null; st.direct++; return false; }
+        imp = e._imp = this._impPool.pop() || this.nouvelImp();
+        imp.e = e; imp.W = imp.H = 0;
+        this._impPx += imp.cv.width * imp.cv.height;
+        this._imps.push(imp);
+      }
+      const cv = imp.cv;
+      // Le canvas garde 20 % de jeu : la boîte bouge d'un pixel à chaque
+      // repeinte, et réallouer à chaque fois coûterait plus que d'effacer.
+      if (W > cv.width || H > cv.height || W * H < cv.width * cv.height * 0.4) {
+        const nW = Math.ceil(W * 1.2) + 2, nH = Math.ceil(H * 1.2) + 2;
+        this._impPx += nW * nH - cv.width * cv.height;
+        cv.width = nW; cv.height = nH;                // remet aussi le contexte à neuf
+      } else {
+        imp.c.setTransform(1, 0, 0, 1, 0, 0);
+        imp.c.clearRect(0, 0, Math.max(W, imp.W), Math.max(H, imp.H));
+      }
+      imp.W = W; imp.H = H;
+      imp.ox = b.x0 - 1 / R; imp.oy = b.y0 - 1 / R;
+      imp.c.setTransform(R, 0, 0, R, 1 - b.x0 * R, 1 - b.y0 * R);
+      this.peindreCorps(imp.c, e, sp, anim);
+      anim.pts = null;
+      imp.sp = sp; imp.R = R; imp.ph = anim.ph; imp.vig = vig; imp.vig0 = anim.vigueur;
+      imp.coq = anim.coquille; imp.bec = anim.becO; imp.lu = lu;
+      st.repeint++;
+    } else st.image++;
+    imp.vu = t;
+    ctx.save();
+    ctx.scale(k, k);
+    ctx.translate(-sp.cx, -sp.cy);
+    ctx.drawImage(imp.cv, 0, 0, imp.W, imp.H, imp.ox, imp.oy, imp.W / imp.R, imp.H / imp.R);
+    ctx.restore();
+    return true;
+  },
+
+  // La boîte, en unités du dessin, de la pose COURANTE : chaque point passé par
+  // `deformer` (gardé dans `anim.pts` pour le tracé), puis par la rotation en
+  // bloc que `peindreCorps` pose au contexte (pivot, bec), plus la moitié des
+  // contours et les halos. Un contour lissé passe par les milieux des segments
+  // et a les sommets pour points de contrôle : il reste dans leur enveloppe.
+  boitePose(sp, e, anim) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    const pts = anim.pts = new Array(sp.shapes.length);
+    const tourne = (x, y, cx, cy, a) => {
+      const c = Math.cos(a), s = Math.sin(a), dx = x - cx, dy = y - cy;
+      return [cx + dx * c - dy * s, cy + dx * s + dy * c];
+    };
+    sp.shapes.forEach((forme, i) => {
+      if (sp.masques && sp.masques.has(i)) return;
+      const apps = sp.appPar && sp.appPar[i];
+      const D = this.prepDeform(forme, sp, i);
+      const src = forme.points, n = src.length;
+      const P = pts[i] = new Array(n);
+      for (let k = 0; k < n; k++) P[k] = this.deformer(src[k][0], src[k][1], sp, anim, apps, D);
+      const piv = (forme.pivot && !apps) ? forme.pivot : null;
+      const aPiv = piv ? anim.battement * (forme.amp || 15) * 0.007 : 0;
+      const bec = (forme.role === 'becHaut' || forme.role === 'becBas') && !anim.repos;
+      const aBec = bec ? (forme.role === 'becHaut' ? -1 : 1) * anim.becO * anim.becAmp : 0;
+      const pose = (x, y) => {
+        let q = [x, y];
+        if (bec) q = tourne(q[0], q[1], anim.becPiv.x, anim.becPiv.y, aBec);
+        if (piv) q = tourne(q[0], q[1], piv[0], piv[1], aPiv);
+        return q;
+      };
+      const m = forme.stroke ? (forme.lineWidth || 1) / 2 + 0.5 : 0.5;
+      for (let k = 0; k < n; k++) {
+        const q = (piv || bec) ? pose(P[k][0], P[k][1]) : P[k];
+        if (q[0] - m < x0) x0 = q[0] - m; if (q[0] + m > x1) x1 = q[0] + m;
+        if (q[1] - m < y0) y0 = q[1] - m; if (q[1] + m > y1) y1 = q[1] + m;
+      }
+      if (forme.lueur && this.lueurForme(forme, e) > 0) {
+        const bo = sp.boites[i];
+        const r = Math.hypot(bo.x1 - bo.x0, bo.y1 - bo.y0) * 0.85;
+        const c = pose((bo.x0 + bo.x1) / 2, (bo.y0 + bo.y1) / 2);
+        if (c[0] - r < x0) x0 = c[0] - r; if (c[0] + r > x1) x1 = c[0] + r;
+        if (c[1] - r < y0) y0 = c[1] - r; if (c[1] + r > y1) y1 = c[1] + r;
+      }
+    });
+    return isFinite(x0) ? { x0, y0, x1, y1 } : { x0: 0, y0: 0, x1: 1, y1: 1 };
+  },
+
+  nouvelImp() {
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 1;
+    // Source redessinée souvent et lue par un canvas peut-être en rendu
+    // logiciel : `willReadFrequently`, cf. PERFORMANCE.md §7 (le piège des
+    // 29 ms du décor).
+    return { cv, c: cv.getContext('2d', { willReadFrequently: true }), W: 0, H: 0, R: 1, e: null, sp: null, vu: 0 };
+  },
+
+  // Les images des créatures qu'on ne dessine plus (hors champ, mortes)
+  // retournent au vivier au bout d'une seconde et demie.
+  balayerImps(t) {
+    this._impBalaye = t;
+    this.balayerPlanches(t);
+    const garde = [];
+    for (const imp of this._imps) {
+      if (t - imp.vu < 1.5 && imp.e && !imp.e.dead && imp.e._imp === imp) { garde.push(imp); continue; }
+      if (imp.e && imp.e._imp === imp) imp.e._imp = null;
+      this._impPx -= imp.cv.width * imp.cv.height;
+      imp.e = null; imp.sp = null; imp.W = imp.H = 0;
+      imp.cv.width = imp.cv.height = 1;               // rend la mémoire
+      if (this._impPool.length < 128) this._impPool.push(imp);
+    }
+    this._imps = garde;
+  },
+
+  lueurCle(e) {
+    const l = e._clignote != null ? e._clignote : 1;
+    return e.def.glowAtNight ? l * (typeof Main !== 'undefined' ? Main.nightAmount() : 0) : l;
+  },
+
+  // Ce que l'imposteur doit savoir d'un DESSIN, relevé une fois : sa boîte
+  // (déformation, contours et halos compris) et ses SENSIBILITÉS — de combien
+  // ses points bougent, au plus, par radian de phase de nage, par unité
+  // d'effort, d'ouverture de coquille et de bec. Elles sont MESURÉES sur la
+  // vraie `deformer`, pas réécrites en formules à côté : une formule parallèle
+  // divergerait au premier réglage d'appendice.
+  infoCache(sp) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, lw = 0, lueur = false;
+    const halos = [];
+    sp.shapes.forEach((f, i) => {
+      const b = sp.boites[i];
+      if (b.x0 < x0) x0 = b.x0; if (b.y0 < y0) y0 = b.y0;
+      if (b.x1 > x1) x1 = b.x1; if (b.y1 > y1) y1 = b.y1;
+      if (f.stroke) lw = Math.max(lw, f.lineWidth || 1);
+      if (f.lueur) {
+        lueur = true;
+        const r = Math.hypot(b.x1 - b.x0, b.y1 - b.y0) * 0.85;
+        halos.push([(b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, r]);
+      }
+    });
+    if (!isFinite(x0)) { x0 = y0 = 0; x1 = y1 = 1; }
+    const axe = (sp.tailAxe == null ? 90 : sp.tailAxe) * Math.PI / 180;
+    const anim = (ph, coquille) => ({ ph, rQueue: sp.vitesseQueue || 1, phase: 0, vigueur: 1,
+                                      repos: false, qx: Math.cos(axe), qy: Math.sin(axe), coquille, col: null });
+    const D = sp.shapes.map((f, i) => this.prepDeform(f, sp, i));
+    const pivote = (P, f, ph) => {
+      // Le repli des calques à `pivot` sans appendice : une rotation en bloc,
+      // posée par `peindreCorps` (cf. `battement`).
+      const a = Math.sin(ph * 0.7 + 1) * (f.amp || 15) * 0.007, c = Math.cos(a), s = Math.sin(a);
+      const dx = P[0] - f.pivot[0], dy = P[1] - f.pivot[1];
+      return [f.pivot[0] + dx * c - dy * s, f.pivot[1] + dx * s + dy * c];
+    };
+    const pose = (f, i, p, an) => {
+      const apps = sp.appPar && sp.appPar[i];
+      const P = this.deformer(p[0], p[1], sp, an, apps, D[i]);
+      return (f.pivot && !apps) ? pivote(P, f, an.ph) : P;
+    };
+    let sensPh = 0, depl = 0, sensC = 0;
+    const d = 0.01;
+    for (let s = 0; s < 12; s++) {
+      // Étalé sur une dizaine de tours : les appendices battent à 0,7 fois la
+      // queue (et à leur propre vitesse), il faut voir toutes leurs phases.
+      const ph = 0.37 + s * 5.27;
+      const A = anim(ph, 0.5), B = anim(ph + d, 0.5);
+      sp.shapes.forEach((f, i) => {
+        for (const p of f.points) {
+          const a = pose(f, i, p, A), b = pose(f, i, p, B);
+          const v = Math.hypot(b[0] - a[0], b[1] - a[1]) / d;
+          if (v > sensPh) sensPh = v;
+          const r = Math.hypot(a[0] - p[0], a[1] - p[1]);
+          if (r > depl) depl = r;
+        }
+      });
+    }
+    const coquille = Object.keys(sp.appPar || {}).some(i => sp.appPar[i].some(f => f.source === 'coquille'));
+    if (coquille) {
+      const A = anim(0.37, 0), B = anim(0.37, 1);
+      sp.shapes.forEach((f, i) => {
+        for (const p of f.points) {
+          const a = pose(f, i, p, A), b = pose(f, i, p, B);
+          sensC = Math.max(sensC, Math.hypot(b[0] - a[0], b[1] - a[1]));
+        }
+      });
+    }
+    let sensB = 0;
+    if (sp.becDessine) {
+      const amp = (sp.bec && sp.bec.ouverture != null ? sp.bec.ouverture : 32) * Math.PI / 180;
+      const piv = sp.bouche || { x: sp.cx, y: sp.cy };
+      for (const f of sp.shapes) if (f.role === 'becHaut' || f.role === 'becBas')
+        for (const p of f.points) sensB = Math.max(sensB, amp * Math.hypot(p[0] - piv.x, p[1] - piv.y));
+    }
+    // La boîte : l'effort monte jusqu'à ~1,9 fois la déformation mesurée.
+    const marge = depl * 2 + sensB + sensC + lw + 2;
+    x0 -= marge; y0 -= marge; x1 += marge; y1 += marge;
+    for (const [cx, cy, r] of halos) {
+      x0 = Math.min(x0, cx - r); y0 = Math.min(y0, cy - r);
+      x1 = Math.max(x1, cx + r); y1 = Math.max(y1, cy + r);
+    }
+    return { x0, y0, x1, y1, sensPh: sensPh * 1.25, sensV: depl * 1.1, sensC: sensC * 1.1, sensB, lueur, coquille };
+  },
+
+  visageSprite(ctx, e, t, sp, k, anim) {
+    const s = e.size;
     // --- Visage commun, calé sur les ANCRES du dessin ---
     // L'œil et la bouche sont posés SÉPARÉMENT, chacun sur son ancre. Caler le
     // seul œil et laisser la bouche à sa place par défaut ne marche pas : le
@@ -1217,7 +1689,12 @@ const FishBody = {
         // se lit comme un tressaillement, pas comme une marche.
         const vit = f.vitesse || 1;
         const dph = (f.phase || 0) * Math.PI / 180;
-        const bat = Math.sin(anim.ph * 0.7 * vit + anim.phase + 1 + dph);
+        // L'horloge de l'appendice. En PLANCHE (`anim.verrou`), elle bat sur un
+        // multiple ENTIER du battement de queue, pour que la pose revienne à
+        // chaque battement ; hors planche, l'expression d'origine, à l'identique.
+        const p7 = anim.verrou ? anim.u * Math.max(1, Math.round(0.7 * vit / anim.rQueue)) : anim.ph * 0.7 * vit;
+        const pQ = anim.verrou ? anim.u * Math.max(1, Math.round(vit)) : anim.ph * anim.rQueue * vit;
+        const bat = Math.sin(p7 + anim.phase + 1 + dph);
         const A = f.amp != null ? f.amp : amp;
         // SYMÉTRIE. Un crabe, une raie, un poulpe ont des appendices des DEUX
         // côtés : un seul ancrage n'animait qu'une moitié. `miroir` en pose un
@@ -1261,7 +1738,7 @@ const FishBody = {
             const u = U.clamp((px * ax + py * ay) / L, 0, 1);
             if (u <= 0) continue;                 // côté corps : l'épaule tient
             const retard = (f.ondes != null ? f.ondes : 0.35) * Math.PI * 2;
-            let w = ((anim.ph * 0.7 * vit + dph - u * retard) / (Math.PI * 2)) % 1;
+            let w = ((p7 + dph - u * retard) / (Math.PI * 2)) % 1;
             if (w < 0) w += 1;
             const bat = this.battementAile(w);
             // LE RETOURNEMENT, et c'est lui qui fait voler.
@@ -1326,7 +1803,7 @@ const FishBody = {
             if (f.source === 'coquille') {
               ouv = U.clamp(anim.coquille, 0, 1);
             } else {
-              const u = ((anim.ph * 0.7 * vit + dph) / (Math.PI * 2)) % 1;
+              const u = ((p7 + dph) / (Math.PI * 2)) % 1;
               ouv = this.claquement(u < 0 ? u + 1 : u);
             }
             // L'amplitude est l'ÉCARTEMENT TOTAL de la pince : chaque mâchoire
@@ -1361,7 +1838,7 @@ const FishBody = {
             // réglage donne le même geste sur un aileron et sur une grande voile.
             // Déphasage à 0 et vitesse à 1 = calé sur la queue.
             const dep = (A / 100) * L * u * u * anim.vigueur
-              * Math.sin(anim.ph * anim.rQueue * vit + anim.phase + dph - u * ondes);
+              * Math.sin(pQ + anim.phase + dph - u * ondes);
             // Le miroir retourne le repère : seule la composante horizontale du
             // battement change de sens.
             x += anim.qx * dep * sens; y += anim.qy * dep;
@@ -1381,7 +1858,7 @@ const FishBody = {
             // `amp` en POURCENTAGE de la longueur : le même réglage donne le
             // même geste sur une patte de crabe et sur un bras de calamar.
             const dep = (A / 100) * L * u * u * sens
-              * Math.sin(anim.ph * 0.7 * vit + anim.phase + dph
+              * Math.sin(p7 + anim.phase + dph
                          - u * (f.ondes != null ? f.ondes : 1) * Math.PI * 2);
             x += -ay * dep; y += ax * dep;
           } else {
@@ -1432,8 +1909,13 @@ const FishBody = {
     const queue = sp.tailBlend != null && (!sp.queueCalques || sp.queueCalques.has(idx));
     const etendue = queue ? Math.max(1, sp.tailBlend - sp.minX) : 1;
     const ondes = (sp.tailOndes || 0) * Math.PI * 2;
-    const P = new Array(n);
-    for (let k = 0; k < n; k++) P[k] = this.deformer(pts[k][0], pts[k][1], sp, anim, apps, D);
+    // Points déjà déformés pour cette pose (`boitePose`, imposteur) : les mêmes,
+    // par la même fonction — on ne les recalcule pas.
+    let P = anim.pts && anim.pts[idx];
+    if (!P) {
+      P = new Array(n);
+      for (let k = 0; k < n; k++) P[k] = this.deformer(pts[k][0], pts[k][1], sp, anim, apps, D);
+    }
     // Un trait ouvert (tentacule, antenne) ne se referme pas : le boucler
     // dessinerait une corde en travers de la créature.
     const ferme = forme.ferme !== false;

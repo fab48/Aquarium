@@ -656,3 +656,117 @@ donc à valider par une simulation longue de contrôle, comme le culling en son
 temps. Et le fondu sous-pixel (ne pas dessiner ce qui fait moins de 2 px
 écran), gain modeste mais ciblé sur le krill.
 
+---
+
+## 10. Quatrième passe (2026-10-19) — les 53 dessins, et leur imposteur
+
+Les mesures précédentes datent d'AVANT les dessins vectoriels. Chaque dessin
+est redessiné à chaque frame en déformant tous ses points (`drawSprite`,
+`deformer`, colonne, appendices) : c'est devenu, de loin, le premier poste.
+
+**Profil « petit PC »** : 1366×768, dpr 1, CPU ralenti ×4 (CDP
+`Emulation.setCPUThrottlingRate`), Chromium headless — « Canvas: Software
+only » d'après `chrome://gpu`, WebGL par SwiftShader. `Math.random` semé, boucle
+rAF neutralisée, frames pilotées à la main (`Ecosystem.update(dt, t)` avec
+`Main.time` qui avance), chaque poste chronométré **pipeline vidé**
+(`getImageData` d'un pixel). Les chiffres sont en ms ×4 ; ÷4 ≈ la machine
+d'essai sans ralenti. Pas de vrai GPU : rien ici ne mesure un canvas accéléré.
+
+### 10.1 Le profil de départ (HEAD, dt 1/60)
+
+| Vue | visibles | simulation | décor | créatures | frame |
+|---|---:|---:|---:|---:|---:|
+| départ (rivage) | 113 | 38 | 34 | 189 | 243 |
+| récif, zoom 1 | 168 | 40 | 51 | 328 | 410 |
+| grand large | 32 | 33 | 18 | 54 | 123 |
+| dézoom 0,5 | 225 | 45 | 54 | 429 | 629 |
+| dézoom 0,35 | 302 | 49 | 61 | 522 | 689 |
+| surpeuplé (1 136 entités), dézoom 0,5 | 622 | 291 | 57 | 1 087 | 1 581 |
+
+- **Les créatures font 70 à 80 % de la frame.** État figé, vue récif : 283 ms
+  avec les dessins, 82 avec les silhouettes procédurales (×3,5 ; ×6 dézoomé).
+- **Le coût d'un dessin ne dépend presque pas de sa taille à l'écran** : un
+  krill de 4 px coûte 1,7 ms, autant qu'un thon de 22 ; la Rascasse (99 calques,
+  1 225 points) 5,6 ms ; le Confetti 3 ms, dont 1,6 pour ses huit reflets (un
+  `clip()` chacun). C'est le nombre d'OPÉRATIONS qui paye, pas les pixels.
+- Au profileur : rastérisation au vidage 45 %, **`ctx.save()` 16 %** (un par
+  calque), JavaScript (déformation, tracé, visage) 15 à 20 %.
+- Le modèle « effectif × coût unitaire par espèce » retombe sur la mesure de
+  scène à 1 % près (325 contre 328 ms au récif) : le Confetti y pèse 23 %.
+
+### 10.2 Ce qui a été fait (`js/fishbody.js`)
+
+1. **Un save/restore par calque retiré** — il ne sert qu'aux calques qui
+   tournent (pivot, bec) ; les autres posent eux-mêmes couleur, trait et alpha,
+   et la passe entière reste enveloppée. Teintes des reflets construites une
+   fois (WeakMap, jamais dans le JSON que l'atelier réenregistre). Rendu
+   **identique au bit près** : planche-contact des 53 espèces, au repos et en
+   mouvement, 53/53 cases bit à bit contre HEAD.
+2. **L'imposteur** (`corpsEnCache`) : chaque créature garde une image de son
+   corps, peinte par le MÊME `peindreCorps`, repeinte dès que la pose réelle
+   s'en écarte de plus de `CACHE_TOLERANCE` (1 px écran). L'écart est BORNÉ :
+   les sensibilités de chaque dessin (par radian de nage, par unité d'effort,
+   d'ouverture de coquille et de bec) sont mesurées une fois sur la vraie
+   `deformer` (`infoCache`). Image sur-échantillonnée ×2 (à ×1 elle s'adoucit
+   visiblement), serrée sur la pose (`boitePose`, dont les points servent
+   ensuite au tracé), résolution sur l'échelle NOMINALE (sinon chaque
+   demi-tour la repeint). Le visage n'y est jamais : il reste dessiné en direct.
+3. **La planche d'animation**, pour les petits nageurs (< 48 px) : seize poses
+   par battement de queue, par dessin × couleurs de l'individu × taille ×
+   effort, peintes au fil de l'eau et partagées. Deux approximations,
+   réservées à cette taille : phase arrondie au 1/16 de battement, appendices
+   battant sur un multiple ENTIER de la queue (`anim.verrou` dans `deformer` ;
+   hors planche l'expression d'origine est rejouée à l'identique). Passage d'un
+   étage à l'autre en fondu (¼ s), avec hystérésis.
+
+Hors jeu rien ne change : le cache ne s'applique qu'au canvas du jeu
+(`FishBody.activerCache`, appelé par `Main.init`) — l'atelier, l'export SVG et
+le pliage hors écran dessinent en direct. `?imposteur=0` le coupe, pour
+comparer sur une vraie machine avec la touche F.
+
+### 10.3 Résultats, A/B entrelacé dans la même page (dt 0,05 : la frame d'une machine lente)
+
+| Vue | créatures direct → cache | frame direct → cache |
+|---|---:|---:|
+| départ | 170 → 99 (−42 %) | 250 → 181 |
+| récif | 257 → 167 (−35 %) | 358 → 281 |
+| grand large | 90 → 81 (−10 %) | 162 → 146 |
+| dézoom 0,5 | 453 → 273 (−40 %) | 580 → 403 |
+| dézoom 0,35 | 673 → 282 (−58 %) | 809 → 461 |
+| surpeuplé, récif | 357 → 232 (−35 %) | 659 → 517 |
+| surpeuplé, dézoom 0,5 | 824 → 373 (−55 %) | 1 144 → 696 |
+
+« direct » inclut déjà le point 1. Mémoire : ~0,5 Mpx d'imposteurs et 4 à
+8 Mpx de planches (budgets `CACHE_BUDGET` / `PLANCHE_BUDGET`, 24 et 32 Mo).
+
+### 10.4 Pièges rencontrés
+
+- **Mesurer à dt 1/60 surestime l'imposteur.** Sur une machine lente la frame
+  dure 50 ms (le `dt` est bridé là) : trois fois plus de mouvement par frame,
+  et la queue d'un petit poisson dépasse le pixel de tolérance à CHAQUE frame.
+  À 1/60 l'imposteur seul donnait −36 % au récif ; à 0,05 il ne donne plus que
+  −7 % (57 % de dessins directs) — c'est ce qui a imposé la planche.
+- **Une repeinte coûte plus qu'un dessin direct** (×1,2 à ×2,4) : pixels ×4,
+  effacement, recopie. Une image n'est rentable que réutilisée.
+- **Le demi-tour regonfle la hauteur d'un tiers** : sur l'échelle de la
+  transformation, l'image changeait de palier — repeinte à chaque virage.
+- **La croisière tombait pile sur une frontière d'effort** (≈ 1,25) et changeait
+  de planche sans arrêt : paliers centrés sur 0,75 / 1,25 / 1,75.
+- `Entity.color` est tirée par `Math.random` au PREMIER accès : un banc de
+  mesure qui sauve/restaure l'état doit la figer avant, sinon la couleur change
+  entre deux rendus « identiques » (la lanterne « allumée » d'une capture).
+
+### 10.5 Ce qui reste
+
+- **Les visages** (dessinés en direct, une vingtaine de chemins chacun) et les
+  **nageurs de plus de 48 px** (directs quand la frame est lente) sont
+  désormais l'essentiel du dessin des créatures au zoom 1.
+- **La simulation est super-linéaire** : 566 → 1 116 entités, 10,2 → 46,9 ms
+  (×4,6 pour ×2). Au profileur, surpeuplé : `move` 29 %, **le getter
+  `Entity.size` 20 %** (11 % en population normale — recalculé à chaque paire
+  de voisins), `update` 18 %, `neighbors` 9 %, `tryMate` 3 %, boids 3 %.
+  Les boids parcourent TOUT le banc (`groupMates`, en O(G²)) et le nourrissage
+  fait grossir les bancs ; la grille rend en moyenne 42 voisins par requête.
+- Non mesurable ici : un canvas accéléré (GPU). Les images sources sont créées
+  `willReadFrequently: true` (§7) ; sur une machine accélérée il faut vérifier
+  à la touche F, `?imposteur=0` en témoin.

@@ -25,6 +25,13 @@ const Main = {
   init() {
     this.canvas = document.getElementById('game');
     this.ctx = this.canvas.getContext('2d');
+    // Les corps des créatures dessinées passent par leur IMPOSTEUR sur le seul
+    // canvas du jeu (cf. FishBody.corpsEnCache) ; l'atelier, qui ne charge pas
+    // main.js, garde le rendu direct.
+    FishBody.activerCache(this.ctx);
+    // `?imposteur=0` le coupe : comparer les deux rendus sur une vraie machine
+    // (touche F pour le compteur), sans rien changer au code.
+    if (/[?&]imposteur=0\b/.test(location.search)) FishBody.CACHE_CORPS = false;
     this.resize();
     window.addEventListener('resize', () => this.resize());
 

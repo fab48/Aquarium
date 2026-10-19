@@ -298,6 +298,8 @@ class Entity {
     // reposé reprendrait son arc balistique là où on l'a posé.
     if ((this._saisi || this._lache) && this._galPh) GAGS._galFin(this);
     if ((this._saisi || this._lache) && Saisie.pilote(this, dt, t)) return;
+    // SUPER SAÏYEN (cf. saiyan.js) : même principe, la scène pilote tout.
+    if (this._saiyan && Saiyan.pilote(this, dt, t)) return;
 
     // Faim. Métabolisme : les nageurs rapides brûlent plus, les embusqués
     // (murène, ver-tapis) qui attendent sans bouger beaucoup moins.
@@ -1134,7 +1136,8 @@ class Entity {
     // C'est le geste le plus naturel du jeu (« ils se font tous manger, je vais
     // les aider »), et il n'avait aucun effet visible avant la minute suivante.
     if (this.def.fraiRapide && this.stage === 'adult'
-        && Ecosystem.countSpecies(this.speciesId) < Ecosystem.popCap(this.def)) {
+        && Ecosystem.countSpecies(this.speciesId) < Ecosystem.popCap(this.def)
+        && Ecosystem.total < Ecosystem.BUDGET) {
       this._fraiT = (this._fraiT ?? 0) + (fav ? 1 : 0.45);
       if (this._fraiT >= 1) {
         this._fraiT = 0;
@@ -2785,6 +2788,7 @@ class Entity {
     // `FishBody.deformationScene` et `FishBody.smear` : l'atelier (vue Scènes)
     // applique exactement les mêmes — deux copies divergeraient au premier
     // réglage.
+    if (this._saiyan) Saiyan.aura(ctx, this, t);       // derrière le corps
     FishBody.deformationScene(ctx, this, t);
     // Le dauphin se tord de rire : il roule sur lui-même
     if (this._farceRoll) ctx.rotate(Math.sin(this._farceRoll) * 0.5);
@@ -2792,6 +2796,7 @@ class Entity {
     // `rendreScene` plie le corps par tranches quand la pose le demande
     // (cabré en arc de cercle, tête froissée du crash), sinon dessin direct.
     FishBody.rendreScene(ctx, this, t);
+    if (this._saiyan) Saiyan.crete(ctx, this, t);      // par-dessus le crâne
     ctx.restore();
   }
 }

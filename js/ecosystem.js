@@ -848,6 +848,15 @@ const Ecosystem = {
   // ce qui finit par tout ramener à l'équilibre — sans jamais punir le joueur.
   boom: {},
 
+  // LE PLAFOND DE L'AQUARIUM ENTIER. Chaque espèce peut doubler, mais toutes à
+  // la fois, c'était 576 → 1 223 créatures et une simulation cinq fois plus
+  // lente (11 → 55 ms par frame, mesuré en nourrissant tout le bas de chaîne).
+  // Au-delà, plus aucune ponte : c'est le filet de sécurité de la machine,
+  // invisible. La scène qui ramène l'équilibre, c'est le Requin Super Saïyen
+  // (saiyan.js), qui se déclenche bien avant.
+  BUDGET: 800,
+  total: 0,
+
   // Plafond du boom : au mieux le DOUBLE de la population normale. Au-delà,
   // l'écran devient illisible et les perfs souffrent (GDD §14).
   feedBoost(speciesId, amount) {
@@ -980,6 +989,7 @@ const Ecosystem = {
     // Capacité de charge par espèce (GDD §14) : la pyramide trophique impose
     // beaucoup de petits herbivores et très peu de grands prédateurs.
     if (this.countSpecies(parent.speciesId) >= this.popCap(parent.def)) return;
+    if (this.total >= this.BUDGET) return;
     parent.evenement('pond');       // le dessin peut avoir SA petite danse de ponte
     const egg = new Entity(parent.speciesId, ox, oy, { stage: 'egg', groupId: parent.groupId });
     egg.stage = 'egg'; egg.growth = 0.2; egg.stateTimer = 0;
@@ -1080,6 +1090,7 @@ const Ecosystem = {
     this.grid.clear();
     this._nbCache.clear();
     this.counts = {};
+    this.total = 0;
     this.bySpecies = {};
     this.byGroup = {};
     // Les colosses sont indexes A PART : la grille fait 130 px et `neighbors`
@@ -1098,6 +1109,7 @@ const Ecosystem = {
     for (const e of this.entities) {
       if (e.dead) continue;
       this.counts[e.speciesId] = (this.counts[e.speciesId] || 0) + 1;
+      this.total++;
       if (e.state === 'flee') this._enFuite[e.speciesId] = (this._enFuite[e.speciesId] || 0) + 1;
       // Hors champ ET loin : elle passera au pas grossier (cf. `update`). Les
       // colosses et les chasseurs lancés gardent le pas fin.
@@ -1331,6 +1343,7 @@ const Ecosystem = {
     this.regroupeBancs(dt);
     this.decayBoom(dt);
     this.immigration(dt);
+    Saiyan.update(dt);            // le régulateur du surnombre (cf. saiyan.js)
   },
 
   _visibles: [],

@@ -41,6 +41,7 @@ const Legend = {
     ['PTUI !', 'le Poisson Archer crache un jet d’eau sur un oiseau : touché, il tombe à l’eau, sonné — et l’archer file le gober'],
     ['un oiseau à plat ventre sur l’eau', 'abattu par un crachat : s’il se réveille avant l’archer, il repart trempé et furieux'],
     ['TOC !', 'le Requin Marteau assomme un crabe d’un coup de tête dans le sable, avant de le manger'],
+    ['SUPER !', 'une espèce prolifère : un Requin devient Super Saïyen. Aura dorée, il peut aller partout et gobe ce qui est en trop, puis s’écroule, épuisé'],
     ['WOUHOU !', 'le Dauphin Farceur prend son élan, jaillit hors de l’eau et fait ses galipettes — un à trois tours, nez le premier à la retombée'],
     ['BONK !', 'en plein bond, le dauphin télescope un oiseau : plumes, l’oiseau tombe à plat ventre, sonné (il ne meurt pas) — le dauphin fait la tête surprise, puis rit'],
     ['un anneau qui se remplit', 'appui long sur une créature : elle sera saisie. Glissez pour la promener, levez le doigt pour la lâcher'],

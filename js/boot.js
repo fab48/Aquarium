@@ -17,7 +17,7 @@
   const FILES = [
     'config', 'utils', 'gags', 'species', 'sprites', 'world', 'camera', 'particles', 'food',
     'fishbody', 'entity', 'idcard', 'legend', 'ecosystem', 'background', 'input',
-    'saisie', 'svgexport', 'svgimport', 'save', 'fps', 'main',
+    'saisie', 'saiyan', 'svgexport', 'svgimport', 'save', 'fps', 'main',
   ];
   const local = /^(localhost|127\.0\.0\.1|\[::1\]|)$/.test(location.hostname);
   const v = local ? `?v=${Date.now()}` : '';

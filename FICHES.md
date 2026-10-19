@@ -231,6 +231,7 @@ la tortue.
 ### Requin Dents-Molles — *Requin* — *Carcharodon dentimollis*
 - **Phrase** — « Grrr… aïe, mes dents. »
 - **Action** — son nom est devenu sa mécanique — **quand il mange, il perd une dent**, et il ne peut plus attraper personne tant qu'elle n'a pas repoussé. Le Poisson Dentiste la lui refait sur-le-champ ; sinon elle revient toute seule, faute de quoi il mourrait de faim.
+- **Super Saïyen** (`js/saiyan.js`, idée de l'auteur) — quand le joueur fait proliférer une espèce (1,5× son plafond normal) ou que l'aquarium déborde (760 créatures), le requin le plus proche se transforme : il se ramasse comme un ressort, aura dorée, crête de cheveux sur le crâne, « SUPER ! ». Il **peut tout faire** — toutes les profondeurs, toutes les zones, tous les menus — et gobe ce qui est en trop (œufs compris), jamais en dessous du plafond normal d'une espèce. Puis il s'écroule, épuisé (100 s de chasse au plus, 40 s de repos).
 - **Mange** — Thon Speedy, Poisson-perroquet Pétomane · plancton · **Favori**** — —
 - **Mangé par** — personne
 - T4 grand prédateur · taille 70 · zone **Mer → Grand large** · frayère **haut-fond** · plafond 6, plancher 4

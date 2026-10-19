@@ -589,6 +589,29 @@ Six mécanismes le rendent stable **sans réglage espèce par espèce**. Les tou
 4. **Immigration** (`Ecosystem.immigration`) — filet de sécurité : une espèce localement éteinte revient du large. Le joueur ne peut pas perdre une espèce définitivement.
 5. **Boom provoqué par le joueur** (`Ecosystem.boom` / `feedBoost`) — nourrir une espèce fait monter son plafond jusqu'au double. Les prédateurs se reportent alors sur elle (`nearestPreyFor` pondère par l'abondance), ce qui ramène tout à l'équilibre sans jamais punir le joueur (GDD §9). Le boom décroît vite : il faut nourrir **en continu** pour le maintenir.
 
+### Le surnombre : un plafond pour la machine, un Super Saïyen pour la scène
+
+Le boom ne double que le plafond de l'espèce nourrie ; rien ne plafonnait
+l'aquarium ENTIER. Nourrir tout le bas de chaîne : 576 → 1 223 créatures, et la
+simulation de 11 à 55 ms par frame (vécu : « le PC était au bout du rouleau »).
+Deux niveaux depuis (octobre 2026) :
+
+- **`Ecosystem.BUDGET` (800)** — au-delà, plus aucune ponte (`layEgg` et le
+  frai éclair). Invisible, c'est le filet de la machine. `Ecosystem.total` est
+  compté avec `counts`, une fois par frame.
+- **Le Requin Super Saïyen** (`js/saiyan.js`) — la scène qui ramène l'équilibre,
+  décrite dans FICHES.md. Il sort de la simulation comme une créature saisie
+  (`Saiyan.pilote`, appelé avant la faim) et **gobe sans `Ecosystem.eat`** :
+  passer par `eat` le ferait grossir à chaque bouchée et exploser au trentième
+  poisson. Il décrémente `counts` à chaque bouchée, sinon il dévorerait un banc
+  entier dans la frame où il l'atteint.
+
+Mesuré, 6 min chacun : aquarium sans joueur **0 transformation** (total 532 à
+674) ; gavage continu de tout le bas de chaîne : total plafonné à **808**,
+simulation **10 à 27 ms** au lieu de 55, 3 transformations, 1 101 créatures
+gobées, **aucune espèce sous son plafond normal**, jamais hors de l'eau, aucun
+résidu de canal, 53 espèces sur 53.
+
 ### Trois mécaniques de défense et de chasse (2026-09-04)
 
 - **`piquant: {range}`** — « tous ceux qui pic-pic rendent malade ». Au contact,

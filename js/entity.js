@@ -2006,18 +2006,8 @@ class Entity {
       const panique = this.state === 'flee';
       const rSep2 = panique ? 6400 : 1600;     // 80 px contre 40
       const mates = Ecosystem.groupMates(this);
-      // LE BANC GAVÉ. Chacun regardait TOUT son banc : un coût au carré de sa
-      // taille. Nourrir fait passer un banc de 31 à 89 poissons, soit de 3 749
-      // à 38 672 paires par frame. Au-delà de `BANC_ECHANTILLON`, chacun n'en
-      // regarde qu'un sur `pas`, un échantillon qui tourne à chaque frame :
-      // cohésion et alignement sont des MOYENNES, l'échantillon les estime
-      // sans biais ; la séparation est une SOMME, multipliée par `pas`. Un banc
-      // de taille normale n'est pas concerné : le calcul y reste exact.
-      const pas = mates.length > Entity.BANC_ECHANTILLON
-        ? Math.ceil(mates.length / Entity.BANC_ECHANTILLON) : 1;
       let cx = 0, cy = 0, avx = 0, avy = 0, sx = 0, sy = 0, n = 0;
-      for (let i = (this.id + Entity.frame) % pas; i < mates.length; i += pas) {
-        const m = mates[i];
+      for (const m of mates) {
         if (m === this) continue;
         const d2 = U.dist2(this.x, this.y, m.x, m.y);
         if (d2 > 340 * 340) continue;
@@ -2037,7 +2027,7 @@ class Entity {
           ax += (avx / n - this.vx) * 2.2;     // alignement
           ay += (avy / n - this.vy) * 2.2;
         }
-        const kSep = (panique ? 9 : 4.5) * pas;
+        const kSep = panique ? 9 : 4.5;
         ax += sx * kSep; ay += sy * kSep;      // séparation
         // La contagion de panique vivait ICI : « assez de voisins affolés, on
         // file avec eux ». Elle comptait les fuyards à chaque frame et appelait
@@ -2158,10 +2148,15 @@ class Entity {
                             && !(this._ecraseT > 0));
     const poussable = !def.filterFeeder && def.size < 70;
     if (choc || poussable) {
+    // Les tailles sont lues UNE fois : `size` est un accesseur, et cette passe
+    // le payait jusqu'à quatre fois par voisin — il pesait 14 % de la
+    // simulation au profileur dans un aquarium gavé.
+    const ts = this.size;
     for (const o of Ecosystem.neighbors(this.x, this.y)) {
       if (o === this || o.dead) continue;
-      if (choc && o.size >= 45) {
-        const contact = o.size * 0.85 + this.size;
+      const os = o.size;
+      if (choc && os >= 45) {
+        const contact = os * 0.85 + ts;
         if (U.dist2(this.x, this.y, o.x, o.y) < contact * contact) {
           this.evenement('collision', { avec: 'colosse' });
           if (enFleche) this.crash();       // en scène : l'accordéon du Coyote
@@ -2179,7 +2174,7 @@ class Entity {
       // Une soustraction et une comparaison suffisent à les écarter : c'est le
       // même filtre que fait une boîte englobante avant un test exact.
       const dx = this.x - o.x;
-      const porteeMax = (this.size + o.size) * 1.5;
+      const porteeMax = (ts + os) * 1.5;
       if (dx > porteeMax || dx < -porteeMax) continue;
       const dy = this.y - o.y;
       if (dy > porteeMax || dy < -porteeMax) continue;
@@ -2189,7 +2184,7 @@ class Entity {
       // les gros labouraient les bancs au repos.
       if (this.state === 'sleep' && o.state !== 'sleep') continue;
       const dortLautre = o.state === 'sleep' && this.state !== 'sleep';
-      const minD = (this.size + o.size) * (dortLautre ? 1.5 : 0.95);
+      const minD = (ts + os) * (dortLautre ? 1.5 : 0.95);
       const d2 = dx * dx + dy * dy;
       if (d2 < minD * minD) {
         const d = Math.max(Math.sqrt(d2), 0.5), push = (minD - d) / minD;
@@ -2821,9 +2816,6 @@ class Entity {
 }
 
 // Le compteur de frames de la simulation, avancé par `Ecosystem.update` : il
-// date les mémos par frame (`size`) et fait tourner l'échantillon des grands
-// bancs. Il reste à 0 hors jeu — l'atelier ne charge pas l'écosystème.
+// date les mémos par frame (`size`). Il reste à 0 hors jeu — l'atelier ne
+// charge pas l'écosystème.
 Entity.frame = 0;
-// Au-delà, un poisson n'examine plus qu'un échantillon de son banc (cf. boids).
-// Un banc normal va jusqu’à une cinquantaine de poissons : il reste en calcul exact.
-Entity.BANC_ECHANTILLON = 60;

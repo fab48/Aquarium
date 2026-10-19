@@ -770,3 +770,26 @@ comparer sur une vraie machine avec la touche F.
 - Non mesurable ici : un canvas accéléré (GPU). Les images sources sont créées
   `willReadFrequently: true` (§7) ; sur une machine accélérée il faut vérifier
   à la touche F, `?imposteur=0` en témoin.
+
+## 11. La simulation après le plafond de population (octobre 2026)
+
+Le plafond global (`Ecosystem.BUDGET`, 800, cf. CLAUDE.md « Le surnombre ») a
+fait l'essentiel : un aquarium gavé coûtait 55 ms de simulation par frame à
+1 223 créatures, il plafonne à ~23 ms à 800. Deux retouches ensuite, mesurées
+par blocs alternés DANS LE MÊME MONDE (les mondes « semés » divergent trop vite
+pour comparer deux pages) :
+
+- **`Entity.size` mémoïsée par frame**, et lue une seule fois par voisin dans la
+  passe d'anti-chevauchement de `move` : **−10 % en jeu normal** (7,12 → 6,41 ms
+  à 533 créatures), rien de mesurable à 800 (22,8 → 23,1, dans le bruit).
+- **Échantillonner les grands bancs** (un poisson sur `pas` au-delà de N) a été
+  essayé puis RETIRÉ : aucun gain une fois le plafond posé, et un risque sur le
+  comportement des bancs.
+
+Ce qui reste cher à 800 créatures, au profileur : `move` et `update` (≈ 45 % à
+eux deux, en temps propre) et l'accesseur `size` (≈ 14 %). Attention, la
+répartition par APPELANT du profileur est faussée par l'inlining de V8 (il
+attribuait des lectures de `size` à `neighbors`, qui n'en fait aucune). Le
+prochain levier serait structurel : faire de la taille un champ simple, mis à
+jour une fois par frame dans `update`, et regrouper les boucles de voisinage de
+`move`.

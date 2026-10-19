@@ -1,0 +1,48 @@
+# Met le jeu en ligne sur GitHub Pages (https://fab48.github.io/Aquarium/)
+# à chaque push sur master, ou à la main depuis l'onglet Actions.
+#
+# C'est le `dist/` du mode normal de `build.py` : scripts concaténés à
+# empreinte, dessins du manifeste seulement, et la PWA — le jeu s'installe sur
+# l'écran d'accueil et tourne hors ligne. Tous les chemins y sont relatifs, il
+# fonctionne donc tel quel sous le sous-dossier `/Aquarium/`.
+#
+# À activer une fois : Settings → Pages → Source « GitHub Actions ».
+
+name: Pages
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Un seul déploiement à la fois ; celui en cours va au bout.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploiement.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pur stdlib : le Python du runner suffit, rien à installer.
+      - name: Construire le site
+        run: python3 build.py
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - id: deploiement
+        uses: actions/deploy-pages@v4

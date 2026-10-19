@@ -82,7 +82,15 @@ C'est ce fichier que publient les **releases GitHub** :
 `.github/release-notes.md`. On le lance depuis l'onglet Actions (« Run
 workflow », avec le numéro de version) ou en poussant une étiquette `v*`
 (`git tag v1.1.0 && git push origin v1.1.0`) ; une release déjà créée à la
-main reçoit simplement le fichier. C'est la seule façon de jouer sans serveur : le
+main reçoit simplement le fichier.
+
+La version **en ligne** est le `dist/` du mode normal, PWA comprise, publié sur
+**GitHub Pages** (https://fab48.github.io/Aquarium/) par
+`.github/workflows/pages.yml` à chaque push sur master. Tous ses chemins sont
+relatifs, il tourne donc tel quel sous le sous-dossier `/Aquarium/` — vérifié
+servi sous ce chemin : 53 dessins sur 53, service worker à la bonne portée,
+rechargement hors ligne complet. Toute URL absolue (`/Assets/…`) ajoutée un
+jour casserait la version en ligne seulement. C'est la seule façon de jouer sans serveur : le
 `index.html` du dépôt, ouvert d'un double-clic depuis un ZIP téléchargé, n'a
 **aucun** dessin (0 sur 53 mesuré, contre 53 sur 53 pour le fichier unique).
 

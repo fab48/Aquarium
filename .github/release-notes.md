@@ -1,5 +1,9 @@
 ## 🐠 Jouer
 
+**En ligne, sans rien installer :** https://fab48.github.io/Aquarium/. Sur téléphone, « Ajouter à l'écran d'accueil » l'installe comme une application, et il marche ensuite sans connexion.
+
+**Ou sur votre ordinateur, sans connexion :**
+
 1. Téléchargez **`Aquarium-Vivant.html`** ci-dessous (dans « Assets »).
 2. Double-cliquez dessus : le jeu s'ouvre dans votre navigateur.
 

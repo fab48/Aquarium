@@ -1,0 +1,38 @@
+# Publie une release GitHub à chaque étiquette `v*` poussée (v1.0.0, v1.1.0…).
+#
+# Pourquoi : quelqu'un qui télécharge le dépôt et ouvre `index.html` d'un
+# double-clic n'a AUCUN dessin — `file://` bloque le `fetch` des
+# `Assets/*.json` par CORS, et le jeu retombe en silence sur les silhouettes
+# procédurales. La release joint donc le fichier unique de
+# `build.py --inline`, dessins embarqués, qui s'ouvre d'un double-clic.
+#
+# Le texte de la page est `.github/release-notes.md`.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pur stdlib : le Python du runner suffit, rien à installer.
+      - name: Construire le fichier unique
+        run: |
+          python3 build.py --inline
+          cp dist/index.html Aquarium-Vivant.html
+
+      - name: Publier la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" Aquarium-Vivant.html \
+            --title "Aquarium Vivant $GITHUB_REF_NAME" \
+            --notes-file .github/release-notes.md

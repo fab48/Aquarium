@@ -1,10 +1,17 @@
-# Publie une release GitHub à chaque étiquette `v*` poussée (v1.0.0, v1.1.0…).
+# Publie une release GitHub avec le jeu en un seul fichier, dessins inclus.
 #
 # Pourquoi : quelqu'un qui télécharge le dépôt et ouvre `index.html` d'un
 # double-clic n'a AUCUN dessin — `file://` bloque le `fetch` des
 # `Assets/*.json` par CORS, et le jeu retombe en silence sur les silhouettes
 # procédurales. La release joint donc le fichier unique de
 # `build.py --inline`, dessins embarqués, qui s'ouvre d'un double-clic.
+#
+# Deux façons de la lancer :
+# - sur GitHub, onglet Actions → Release → « Run workflow », en donnant le
+#   numéro de version (v1.0.0, v1.1.0…) : l'étiquette est créée sur master ;
+# - ou en poussant soi-même une étiquette : git tag v1.1.0 && git push origin v1.1.0
+# Si la release existe déjà (créée à la main sur GitHub), le fichier y est
+# simplement joint, ou remplacé.
 #
 # Le texte de la page est `.github/release-notes.md`.
 
@@ -13,6 +20,11 @@ name: Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Numéro de version, par exemple v1.0.0'
+        required: true
 
 permissions:
   contents: write
@@ -20,6 +32,8 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.version || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
 
@@ -33,6 +47,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" Aquarium-Vivant.html \
-            --title "Aquarium Vivant $GITHUB_REF_NAME" \
-            --notes-file .github/release-notes.md
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" Aquarium-Vivant.html --clobber
+          else
+            gh release create "$TAG" Aquarium-Vivant.html \
+              --target "$GITHUB_SHA" \
+              --title "Aquarium Vivant $TAG" \
+              --notes-file .github/release-notes.md
+          fi

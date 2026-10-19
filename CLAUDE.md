@@ -76,11 +76,13 @@ tout `fetch`) : sans ça, `file://` bloque `fetch` par CORS et le fichier perdra
 tous ses sprites **en silence**, en rendant des silhouettes procédurales.
 Vérifié : un seul GET, zéro requête vers `Assets/`.
 
-C'est ce fichier que publient les **releases GitHub** : pousser une étiquette
-`v*` (`git tag v1.1.0 && git push origin v1.1.0`) lance
-`.github/workflows/release.yml`, qui construit en `--inline` et joint
+C'est ce fichier que publient les **releases GitHub** :
+`.github/workflows/release.yml` construit en `--inline` et joint
 `Aquarium-Vivant.html` à la release, avec le texte de
-`.github/release-notes.md`. C'est la seule façon de jouer sans serveur : le
+`.github/release-notes.md`. On le lance depuis l'onglet Actions (« Run
+workflow », avec le numéro de version) ou en poussant une étiquette `v*`
+(`git tag v1.1.0 && git push origin v1.1.0`) ; une release déjà créée à la
+main reçoit simplement le fichier. C'est la seule façon de jouer sans serveur : le
 `index.html` du dépôt, ouvert d'un double-clic depuis un ZIP téléchargé, n'a
 **aucun** dessin (0 sur 53 mesuré, contre 53 sur 53 pour le fichier unique).
 

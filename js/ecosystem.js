@@ -1320,6 +1320,7 @@ const Ecosystem = {
   // Vérifié en simulation longue AVANT/APRÈS : mêmes populations, mêmes prises.
   _tick: 0,
   update(dt, t) {
+    Entity.frame++;               // date les mémos par frame (cf. Entity.size)
     this.buildGrid();
     this.mesureFuite(dt);         // qui est harcelé, avant qu'on choisisse les proies
     this.humeurBancs(dt, t);      // le banc décide AVANT que ses membres pensent

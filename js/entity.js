@@ -123,10 +123,19 @@ class Entity {
   // (au-delà de 1 c'est du gras, et à TAILLE_EXPLOSION ça éclate) : la
   // variabilité naturelle passe donc par des facteurs séparés.
   get size() {
+    // MÉMOÏSÉE PAR FRAME. Lue à chaque paire de voisins (boids, contacts,
+    // séparation), elle était recalculée 15 700 fois par frame en temps normal
+    // et 68 800 en surpopulation — 20 % du temps propre de la simulation.
+    // Recalculée si `growth` bouge dans la frame (une bouchée, le gavage) ;
+    // hors jeu (`Entity.frame` reste à 0 dans l'atelier), jamais mémoïsée.
+    const f = Entity.frame;
+    if (f && this._tailleF === f && this._tailleG === this.growth) return this._taille;
     // Les poissons grandissent toute leur vie : un vieux est sensiblement plus
     // gros qu'un jeune adulte, sans avoir été gavé pour autant.
     const vieillesse = U.lerp(0.9, 1.12, U.clamp(this.age / this.maxAge, 0, 1));
-    return this.def.size * this.growth * this.gabarit * vieillesse;
+    const s = this.def.size * this.growth * this.gabarit * vieillesse;
+    if (f) { this._tailleF = f; this._tailleG = this.growth; this._taille = s; }
+    return s;
   }
   get color() { return this._color ?? (this._color = U.pick(this.def.colors)); }
   get colorDark() { return this._cd ?? (this._cd = U.mixColor(this.color.startsWith('#') ? this.color : '#888888', '#102030', 0.35)); }
@@ -1997,8 +2006,18 @@ class Entity {
       const panique = this.state === 'flee';
       const rSep2 = panique ? 6400 : 1600;     // 80 px contre 40
       const mates = Ecosystem.groupMates(this);
+      // LE BANC GAVÉ. Chacun regardait TOUT son banc : un coût au carré de sa
+      // taille. Nourrir fait passer un banc de 31 à 89 poissons, soit de 3 749
+      // à 38 672 paires par frame. Au-delà de `BANC_ECHANTILLON`, chacun n'en
+      // regarde qu'un sur `pas`, un échantillon qui tourne à chaque frame :
+      // cohésion et alignement sont des MOYENNES, l'échantillon les estime
+      // sans biais ; la séparation est une SOMME, multipliée par `pas`. Un banc
+      // de taille normale n'est pas concerné : le calcul y reste exact.
+      const pas = mates.length > Entity.BANC_ECHANTILLON
+        ? Math.ceil(mates.length / Entity.BANC_ECHANTILLON) : 1;
       let cx = 0, cy = 0, avx = 0, avy = 0, sx = 0, sy = 0, n = 0;
-      for (const m of mates) {
+      for (let i = (this.id + Entity.frame) % pas; i < mates.length; i += pas) {
+        const m = mates[i];
         if (m === this) continue;
         const d2 = U.dist2(this.x, this.y, m.x, m.y);
         if (d2 > 340 * 340) continue;
@@ -2018,7 +2037,7 @@ class Entity {
           ax += (avx / n - this.vx) * 2.2;     // alignement
           ay += (avy / n - this.vy) * 2.2;
         }
-        const kSep = panique ? 9 : 4.5;
+        const kSep = (panique ? 9 : 4.5) * pas;
         ax += sx * kSep; ay += sy * kSep;      // séparation
         // La contagion de panique vivait ICI : « assez de voisins affolés, on
         // file avec eux ». Elle comptait les fuyards à chaque frame et appelait
@@ -2800,3 +2819,11 @@ class Entity {
     ctx.restore();
   }
 }
+
+// Le compteur de frames de la simulation, avancé par `Ecosystem.update` : il
+// date les mémos par frame (`size`) et fait tourner l'échantillon des grands
+// bancs. Il reste à 0 hors jeu — l'atelier ne charge pas l'écosystème.
+Entity.frame = 0;
+// Au-delà, un poisson n'examine plus qu'un échantillon de son banc (cf. boids).
+// Un banc normal va jusqu’à une cinquantaine de poissons : il reste en calcul exact.
+Entity.BANC_ECHANTILLON = 60;

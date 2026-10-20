@@ -55,6 +55,7 @@ const Main = {
     Input.init(this.canvas);
     Legend.init();
     IdCard.init();
+    Son.init();               // rien ne joue avant le premier geste (cf. son.js)
     this.initBarres();
     this.initResetBtn();
 
@@ -113,6 +114,7 @@ const Main = {
     Ecosystem.update(dt, t);
     Particles.update(dt);
     Save.update(dt);          // sauvegarde périodique (cf. save.js)
+    Son.update(dt);           // l'ambiance et le filtre de l'eau suivent la vue
     const tDessin = performance.now();
 
     const ctx = this.ctx;

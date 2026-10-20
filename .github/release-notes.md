@@ -19,7 +19,7 @@ Ce fichier unique contient le jeu complet **et les dessins de toutes les créatu
 - **Molette** : zoom · **clic droit / clic molette** ou souris au bord : déplacer la vue
 - **Double-clic sur une créature** : la caméra la suit
 - **Appui long sur une créature** : l'attraper
-- 🔍 : fiche d'identité · ❔ : légende des bulles et des expressions · **F** : compteur de performance
+- 🔍 : fiche d'identité · ❔ : légende des bulles et des expressions · **F** : compteur de performance · 🔊 : couper / remettre le son
 - Au doigt : tap = nourrir, glisser = déplacer, pincer = zoomer
 
 L'aquarium se sauvegarde tout seul dans le navigateur. 💾 et 📂 permettent d'emporter la sauvegarde dans un fichier et de la recharger ailleurs.

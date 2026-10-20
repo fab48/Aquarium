@@ -83,6 +83,9 @@ const FishBody = {
     sad:       { sx: 1.05, sy: 1.1, pu: .6,  look: -.2, lid: .15, ba: -.75, bl: .35, mouth: 'triste', blush: 0 },
     // Air malin (l'orque qui feinte)
     smug:      { sx: .95,  sy: .62, pu: .45, look: .5, lid: .42, ba: .3,  bl: .45, mouth: 'malin', blush: 0 },
+    // Bâillement : yeux fermés, sourcils hissés, la gueule la plus grande du
+    // catalogue (la Murène qui sort de son trou pour bâiller)
+    yawn:      { sx: 1,    sy: .9,  pu: .5,  look: 0,  lid: .85, ba: -.6, bl: .85, mouth: 'cri', blush: 0 },
   },
 
   // --- PALETTE DU VISAGE ------------------------------------------------------
@@ -2756,7 +2759,7 @@ const FishBody = {
 
   drawEel(ctx, e, t) {
     const s = e.size;
-    const strike = U.clamp(e.strikeT ?? 0, 0, 1);
+    const strike = U.clamp(Math.max(e.strikeT ?? 0, e._sortie || 0), 0, 1);
     const SEG = 12;
     const amp = s * 0.5 * (0.3 + strike * 0.7);
 
@@ -3700,7 +3703,9 @@ const FishBody = {
     if (r === 'lantern' && e._fondu != null) ctx.globalAlpha *= e._fondu;
     if (ctx.globalAlpha < 0.02) { ctx.restore(); return null; }
     let gueule = 0;
-    const jaillit = (e.state === 'strike' || e.state === 'retract') ? U.clamp(e.strikeT || 0, 0, 1) : 0;
+    // `_sortie` : la Murène qui se hisse hors de son trou SANS attaquer (son bâillement).
+    const jaillit = Math.max((e.state === 'strike' || e.state === 'retract') ? U.clamp(e.strikeT || 0, 0, 1) : 0,
+                             e._sortie || 0);
     if (r === 'worm') {
       ctx.translate(s * 0.5 * jaillit, -s * 0.5 * jaillit);
       gueule = Math.max(jaillit, e._gueule || 0);

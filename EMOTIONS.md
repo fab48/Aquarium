@@ -37,6 +37,7 @@ une ligne là-bas, puis une ligne ici et une dans `js/legend.js`.
 | `wink` | complice | clin d'œil |
 | `smug` | malin | paupière basse, sourire en coin |
 | `proud` | fier | paupière basse, petit sourire |
+| `yawn` | bâille | yeux fermés, sourcils hissés, la gueule la plus grande du catalogue |
 
 ---
 
@@ -79,6 +80,7 @@ une ligne là-bas, puis une ligne ici et une dans `js/legend.js`.
 | fait semblant de charger | `wink` | `entity.js` — `trickster` |
 | ressort trempé d'un plongeon raté | `sad` | `entity.js` — `aerial` |
 | gênée d'avoir raté son coup (murène) | `blush` | `entity.js` — `ambush` |
+| se hisse hors de son trou pour bâiller (murène) | `yawn` | gag de la Murène (`GAGS._baillement`) |
 | timide quand le curseur approche | `blush` | gag de l'Hippocampe |
 | danse sur sa boule disco | `happy` + **notes de musique** | gag du Crabe |
 | dort (la nuit, ~46 % de l'aquarium) | `sleeping` | `entity.js` — sauf nocturnes et embusqués |

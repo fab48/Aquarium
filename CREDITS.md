@@ -13,6 +13,6 @@ Code et dessins sous licence MIT (voir [LICENSE](LICENSE)).
 - **Planches de concept** (`Assets/Concepts/`) : les fichiers
   « ChatGPT Image … » ont été générés avec ChatGPT ; les repères
   (`Assets/Reperes/`) sont découpés dans ces planches par `decoupe_planche.py`.
-- **Sons** : pas encore là. Ils sont prévus en synthèse Web Audio procédurale
-  (voir `SONS.md`) — si un fichier son tiers entre un jour dans le dépôt, il
-  devra être sous CC0 ou CC-BY et crédité ici.
+- **Sons** : synthétisés en direct par le navigateur (Web Audio, `js/son.js`,
+  voir `SONS.md`) — aucun fichier son. Si un fichier son tiers entre un jour
+  dans le dépôt, il devra être sous CC0 ou CC-BY et crédité ici.

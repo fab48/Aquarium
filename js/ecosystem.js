@@ -43,7 +43,12 @@ const Ecosystem = {
     // Les grands fonds : sans eux la zone abyssale n'est qu'un decor noir.
     // La crevette d'abord (base de la chaine), puis ce qui la mange.
     this.spawnGroups('crevette', 4);
-    this.spawnGroups('calamar', 4);
+    // LE PEUPLEMENT DE DÉPART EST L'ÉQUILIBRE, pas le plafond. Mesuré sur 2 ×
+    // 12 min (20 octobre 2026) : quatre espèces démarraient bien au-dessus de
+    // ce que la prédation leur laisse, et le joueur arrivait sur une hécatombe
+    // — Calmar 16 → 5, Maquereau 23 → 7, Fugu 8 → 4, Oursin 18 pour un
+    // plafond de 14. Elles démarrent maintenant près de leur effectif tenu.
+    this.spawnGroups('calamar', 2);
     this.spawnGroups('calamar_geant', 2);
     this.spawnGroups('moustachu', 3);
     this.spawnGroups('dauphin', 2);
@@ -55,7 +60,7 @@ const Ecosystem = {
     this.spawnGroups('cachalot', 2);
     // Les trois dernières arrivées : le Fugu qui pique, le Pélican qui cueille
     // les volants en plein vol, l'Anguille qui électrocute.
-    this.spawnGroups('fugu', 3);
+    this.spawnGroups('fugu', 2);
     this.spawnGroups('pelican', 2);
     this.spawnGroups('anguille', 3);
 
@@ -63,11 +68,11 @@ const Ecosystem = {
     // chaîne gagne ses maillons manquants. Ordre important : les bases de
     // chaîne AVANT ce qui les mange, sinon les prédateurs démarrent à jeun.
     this.spawnGroups('corail', 5);          // second refuge de ponte
-    this.spawnGroups('oursin', 4);
+    this.spawnGroups('oursin', 3);
     this.spawnGroups('nudibranche', 3);
     this.spawnGroups('krill', 1);
     this.spawnGroups('crevette_claire', 2);
-    this.spawnGroups('maquereau', 2);
+    this.spawnGroups('maquereau', 1);      // un seul banc, de 9 à 13
     this.spawnGroups('dorade', 2);
     this.spawnGroups('papillon', 4);
     this.spawnGroups('coffre', 3);
@@ -1108,6 +1113,7 @@ const Ecosystem = {
     const cs = this.GRID;
     for (const e of this.entities) {
       if (e.dead) continue;
+      e.poserTaille();            // la taille de la frame, en champ (cf. Entity.poserTaille)
       this.counts[e.speciesId] = (this.counts[e.speciesId] || 0) + 1;
       this.total++;
       if (e.state === 'flee') this._enFuite[e.speciesId] = (this._enFuite[e.speciesId] || 0) + 1;

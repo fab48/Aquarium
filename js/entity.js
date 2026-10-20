@@ -137,6 +137,23 @@ class Entity {
     if (f) { this._tailleF = f; this._tailleG = this.growth; this._taille = s; }
     return s;
   }
+  // LA TAILLE EN CHAMP, en jeu. Même mémoïsé, l'accesseur coûtait deux tests
+  // et un appel à chacune des dizaines de milliers de lectures par frame :
+  // poser un champ propre une fois par frame (`Ecosystem.buildGrid`) fait
+  // gagner 10 % de la simulation (2,96 → 2,66 ms à 500 créatures, A/B
+  // entrelacé sur le même monde). Le champ masque l'accesseur du prototype,
+  // qui reste là pour l'atelier (qui ne simule pas) et pour une créature née
+  // dans la frame. Une bouchée qui fait grossir se voit donc à la frame
+  // suivante — un retard d'un soixantième de seconde.
+  poserTaille() {
+    const v = this.def.size * this.growth * this.gabarit
+            * U.lerp(0.9, 1.12, U.clamp(this.age / this.maxAge, 0, 1));
+    if (this._tailleChamp) this.size = v;
+    else {
+      Object.defineProperty(this, 'size', { value: v, writable: true, configurable: true });
+      this._tailleChamp = true;
+    }
+  }
   get color() { return this._color ?? (this._color = U.pick(this.def.colors)); }
   get colorDark() { return this._cd ?? (this._cd = U.mixColor(this.color.startsWith('#') ? this.color : '#888888', '#102030', 0.35)); }
   colorAlpha(a) {
@@ -410,6 +427,7 @@ class Entity {
       this._freeze = 0.3;
       this.vx *= 0.6; this.vy *= 0.6;
       if (this._ecraseT <= 0) {
+        Particles.son('boing', this.x, this.y, this.size);
         this.assomme(null, true);          // la vrille et les yeux KO
         // Le PLOP : amplitude NÉGATIVE — le retour part en dépassement étiré
         // puis tremblote, au lieu de rejouer un écrasement (celui qu'`assomme`
@@ -491,10 +509,18 @@ class Entity {
         // Jaillissement : le corps sort d'un coup
         const p = this.target;
         this.strikeT = Math.min(1, this.strikeT + dt * 4);
+        // Une proie de fond se mesure à sa ligne de sable, pas à son y : le
+        // décalage dans la bande (`_sable`) est de la PERSPECTIVE — elle est
+        // plus loin, pas plus bas —, et un nageur tenu au-dessus du sable ne
+        // l'aurait jamais atteinte.
         const reached = p && !p.dead &&
-          U.dist2(this.x, this.y, p.x, p.y) < (this.size * this.strikeT * 3 + p.size) ** 2;
+          U.dist2(this.x, this.y, p.x, p.y - (p._sable || 0)) < (this.size * this.strikeT * 3 + p.size) ** 2;
         if (!p || p.dead || this.stateTimer <= 0 || (this.strikeT >= 1 && reached)) {
-          if (p && !p.dead && reached && !Ecosystem.isNearRefuge(p.x, p.y)
+          // L'anémone protège qui S'Y RÉFUGIE. Une proie posée (l'Oursin) ne
+          // se réfugie nulle part : elle vit au récif, donc presque toujours à
+          // moins de 60 px d'une anémone, et le Mérou ratait par principe.
+          const abritee = p && p.def.movement !== 'fixed' && Ecosystem.isNearRefuge(p.x, p.y);
+          if (p && !p.dead && reached && !abritee
               && Math.random() > def.ambush.missChance) {
             Ecosystem.eat(this, p);
           } else {
@@ -518,6 +544,12 @@ class Entity {
 
       // À l'affût : rentrée, seule la tête ondule hors du trou
       this.strikeT = Math.max(0, this.strikeT - dt * 2);
+      this._poseeCd = Math.max(0, (this._poseeCd ?? 0) - dt);
+      // Parti chercher une proie posée (ci-dessous) : il lâche l'affaire si
+      // elle a disparu ou s'il n'a plus faim.
+      if (this.state === 'hunt' && (!this.target || this.target.dead || this.hunger <= 0.3)) {
+        this.state = 'wander'; this.target = null;
+      }
       if (this._ambushCd <= 0 && this.hunger > 0.3) {
         const p = Ecosystem.nearestPreyFor(this);
         // Embusqué MOBILE (Poisson-Tapis) : il se traîne vers ce qu'il repère au
@@ -531,9 +563,24 @@ class Entity {
         // faisait jaillir en boucle) — ou ce qui DORT à sa portée, aubaine d'une
         // embusquée. Sans ce second cas, elle mourait de faim toutes les nuits.
         const passe = p && (p.speedNow > 18 || p.state === 'sleep');
-        if (passe && U.dist2(this.x, this.y, p.x, p.y) < def.ambush.range ** 2) {
+        // UNE PROIE POSÉE NE PASSE JAMAIS. L'Oursin est `fixed` : à ce compte
+        // le Mérou, son seul prédateur, ne pouvait matériellement pas le
+        // manger (0 prise en 36 min, l'Oursin n'avait donc aucun prédateur).
+        // Un embusqué qui NAGE descend la chercher, en chasse ordinaire, et
+        // ne tente sa chance sur une proie posée qu'une fois toutes les 25 à
+        // 45 s — sinon c'est le ping-pong de la murène qui revient.
+        const posee = p && p.def.movement === 'fixed' && !(this._poseeCd > 0)
+                      && def.movement !== 'fixed' && def.movement !== 'crawl';
+        // Sur une proie posée, il s'approche jusqu'à ce que sa gueule l'ATTEIGNE
+        // (le test `reached` du jaillissement) : à `ambush.range` il aspirait
+        // dans le vide, 165 px trop loin pour un coup qui porte à 124.
+        const portee = posee ? (this.size * 3 + p.size) * 0.85 : def.ambush.range;
+        if ((passe || posee) && U.dist2(this.x, this.y, p.x, p.y - (p._sable || 0)) < portee ** 2) {
           this.state = 'strike'; this.target = p; this.stateTimer = 1.1;
           this.emote('scared', 0.4);         // gueule grande ouverte
+          if (posee) this._poseeCd = U.rand(25, 45);
+        } else if (posee) {
+          this.state = 'hunt'; this.target = p;
         }
       }
       return;
@@ -950,6 +997,9 @@ class Entity {
       // suite : c'est ce délai qui rend le geste sérieux.
       if (this._piquantGonfle > 0.5) this._gonfleCd = 26;
       else if (this._gonfleCd > 0) this._gonfleCd -= dt;
+      // La baudruche se remplit : une fois par gonflement, pas à chaque frame.
+      if (this._piquantGonfle > 0.5 && !this._gonfleSon) { this._gonfleSon = true; Particles.son('gonfle', this.x, this.y, this.size); }
+      else if (this._piquantGonfle < 0.2) this._gonfleSon = false;
     }
   }
 
@@ -971,7 +1021,9 @@ class Entity {
   // qui ne part QUE si quelqu'un est assez près pour la justifier.
   decharge(dt) {
     const S = this.def.shock;
-    this._shockCd = (this._shockCd ?? U.rand(0, S.cooldown)) - dt;
+    // Premier délai dispersé sur la cadence : tiré dans [0, plancher], toutes
+    // les anguilles déchargeaient dans la première demi-minute.
+    this._shockCd = (this._shockCd ?? U.rand(0.1, 1) * Ecosystem.cadence(this, CADENCE.decharge, S.cooldown)) - dt;
     if (this._shockCd > 0) return;
 
     const portee = S.range;
@@ -995,10 +1047,11 @@ class Entity {
     // poissons en vrille, des étoiles partout. Elle partait 25 fois par minute
     // quelque part dans l'aquarium, soit toutes les deux secondes et demie :
     // on ne la remarquait plus, elle faisait partie du décor. Le cooldown se
-    // calcule donc sur l'EFFECTIF (`cadence`), pour une cadence d'aquarium
-    // d'environ une décharge par minute — assez rare pour qu'on la surprenne,
-    // assez fréquente pour qu'elle existe. `S.cooldown` reste le plancher.
-    this._shockCd = Math.max(S.cooldown, Ecosystem.cadence(this, 1, S.cooldown));
+    // calcule donc sur l'EFFECTIF (`cadence`), à la cadence de la table
+    // (`CADENCE.decharge`, qui n'était pas lue : le code disait 1 en dur) —
+    // assez rare pour qu'on la surprenne, assez fréquente pour qu'elle existe.
+    // `S.cooldown` reste le plancher.
+    this._shockCd = Math.max(S.cooldown, Ecosystem.cadence(this, CADENCE.decharge, S.cooldown));
     Particles.eclairs(this.x, this.y, portee, 6);
     this.emote('smug', 1.8, false);
     // BORNÉE À HUIT VICTIMES, LES PLUS PROCHES. Une décharge lâchée dans un
@@ -1103,6 +1156,7 @@ class Entity {
 
   onAte(foodType) {
     const fav = foodType && foodType === this.def.favoriteFood;
+    if (fav) Particles.son('carillon', this.x, this.y, this.size);
     this.hunger = Math.max(0, this.hunger - (fav ? 0.5 : 0.3));
     this.wellFed += fav ? 0.6 : 0.22;
     // Il GROSSIT. Tant qu'il n'est pas adulte c'est de la croissance normale
@@ -1330,6 +1384,9 @@ class Entity {
   // il perd de l'état, dégonfle et déguerpit.
   malaise(force = 1, sx = null, sy = null) {
     this.emote('disgust', 2.5 + force);
+    // Le « bleuh » est réservé au caca avalé (force 1) : la piqûre d'oursin et
+    // le prout respiré se lisent sur le visage — et le prout a déjà son son.
+    if (force >= 1) Particles.son('beurk', this.x, this.y, this.size);
     // perte d'état : la faim remonte, la jauge de ponte s'effondre. Bornée à
     // 0,9 pour que le dégoût ne puisse jamais TUER de faim.
     this.hunger = Math.min(0.9, this.hunger + 0.16 * force);
@@ -1463,6 +1520,7 @@ class Entity {
     this.vx = 0; this.vy = 0;              // il s'arrête NET, collé à l'obstacle
     this.emote('surprise', duree, false);  // le temps de flottement, yeux ronds
     Particles.burst(this.x, this.y, '#ffe8a8', 8);
+    Particles.son('krrsh', this.x, this.y, this.size);
   }
 
   // Choc : il part en vrille, voit des étoiles et reste sonné un moment.
@@ -1473,6 +1531,7 @@ class Entity {
     this.target = null; this._faceAt = null;
     this.choc(1, solY !== null ? 'y' : 'x');
     this.emote('dizzy', 3, vfx);
+    if (vfx) Particles.son('tuiii', this.x, this.y, this.size);
     this.vx *= -0.25; this.vy = -Math.abs(this.vy) * 0.3;
     // La gerbe suit le drapeau `vfx`, comme l'étoile de l'émotion. Elle partait
     // sur CHAQUE assommé : une décharge d'Anguille en touche six d'un coup, et
@@ -1708,7 +1767,10 @@ class Entity {
       // soit une fois et demie le budget entier de bulles de l'aquarium. C'est
       // exactement la règle que le projet s'est donnée (« ne jamais émettre à
       // chaque frame d'une scène ») et qui n'avait pas été appliquée ici.
-      if (this._matingT < dt * 2) Particles.loveBurst((this.x + p.x) / 2, (this.y + p.y) / 2, 4);
+      if (this._matingT < dt * 2) {
+        Particles.loveBurst((this.x + p.x) / 2, (this.y + p.y) / 2, 4);
+        Particles.son('smack', this.x, this.y, this.size);
+      }
 
       // Un seul des deux pond, sinon la portée est doublée
       if (this._matingT > 1.6 && this.id < p.id) {
@@ -2422,13 +2484,19 @@ class Entity {
     // PLAFOND DUR de la surface. Le rappel de bande n'est qu'une accélération :
     // un banc qui prend peur la franchit et se retrouve EN L'AIR au-dessus de
     // l'eau (mesuré : 6,9 % du temps pour les sardines et les confettis).
-    // Les sauteurs (poisson volant, sardine) et les cétacés en train de
-    // respirer en sont évidemment exemptés — et aussi pendant leur REPLONGÉE :
-    // réappliquer le plafond dès la fin du souffle les téléportait de « dos
-    // hors de l'eau » à « entièrement immergés » en une frame.
-    if (!def.aerial && !def.jumps && !this._surfacing && !this._replonge
+    // Les cétacés en train de respirer en sont exemptés — et aussi pendant leur
+    // REPLONGÉE : réappliquer le plafond dès la fin du souffle les téléportait
+    // de « dos hors de l'eau » à « entièrement immergés » en une frame.
+    // Les sauteurs n'en sont exemptés QUE pendant leur saut (`jumpState ===
+    // 'air'`, qui sort de `move` bien avant d'ici). Une exemption sur l'ESPÈCE
+    // laissait un Poisson Volant ou une Sardine qui fuit vers le haut sans
+    // sauter monter jusqu'à 209 px au-dessus de l'eau — et y rester, endormi
+    // compris : ~5 individus en l'air en permanence, mesuré sur 36 min. Leur
+    // plafond est plus près de la surface, pour que la retombée d'un saut
+    // (qui rend la main au ras de l'eau) ne claque pas.
+    if (!def.aerial && !this._surfacing && !this._replonge
         && this.jumpState !== 'air' && !this._plage) {
-      const plafond = CONFIG.SURFACE_Y + this.size * 0.7;
+      const plafond = CONFIG.SURFACE_Y + this.size * (def.jumps ? 0.2 : 0.7);
       if (this.y < plafond) { this.y = plafond; this.vy = Math.max(this.vy, 0); }
     } else if ((this._surfacing || this._replonge) && !this._plage) {
       // PERCÉE BORNÉE : le dos sort de l'eau, le corps ne DÉCOLLE jamais.
@@ -2548,6 +2616,7 @@ class Entity {
     this._agonie = U.clamp(clip.cles[clip.cles.length - 1].t + 0.15, 0.5, 2.5);
     this._agonieMangee = !!mangee;
     this.target = null; this._faceAt = null;
+    Particles.son('mort', this.x, this.y, this.size);
     return true;
   }
 

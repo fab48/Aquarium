@@ -339,9 +339,11 @@ const SPECIES = {
     // Le Confetti sort du menu : depuis que la murène commence à 650 px de
     // profondeur, les deux bandes ne se recouvrent plus que sur 100 px — le
     // lien était déclaré mais ne pouvait presque jamais servir. Le Poisson
-    // Coffre le remplace : il vit à sa portée (350 px de recouvrement), il nage
-    // atrocement mal, et il n'avait AUCUN prédateur — un trou dans la chaîne.
-    prey: ['coffre', 'perroquet', 'meduse', 'hippocampe'], ambush: { range: 140, missChance: 0.22 },
+    // Coffre l'avait remplacé, sur le papier (350 px de recouvrement de
+    // bandes) : mesuré sur 24 min, ZÉRO prise, et jamais un coffre à moins de
+    // 140 px d'une murène — il nage en pleine eau, elle guette au ras de son
+    // rocher. Il est passé au Mérou, qui va chercher ses proies.
+    prey: ['perroquet', 'meduse', 'hippocampe'], ambush: { range: 140, missChance: 0.22 },
     colors: ['#7a8a6a'],
     render: 'eel',
     lifespan: [700, 1000],
@@ -631,13 +633,15 @@ const SPECIES = {
   },
 
   // Embusqué du récif : il n'attrape pas, il ASPIRE. Et il mange le
-  // Poisson-clown Chatouille, qui n'avait aucun prédateur.
+  // Poisson-clown Chatouille et le Poisson Coffre, qui n'avaient aucun
+  // prédateur (le Coffre était déclaré au menu de la Murène, qui ne le
+  // croisait jamais : elle guette au ras du sable, il nage en pleine eau).
   merou: {
     name: 'Mérou Patatras', realName: 'Mérou', trophic: 4, movement: 'strata',
     nursery: 'reef',
     depthBand: [250, 1200], size: 38, speed: 34, sprintSpeed: 150,
     schooling: false, groupSize: [1, 2], popCap: 6, metabolism: 0.7,
-    prey: ['clown', 'fugu', 'oursin'], missChance: 0.35, senseRange: 700, grazes: true,
+    prey: ['clown', 'fugu', 'oursin', 'coffre'], missChance: 0.35, senseRange: 700, grazes: true,
     ambush: { range: 190, missChance: 0.3 },
     colors: ['#7d5a3c', '#c9a06a'],
     bodyRatio: 0.72, tail: 'fan', sizeVar: 0.16,

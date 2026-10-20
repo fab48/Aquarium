@@ -85,6 +85,7 @@ const Input = {
       if (this.mouseSpeed > 1100) {
         const [wx, wy] = Camera.toWorld(this.mx, this.my);
         if (World.isUnderwater(wx, wy) && Math.random() < 0.4) Particles.wake(wx, wy);
+        if (World.isUnderwater(wx, wy)) Particles.son('remous', wx, wy, 30);
       }
     });
 
@@ -247,6 +248,8 @@ const Input = {
     const nearSurface = Math.abs(wy - CONFIG.SURFACE_Y) < 120 || wy < CONFIG.SURFACE_Y;
     const nearFloor = World.floorY(wx) - wy < 80;
 
+    // La goutte d'abord : elle étouffe le plouf du splash qui suit (`etouffe`).
+    Particles.son('plic', wx, Math.max(wy, CONFIG.SURFACE_Y + 20), 30);
     if (nearSurface) {
       Particles.splash(wx);                       // splash + nourriture (GDD §8)
       Food.drop(wx, CONFIG.SURFACE_Y + 10);
@@ -291,6 +294,7 @@ const Input = {
       if (this.holdTimer > 0.35 && !(typeof Saisie !== 'undefined' && Saisie.occupe())) {
         const [wx, wy] = Camera.toWorld(this.mx, this.my);
         if (World.isUnderwater(wx, wy) && Math.random() < 0.7) Particles.bubble(wx, wy);
+        if (World.isUnderwater(wx, wy) && Math.random() < 0.3) Particles.son('bloup', wx, wy, 30);
       }
     }
   },

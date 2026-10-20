@@ -9,6 +9,7 @@ const Food = {
   // dissout — mais tant qu'il est là, il ressemble assez à de la nourriture
   // pour qu'un poisson affamé s'y trompe (et le regrette).
   poop(x, y, taille = 20) {
+    Particles.son('caca', x, y, taille);
     this.poops.push({
       x, y, r: U.clamp(taille * 0.16, 2.5, 7), age: 0, settled: false,
       wob: Math.random() * 10, seed: Math.random() * 100,

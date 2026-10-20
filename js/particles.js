@@ -6,9 +6,15 @@ const Particles = {
 
   spawn(p) { this.list.push(Object.assign({ age: 0, life: 1, vx: 0, vy: 0 }, p)); },
 
+  // Le SON des effets (js/son.js). Absent — l'atelier ne charge pas son.js —,
+  // tout reste muet sans erreur.
+  son(nom, x, y, taille) { if (typeof Son !== 'undefined') Son.jouer(nom, x, y, taille); },
+  sonBulle(texte, x, y, taille) { if (typeof Son !== 'undefined') Son.bulle(texte, x, y, taille); },
+
   // --- Effets prêts à l'emploi (branchables partout : collisions, gags...) ---
 
   splash(x) {
+    this.son('plouf', x, CONFIG.SURFACE_Y);
     // onde circulaire à la surface + gouttelettes
     this.spawn({ type: 'ripple', x, y: CONFIG.SURFACE_Y, life: 0.9, r: 4 });
     for (let i = 0; i < 6; i++) {
@@ -44,6 +50,7 @@ const Particles = {
 
   // Bulle d'action comique (GDD §8) : un symbole dans une bulle qui monte
   comic(x, y, symbol) {
+    this.sonBulle(symbol, x, y);
     this.actionBubbles.push({ x, y, symbol, age: 0, life: 1.8 });
   },
 
@@ -113,6 +120,7 @@ const Particles = {
 
   // Souffle du cétacé : panache de vapeur qui jaillit de l'évent et retombe
   blow(x, y, size) {
+    this.son('souffle', x, y, size);
     // Panache : une colonne serrée qui monte vite puis s'évase en retombant.
     // Le cône de départ est étroit, sinon on obtient un nuage flou au lieu du
     // jet vertical caractéristique.
@@ -155,6 +163,7 @@ const Particles = {
   // `taille` : celle de l'emetteur, pour qu'un petit poisson ne crie pas plus
   // gros que lui.
   shout(x, y, text, color = '#fff', taille = 30) {
+    this.sonBulle(text, x, y, taille / 1.3);
     const f = U.clamp(taille * 1.15, 18, 46);
     this.spawn({ type: 'shout', x, y, text, color, life: 1.1, r: f * 0.85, font: f });
   },
@@ -172,6 +181,7 @@ const Particles = {
   // La prise : éclair d'impact + écailles qui volent. C'est CE qu'il faut voir
   // pour comprendre qu'un poisson vient de se faire manger.
   chomp(x, y, size, color) {
+    this.son('chomp', x, y, size);
     this.spawn({ type: 'chomp', x, y, r: Math.max(14, size * 2.2), life: 0.45 });
     for (let i = 0; i < 9; i++) {
       const a = Math.random() * Math.PI * 2, sp = U.rand(70, 190);
@@ -213,6 +223,7 @@ const Particles = {
   // toutes les directions. Le tracé est figé à la naissance (`pts`) — recalculé
   // à chaque frame, l'éclair grouillait au lieu de claquer.
   eclairs(x, y, portee, n = 5) {
+    this.son('zap', x, y, 30);
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2;
       const L = portee * U.rand(0.55, 1);
@@ -229,6 +240,7 @@ const Particles = {
   },
 
   ink(x, y, size) {
+    this.son('poof', x, y, size);
     const n = Math.round(U.clamp(size * 0.6, 10, 34));
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2, sp = U.rand(10, 55);

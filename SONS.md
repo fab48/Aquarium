@@ -1,13 +1,42 @@
 # Sons — la liste des SFX
 
-Rien n'est codé : c'est la liste de ce qu'il faut, tirée des déclencheurs qui
-existent déjà dans le code (bulles de BD, gags de `gags.js`, événements du
-moteur). La colonne **Branché sur** dit où le son se pose : dans presque tous
-les cas il y a déjà une ligne `Particles.shout` / `comic` / `boom` au bon
-instant, il suffit de jouer le son à côté.
+**C'est codé** (octobre 2026) : `js/son.js`, synthèse **Web Audio
+procédurale** — zéro fichier, zéro dépendance, comme les silhouettes. Chaque
+son est une recette de `Son.R` (quelques oscillateurs et un bruit filtré).
+`sons.html` (outil de dev, comme l'atelier) les joue une par une à la hauteur
+voulue et les rend hors ligne en `.wav` ; le banc d'essai les rend toutes et
+vérifie qu'aucune ne se tait ni ne sature.
 
-Synthèse visée : **Web Audio procédural** (zéro fichier, zéro dépendance, comme
-les silhouettes). La recette de chaque son est indicative.
+Comment c'est branché, en un coup d'œil :
+
+- **Le son EST la bulle.** `Particles.shout` et `Particles.comic` appellent
+  `Son.bulle(texte)` ; la table `Son.BULLES` dit quelle bulle sonne. Ce qui
+  n'y est pas reste muet — c'est la règle 1 appliquée par construction.
+- **Les effets du moteur** sonnent depuis `Particles` (`chomp`, `splash`,
+  `blow`, `ink`, `eclairs`) et depuis `Entity` (`crash`, son PLOP, `assomme`,
+  `malaise`, `agonise`, `onAte` favorite, le baiser de `tryMate`), plus
+  `Food.poop`.
+- **Les scènes sans bulle** ont une ligne `Particles.son(nom, x, y, taille)`
+  à l'instant clé : départ de charge (ressort) et torpille, fusée du Calmar,
+  préavis de l'Anguille, crachat qui touche (couac), bâillement de la Murène,
+  aspiration et raté du Mérou, ballon crevé par le Barracuda, ponte de la
+  Tortue, gonflement du Fugu.
+- **Le joueur** : `Input.click` (plic, qui étouffe le plouf du splash),
+  bulles du clic maintenu, remous, saisie (pop).
+- **L'ambiance** (`Son.ambiance` / `Son.update`, à 4 Hz) : rumeur selon la
+  profondeur de la vue, ressac près du rivage, grondement des abysses,
+  mouettes de jour en surface, chant de cétacé lointain au fond, « bloup »
+  isolés la nuit.
+
+Mesuré (2 min, caméra réelle au départ, au rivage) : **~23 sons/min**, dont
+la moitié de ploufs de sauteurs — un son toutes les 2,5 s. Borne haute
+(caméra qui « voit » tout l'aquarium) : ~150/min, aucun type au-delà de 35.
+Deux réglages en sont sortis : le plouf ne rejoue pas avant 2,5 s, et le
+« bleuh » n'est que pour le caca avalé — la piqûre d'oursin se lit sur le
+visage.
+
+Les tableaux ci-dessous sont la liste d'origine ; la recette réelle est dans
+`Son.R` sous le nom indiqué entre crochets, **(à faire)** sinon.
 
 ## Les règles d'abord (elles valent plus que la liste)
 
@@ -43,14 +72,14 @@ fréquents : ils doivent être courts, doux, et se fondre.
 
 | Son | Quand | Branché sur | Recette |
 |---|---|---|---|
-| **Plic** de graine | clic = nourrir | `input.js` (splash + nourriture) | goutte : sinus 900→1600 Hz en 40 ms |
-| **Graine favorite** mangée | une espèce mange SA graine | `Entity.onAte` (favorite) | deux notes montantes, carillon |
-| **Bulles** du clic maintenu | appui long dans le vide | `input.js` | petits « bloup » aléatoires, très bas en volume |
-| **Remous** souris rapide | balayage qui fait fuir les petits | `input.js` | souffle de bruit filtré, bref |
-| **Saisie** : prise | l'anneau se remplit, la créature est à vous | `saisie.js` | « pop » de ventouse |
-| **HÉ !** | la créature se débat / proteste | `saisie.js:169` | couinement aigu court |
-| **TROP LOURD !** | tentative sur un colosse | `saisie.js:150` | « hnnngh » grave, effort raté |
-| **Relâché** dans l'eau / sur la plage | retombée, frétillement | `saisie.js` (splash) | plouf ; sur le sable, petits « flop » |
+| **Plic** de graine [plic] | clic = nourrir | `input.js` (splash + nourriture) | goutte : sinus 900→1600 Hz en 40 ms |
+| **Graine favorite** mangée [carillon] | une espèce mange SA graine | `Entity.onAte` (favorite) | deux notes montantes, carillon |
+| **Bulles** du clic maintenu [bloup] | appui long dans le vide | `input.js` | petits « bloup » aléatoires, très bas en volume |
+| **Remous** souris rapide [remous] | balayage qui fait fuir les petits | `input.js` | souffle de bruit filtré, bref |
+| **Saisie** : prise [pop] | l'anneau se remplit, la créature est à vous | `saisie.js` | « pop » de ventouse |
+| **HÉ !** [he] | la créature se débat / proteste | `saisie.js:169` | couinement aigu court |
+| **TROP LOURD !** [lourd] | tentative sur un colosse | `saisie.js:150` | « hnnngh » grave, effort raté |
+| **Relâché** dans l'eau / sur la plage [plouf ; le « flop » sur le sable : à faire] | retombée, frétillement | `saisie.js` (splash) | plouf ; sur le sable, petits « flop » |
 
 ## P2 — les scènes BRUYANTES (0,3–0,5 /min)
 
@@ -59,24 +88,25 @@ bulle. Rares par construction, donc on peut se permettre du caractère.
 
 | Son | Espèce / scène | Branché sur | Recette |
 |---|---|---|---|
-| **PROUT !** | Perroquet pétomane | `gags.js:265` | bruit rose, passe-bas ~150 Hz, modulé en amplitude (« brrrt ») + glissando final |
-| **BOUH !** | Dauphin farceur, le jaillissement | `gags.js:344` | voix synthétique grave, « bouh » (formant O) |
-| **ha ha** | Dauphin qui se tord de rire, Clown | `gags.js:372`, `:230` | 3–4 « ha » de clic-cliquetis (le rire du dauphin) |
-| **VROUUUM** | Thon pressé, la charge | `_charge`, `gags.js:925` | moteur : dent de scie 60→180 Hz + vibrato |
-| **FIOUUU** | Espadon, le grand run | `gags.js:1756` | sifflement descendant, bruit filtré passe-bande qui glisse |
-| **Torpille** (sans bulle) | Barracuda | `_charge` (`shout: null`) | whoosh seul, plus sec que le thon |
-| **ECHOOO** | Orque, l'onde | `gags.js:1019` | appel tonal 400→800 Hz + délai/réverb qui **voyage** avec l'onde |
-| **3… 2… 1…** | Calamar Fusée, décompte | `gags.js:1121` | trois bips montants, puis **fusée** (souffle + glissando) |
-| **PTUI !** | Poisson Archer, le crachat | `gags.js:2011`, `:2095` | « ptt » labial + petit jet d'eau |
-| **Oiseau abattu** | l'oiseau tombe à plat ventre | `Entity.move` (branche aérienne) | couac + plouf |
-| **TOC !** | Requin Marteau, coup de tête | `entity.js:705` | bloc de bois creux, sec |
-| **Bâillement** | Murène | `gags.js:1144` (`baille`) | « aaaouh » grave, formant A→O |
-| **ZAP** + préavis | Anguille Coup-de-Jus | préavis `gags.js:820`, décharge `entity.js:985` | grésillement qui monte (préavis), puis claquement électrique |
-| **PSCHIII** | Fugu crevé par des épines | `entity.js:906` | ballon qui se dégonfle : bruit + pitch qui chute en zigzag |
-| **PAN !** | Barracuda crève un Fugu gonflé | `gags.js:1930` | ballon qui éclate : clic large + bruit court |
-| **BOUM !** | Explosion de gavage | `entity.js:1332` | grosse détonation sourde, puis « splotch » des retombées |
-| **BUUURP** | Poulpe Ninja, le rot avant le poof | `gags.js:1398` | rot : dent de scie grave, vibrato irrégulier |
-| **Poof** d'encre | Poulpe, Calamar | `gags.js:1410`, `entity.js:1017` | « pfff » de nuage étouffé |
+| **PROUT !** [prout] | Perroquet pétomane | `gags.js:265` | bruit rose, passe-bas ~150 Hz, modulé en amplitude (« brrrt ») + glissando final |
+| **BOUH !** [bouh] | Dauphin farceur, le jaillissement | `gags.js:344` | voix synthétique grave, « bouh » (formant O) |
+| **ha ha** [rire] | Dauphin qui se tord de rire, Clown | `gags.js:372`, `:230` | 3–4 « ha » de clic-cliquetis (le rire du dauphin) |
+| **VROUUUM** [vroum] | Thon pressé, la charge | `_charge`, `gags.js:925` | moteur : dent de scie 60→180 Hz + vibrato |
+| **FIOUUU** [fiou] | Espadon, le grand run | `gags.js:1756` | sifflement descendant, bruit filtré passe-bande qui glisse |
+| **Torpille** (sans bulle) [whoosh] | Barracuda | `_charge` (`shout: null`) | whoosh seul, plus sec que le thon |
+| **ECHOOO** [echo] | Orque, l'onde | `gags.js:1019` | appel tonal 400→800 Hz + délai/réverb qui **voyage** avec l'onde |
+| **3… 2… 1…** [bip3, bip2, bip1, fusee] | Calamar Fusée, décompte | `gags.js:1121` | trois bips montants, puis **fusée** (souffle + glissando) |
+| **PTUI !** [ptui] | Poisson Archer, le crachat | `gags.js:2011`, `:2095` | « ptt » labial + petit jet d'eau |
+| **Oiseau abattu** [couac] | l'oiseau tombe à plat ventre | `Entity.move` (branche aérienne) | couac + plouf |
+| **TOC !** [toc] | Requin Marteau, coup de tête | `entity.js:705` | bloc de bois creux, sec |
+| **Bâillement** [baille] | Murène | `gags.js:1144` (`baille`) | « aaaouh » grave, formant A→O |
+| **ZAP** + préavis [gresille, zap] | Anguille Coup-de-Jus | préavis `gags.js:820`, décharge `entity.js:985` | grésillement qui monte (préavis), puis claquement électrique |
+| **PSCHIII** [pschiii] | Fugu crevé par des épines | `entity.js:906` | ballon qui se dégonfle : bruit + pitch qui chute en zigzag |
+| **PAN !** [pan] | Barracuda crève un Fugu gonflé | `gags.js:1930` | ballon qui éclate : clic large + bruit court |
+| **BOUM !** [boum] | Explosion de gavage | `entity.js:1332` | grosse détonation sourde, puis « splotch » des retombées |
+| **BUUURP** [burp] | Poulpe Ninja, le rot avant le poof | `gags.js:1398` | rot : dent de scie grave, vibrato irrégulier |
+| **Poof** d'encre [poof] | Poulpe, Calamar | `gags.js:1410`, `entity.js:1017` | « pfff » de nuage étouffé |
+| **SUPER !** [super] | un Requin devient Super Saïyen | `Saiyan.pilote` (la bulle) | accord qui monte en puissance, puis l'éclat |
 
 ## P2 — la panoplie du cartoon (moteur, partagée)
 
@@ -85,19 +115,19 @@ fait sonne dans vingt scènes. Hauteur indexée sur le gabarit (règle 3).
 
 | Son | Quand | Branché sur | Recette |
 |---|---|---|---|
-| **Crash du Coyote** | collision pleine vitesse | `Entity.crash` | « krrsh » d'accordéon (bruit qui se comprime), silence tenu ~2 s… |
-| **PLOP** de retour | il reprend sa forme | `Entity.crash` (fin) | « boing » : sinus qui oscille et retombe |
-| **Assommé** | vrille + étoiles | `Entity.assomme` | petits « tuiii » de cuicui tournoyants |
-| **Choc gelée** | `Entity.choc` (rare, hors ventre-plat) | `Entity.choc` | « bloïng » mou, ressort amorti |
-| **Ressort** (anticipation) | `_crispe` qui monte (cabré) | `_charge`, espadon, calamar | grincement de ressort qui se tend, très court |
-| **Chomp** | une prise | `ecosystem.js:730` (`Particles.chomp`) | claquement de mâchoire, grave pour un gros |
-| **Mastication** | pause de mastication | `pred._chew` | 2–3 « nom » étouffés |
-| **Mort jouée** | le clip `mort` | `Entity.agonise` | petit glissando descendant (trombone triste, 0,6 s) |
-| **Raté** comique | `missChance`, la proie esquive | moteur de chasse | « whiff » dans le vide |
-| **Caca** | il part par la queue | `Food.poops` | « plop » mouillé discret |
-| **Beurk** | `Entity.malaise` (caca avalé, prout respiré) | `Entity.malaise` | « bleuh » nasal |
-| **Splash / plouf** | sauteurs, cétacés, oiseaux qui plongent | `Particles.splash` (12 appels) | plouf, plus profond pour un gros ; **cooldown fort**, les sauteurs en font beaucoup |
-| **Souffle** de cétacé | évent qui crève la surface | `entity.js:1628` (`Particles.blow`) | « pschhh » d'évent, grave et long pour la baleine |
+| **Crash du Coyote** [krrsh] | collision pleine vitesse | `Entity.crash` | « krrsh » d'accordéon (bruit qui se comprime), silence tenu ~2 s… |
+| **PLOP** de retour [boing] | il reprend sa forme | `Entity.crash` (fin) | « boing » : sinus qui oscille et retombe |
+| **Assommé** [tuiii] | vrille + étoiles | `Entity.assomme` | petits « tuiii » de cuicui tournoyants |
+| **Choc gelée** [bloing — sur le raté du Mérou seulement] | `Entity.choc` (rare, hors ventre-plat) | `Entity.choc` | « bloïng » mou, ressort amorti |
+| **Ressort** (anticipation) [ressort] | `_crispe` qui monte (cabré) | `_charge`, espadon, calamar | grincement de ressort qui se tend, très court |
+| **Chomp** [chomp] | une prise | `ecosystem.js:730` (`Particles.chomp`) | claquement de mâchoire, grave pour un gros |
+| **Mastication** **(muet, volontairement : le chomp suffit)** | pause de mastication | `pred._chew` | 2–3 « nom » étouffés |
+| **Mort jouée** [mort] | le clip `mort` | `Entity.agonise` | petit glissando descendant (trombone triste, 0,6 s) |
+| **Raté** comique [whiff, sur 💦] | `missChance`, la proie esquive | moteur de chasse | « whiff » dans le vide |
+| **Caca** [caca] | il part par la queue | `Food.poops` | « plop » mouillé discret |
+| **Beurk** [beurk, caca avalé seulement] | `Entity.malaise` (caca avalé, prout respiré) | `Entity.malaise` | « bleuh » nasal |
+| **Splash / plouf** [plouf] | sauteurs, cétacés, oiseaux qui plongent | `Particles.splash` (12 appels) | plouf, plus profond pour un gros ; **cooldown fort**, les sauteurs en font beaucoup |
+| **Souffle** de cétacé [souffle] | évent qui crève la surface | `entity.js:1628` (`Particles.blow`) | « pschhh » d'évent, grave et long pour la baleine |
 
 ## P3 — les scènes SILENCIEUSES (0,8–1,2 /min)
 
@@ -107,33 +137,33 @@ bruyantes. Si on hésite : pas de son.
 
 | Son | Espèce / scène | Branché sur | Recette |
 |---|---|---|---|
-| Boule disco | Crabe Disco danse | `gags.js:148` | 4 mesures de basse funky, très bas |
-| ♪ musique | Anémone qui balance ses bras | `gags.js:1314` | deux notes de harpe |
-| **BONK !** | Dauphin, galipette qui heurte un oiseau | `gags.js:552` | « bonk » de tête creuse |
-| **WOUHOU !** | Dauphin en l'air | `gags.js:616`, `:685` | petit sifflement joyeux de dauphin |
-| Glouglou | Sardine Bulle-fofolle | `gags.js:140` | chapelet de « bloup » rapides |
-| Sirène 🚨 | Poisson Police gronde | `gags.js:1545` | « pin-pon » minuscule, deux notes |
-| Brossage 🪥 | Poisson Dentiste | `gags.js:1517` | « scritch-scritch » |
-| Dent qui tombe 🦷 | Requin Dents-Molles | `gags.js:1376` | « tink » cristallin |
-| Ronflement | Baleine Gros Dodo | `gags.js:944` | ronflement très grave, une expiration toutes les 2,6 s — **à n'entendre qu'en zoom proche** |
-| Bada-boum | Poisson-lune qui coule et touche le fond | `gags.js:979` | « boum » mou + nuage |
-| Gloups de poche | Pélican rate, le poisson ressort | `gags.js:806` | « gloup » puis « pop » |
-| Plongeon + ébrouement | Cormoran | `gags.js:1839` | plouf, puis frrr de plumes |
-| Algue trophée | Fou Moustachu | `gags.js:1160` | plouf + « hmpf » |
-| Saut raté | Poisson Volant | `gags.js:1169` | plat ventre (« flac ») |
-| Vol à la tire 😈 | Goéland chapardeur | `gags.js:1815` | cri de goéland moqueur |
-| Zip | Anguilles-Jardinières rentrent toutes | `gags.js:1854` | « zwip » collectif, rapide |
-| Déménagement 🐚 | Bernard-l'Ermite | `gags.js:1873` | toc-toc de coquille + « pop » |
-| Ventouse 🎢 | Étoile collée à un passant | `gags.js:1273` | « schlop » de ventouse au collage et au décollage |
-| Aspiration ratée | Mérou Patatras | `gags.js:1555` | aspirateur qui monte, puis « splotch » |
-| Repli gêné | Calamar Géant timide | `gags.js:752` | rien, ou un « oh » minuscule |
-| Ponte 🥚 + soupir | Tortue sur la plage | `gags.js:1693` | soupir d'aise |
-| Gonflement | Fugu (avertissement) | `gags.js:788` | baudruche qui se remplit (couinement) |
-| Hérissement | Oursin | `_piquantGonfle` | « tchk » sec |
-| Bisou | couples (`tryMate`), Papillons | `entity.js:1702` | « smack » |
-| Perle ✨ | Coquillage rieur | `gags.js:930` | ting de carillon |
+| Boule disco **(à faire)** | Crabe Disco danse | `gags.js:148` | 4 mesures de basse funky, très bas |
+| ♪ musique [harpe] | Anémone qui balance ses bras | `gags.js:1314` | deux notes de harpe |
+| **BONK !** [bonk] | Dauphin, galipette qui heurte un oiseau | `gags.js:552` | « bonk » de tête creuse |
+| **WOUHOU !** [wouhou] | Dauphin en l'air | `gags.js:616`, `:685` | petit sifflement joyeux de dauphin |
+| Glouglou [glouglou] | Sardine Bulle-fofolle | `gags.js:140` | chapelet de « bloup » rapides |
+| Sirène 🚨 [sirene] | Poisson Police gronde | `gags.js:1545` | « pin-pon » minuscule, deux notes |
+| Brossage 🪥 [brosse] | Poisson Dentiste | `gags.js:1517` | « scritch-scritch » |
+| Dent qui tombe 🦷 [tink] | Requin Dents-Molles | `gags.js:1376` | « tink » cristallin |
+| Ronflement **(à faire)** | Baleine Gros Dodo | `gags.js:944` | ronflement très grave, une expiration toutes les 2,6 s — **à n'entendre qu'en zoom proche** |
+| Bada-boum **(à faire)** | Poisson-lune qui coule et touche le fond | `gags.js:979` | « boum » mou + nuage |
+| Gloups de poche **(à faire)** | Pélican rate, le poisson ressort | `gags.js:806` | « gloup » puis « pop » |
+| Plongeon + ébrouement **(à faire (le plouf joue))** | Cormoran | `gags.js:1839` | plouf, puis frrr de plumes |
+| Algue trophée [hmpf] | Fou Moustachu | `gags.js:1160` | plouf + « hmpf » |
+| Saut raté **(à faire)** | Poisson Volant | `gags.js:1169` | plat ventre (« flac ») |
+| Vol à la tire 😈 [goeland] | Goéland chapardeur | `gags.js:1815` | cri de goéland moqueur |
+| Zip **(à faire)** | Anguilles-Jardinières rentrent toutes | `gags.js:1854` | « zwip » collectif, rapide |
+| Déménagement 🐚 [coquille] | Bernard-l'Ermite | `gags.js:1873` | toc-toc de coquille + « pop » |
+| Ventouse 🎢 [ventouse] | Étoile collée à un passant | `gags.js:1273` | « schlop » de ventouse au collage et au décollage |
+| Aspiration ratée [aspire] | Mérou Patatras | `gags.js:1555` | aspirateur qui monte, puis « splotch » |
+| Repli gêné **(muet)** | Calamar Géant timide | `gags.js:752` | rien, ou un « oh » minuscule |
+| Ponte 🥚 + soupir [soupir] | Tortue sur la plage | `gags.js:1693` | soupir d'aise |
+| Gonflement [gonfle] | Fugu (avertissement) | `gags.js:788` | baudruche qui se remplit (couinement) |
+| Hérissement **(à faire)** | Oursin | `_piquantGonfle` | « tchk » sec |
+| Bisou [smack] | couples (`tryMate`), Papillons | `entity.js:1702` | « smack » |
+| Perle ✨ **(à faire)** | Coquillage rieur | `gags.js:930` | ting de carillon |
 
-## P4 — l'ambiance (le liant)
+## P4 — l'ambiance (le liant) — les cinq couches sont codées
 
 Ce qui fait passer de « des sons » à « un lieu ». Continu, très bas, jamais
 de mélodie qui tourne en boucle (on l'entendrait au bout de cinq minutes).
@@ -160,6 +190,12 @@ de mélodie qui tourne en boucle (on l'entendrait au bout de cinq minutes).
   silence.
 
 ## Combien de sons au total
+
+**Codés : 57 recettes** (`Son.R`) et les cinq couches d'ambiance. Restent
+**à faire** les scènes marquées ainsi plus haut — toutes silencieuses, donc
+sans urgence : la règle est « si on hésite : pas de son ».
+
+L'estimation de départ :
 
 Environ **25 sons du moteur et du joueur**, qui couvrent la majorité de ce qu'on
 entendra, plus **~35 sons de scène** spécifiques et **5 couches d'ambiance**.

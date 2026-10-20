@@ -166,6 +166,7 @@ const Saisie = {
     const oiseau = !!e.def.aerial;
     e._vfxCd = 3;
     e.hold(oiseau ? 'angry' : 'scared');
+    Particles.son('pop', e.x, e.y, e.size);
     if (oiseau) Particles.shout(e.x, e.y - e.size * 1.3, 'HÉ !', '#ffffff', 26);
     else Particles.comic(e.x, e.y - e.size * 1.2, '!');
     Particles.burst(e.x, e.y, '#ffffff', 6);

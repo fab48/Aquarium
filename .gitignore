@@ -3,3 +3,4 @@ __pycache__/
 
 # Planche de référence issue d'une banque d'images (Dreamstime) : gardée en local, jamais publiée.
 Assets/Concepts/cartoon-trendy-*.jpg
+node_modules/

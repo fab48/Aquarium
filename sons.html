@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sons de l'aquarium</title>
+<!-- LA TABLE DE MIXAGE DES RECETTES. Outil de dev, comme l'atelier : chaque
+     recette de js/son.js se joue ici d'un clic, à la hauteur voulue (le
+     gabarit de l'animal), et se rend hors ligne en .wav pour être écoutée et
+     comparée. C'est le MÊME code que le jeu : rien n'est recopié. -->
+<style>
+  :root { color-scheme: dark; --fond: #0d2236; --carte: #15324d; --trait: #2c5577; --texte: #d8ebf8; --doux: #8fb3cc; --accent: #7fd4ff; }
+  body { margin: 0; padding: 16px; font: 14px/1.4 system-ui, sans-serif; background: var(--fond); color: var(--texte); }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p { color: var(--doux); margin: 0 0 14px; max-width: 70ch; }
+  .barre { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+  .son { background: var(--carte); border: 1px solid var(--trait); border-radius: 8px; padding: 8px 10px; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+  .son b { font-weight: 600; }
+  .son small { color: var(--doux); display: block; }
+  button { background: #1f4767; color: var(--texte); border: 1px solid var(--trait); border-radius: 6px; padding: 4px 9px; cursor: pointer; font: inherit; }
+  button:hover { border-color: var(--accent); }
+  h2 { font-size: 15px; color: var(--accent); margin: 18px 0 8px; }
+</style>
+</head>
+<body>
+<h1>🔊 Sons de l'aquarium</h1>
+<p>Chaque recette de <code>js/son.js</code>, jouée telle que le jeu la joue. Le
+curseur « taille » est celle de l'animal : un gros joue plus grave (règle 3 de
+SONS.md). « .wav » rend la recette hors ligne et la télécharge.</p>
+<div class="barre">
+  <label>taille de l'émetteur <input id="taille" type="range" min="6" max="190" value="30"> <span id="tv">30</span> px</label>
+  <label><input id="eau" type="checkbox" checked> sous l'eau (passe-bas)</label>
+  <button id="tout">▶ tout jouer</button>
+</div>
+<div id="liste"></div>
+
+<script src="js/config.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/son.js"></script>
+<script>
+  const GROUPES = [
+    ['Le joueur', ['plic', 'carillon', 'bloup', 'remous', 'pop', 'he', 'lourd', 'plouf']],
+    ['Les bruyantes', ['prout', 'bouh', 'rire', 'vroum', 'fiou', 'whoosh', 'echo', 'bip3', 'bip2', 'bip1', 'fusee', 'ptui', 'couac', 'toc', 'baille', 'gresille', 'zap', 'pschiii', 'pan', 'boum', 'burp', 'poof', 'super', 'wouhou', 'bonk']],
+    ['La panoplie du cartoon', ['krrsh', 'boing', 'tuiii', 'bloing', 'ressort', 'chomp', 'mort', 'whiff', 'caca', 'beurk', 'souffle', 'aspire']],
+    ['Les silencieuses', ['tink', 'brosse', 'sirene', 'goeland', 'coquille', 'ventouse', 'harpe', 'glouglou', 'hmpf', 'smack', 'gonfle', 'soupir']],
+  ];
+  // Une recette absente des groupes apparaît quand même : la page ne doit pas
+  // cacher un son ajouté au jeu.
+  const vus = new Set(GROUPES.flatMap(g => g[1]));
+  const autres = Object.keys(Son.R).filter(n => !vus.has(n));
+  if (autres.length) GROUPES.push(['Autres', autres]);
+
+  let ctx = null, sortie = null, filtre = null;
+  function contexte() {
+    if (ctx) return ctx;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    ctx = new AC();
+    filtre = ctx.createBiquadFilter(); filtre.type = 'lowpass'; filtre.frequency.value = 2400;
+    sortie = ctx.createGain(); sortie.gain.value = 0.8;
+    const lim = ctx.createDynamicsCompressor(); lim.threshold.value = -14; lim.ratio.value = 8;
+    filtre.connect(sortie); sortie.connect(lim); lim.connect(ctx.destination);
+    Son.ctx = ctx; Son.bruits();
+    return ctx;
+  }
+  const taille = () => +document.getElementById('taille').value;
+  const hauteur = () => U.clamp(Math.pow(30 / taille(), 0.4), 0.45, 1.9);
+
+  function jouer(nom, t0) {
+    const c = contexte(); Son.ctx = c;
+    const r = Son.R[nom];
+    const g = c.createGain(); g.gain.value = r.vol ?? 0.5;
+    g.connect(document.getElementById('eau').checked && !r.air ? filtre : sortie);
+    return r.f(Son, g, t0 ?? c.currentTime + 0.02, { h: hauteur(), d: 1, k: 1 }) || 1;
+  }
+
+  // Rendu hors ligne : le même code sur un OfflineAudioContext. Renvoie le
+  // tampon — `analyser` s'en sert pour le banc d'essai (crête, énergie).
+  async function rendre(nom, h = 1, sr = 44100) {
+    const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    const off = new OAC(1, Math.ceil(sr * 3), sr);
+    const avant = [Son.ctx, Son._blanc, Son._brun];
+    Son.ctx = off; Son.bruits();
+    const r = Son.R[nom];
+    const g = off.createGain(); g.gain.value = r.vol ?? 0.5; g.connect(off.destination);
+    let erreur = null;
+    try { r.f(Son, g, 0.01, { h, d: 1, k: 1 }); } catch (e) { erreur = String(e); }
+    [Son.ctx, Son._blanc, Son._brun] = avant;
+    const buf = await off.startRendering();
+    return { buf, erreur };
+  }
+  async function analyser(nom, h = 1) {
+    const { buf, erreur } = await rendre(nom, h);
+    const d = buf.getChannelData(0);
+    let crete = 0, e = 0, fin = 0;
+    for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > crete) crete = v; e += v * v; if (v > 0.002) fin = i; }
+    return { nom, erreur, crete: +crete.toFixed(3), rms: +Math.sqrt(e / d.length).toFixed(4), duree: +(fin / buf.sampleRate).toFixed(2) };
+  }
+  function wav(buf) {
+    const d = buf.getChannelData(0), n = d.length, b = new ArrayBuffer(44 + n * 2), v = new DataView(b);
+    const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVE'); w(12, 'fmt ');
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, buf.sampleRate, true); v.setUint32(28, buf.sampleRate * 2, true);
+    v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, n * 2, true);
+    for (let i = 0; i < n; i++) v.setInt16(44 + i * 2, U.clamp(d[i], -1, 1) * 32767, true);
+    return new Blob([b], { type: 'audio/wav' });
+  }
+  async function telecharger(nom) {
+    const { buf } = await rendre(nom, hauteur());
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(wav(buf)); a.download = `son_${nom}.wav`; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+
+  const liste = document.getElementById('liste');
+  for (const [titre, noms] of GROUPES) {
+    const h = document.createElement('h2'); h.textContent = titre; liste.append(h);
+    const g = document.createElement('div'); g.className = 'grille'; liste.append(g);
+    for (const nom of noms) {
+      if (!Son.R[nom]) continue;
+      const r = Son.R[nom];
+      const el = document.createElement('div'); el.className = 'son';
+      el.innerHTML = `<div><b>${nom}</b><small>délai ${r.cd ?? 0.12} s · niveau ${r.vol ?? 0.5}${r.air ? ' · en l’air' : ''}</small></div>`;
+      const b1 = document.createElement('button'); b1.textContent = '▶'; b1.onclick = () => jouer(nom);
+      const b2 = document.createElement('button'); b2.textContent = '.wav'; b2.onclick = () => telecharger(nom);
+      const bo = document.createElement('span'); bo.append(b1, ' ', b2); el.append(bo); g.append(el);
+    }
+  }
+  document.getElementById('taille').oninput = e => { document.getElementById('tv').textContent = e.target.value; };
+  document.getElementById('tout').onclick = () => {
+    const c = contexte(); let t = c.currentTime + 0.05;
+    for (const nom of GROUPES.flatMap(g => g[1])) if (Son.R[nom]) t += jouer(nom, t) + 0.25;
+  };
+</script>
+</body>
+</html>

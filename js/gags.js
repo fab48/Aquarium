@@ -39,7 +39,10 @@ const CADENCE = {
   vroum:      0.4,
   torpille:   0.5,   // la charge silencieuse du Barracuda (même scène que le
                      //   vroum, sans la bulle : la traînée parle pour lui)
-  decharge:   0.5,   // était à 25,5/min : cinquante fois trop
+  decharge:   0.5,   // était à 25,5/min : cinquante fois trop. Le code lisait
+                     //   1 en dur au lieu de cette ligne : mesuré à 1,3–1,8/min
+                     //   (3 × 10 min), rafale de départ comprise. Avec cette
+                     //   ligne et un premier délai dispersé : 0,3–0,4/min.
   run:        0.4,
   echo:       0.4,
   fusee:      0.4,
@@ -69,6 +72,8 @@ const CADENCE = {
   figure:     4,     // par BANC, pas par individu (cf. `cadenceBanc`)
   // VIVANT
   perle:      2,
+  looping:    3,     // la Méduse retournée par le courant (silencieux : le visage).
+                     //   Mesuré 2,5–3/min (3 × 10 min)
   chapardage: 1,
 };
 
@@ -837,6 +842,9 @@ const GAGS = {
   // préavis se lit comme un bug d'affichage.
   anguille(e, dt, t) {
     const cd = e._shockCd ?? 99;
+    // Le grésillement du préavis, une fois, quand la décharge devient imminente.
+    if (cd < 1 && (e._cdPrev ?? 99) >= 1) Particles.son('gresille', e.x, e.y, e.size);
+    e._cdPrev = cd;
     // 9 étincelles/s par anguille, c'était 632 gerbes/min : le deuxième poste
     // de particules du jeu, pour un préavis d'une seconde. Trois suffisent à
     // annoncer la décharge.
@@ -878,6 +886,7 @@ const GAGS = {
           // c'est ce qui rend un crash possible dès les premiers mètres.
           e.vx = e._chargeDir * e.def.speed * 2.3; e.vy = 0;
           if (o.shout) Particles.shout(e.x, e.y - e.size * 1.2, o.shout, o.couleur, e.size * 1.4);
+          else Particles.son('whoosh', e.x, e.y, e.size);   // la torpille : sa traînée, et son souffle
         }
         return;
       }
@@ -932,6 +941,7 @@ const GAGS = {
     const spD = (e.def.sprite && typeof Sprites !== 'undefined') ? Sprites.get(e.def.sprite) : null;
     e._chargeDuree = (spD && spD.poses && spD.poses.cabre && spD.poses.cabre.duree) || 0.8;
     e._chargePh = 'pose'; e._chargeT = e._chargeDuree;
+    Particles.son('ressort', e.x, e.y, e.size);
     e.jouerAnime('charge');                     // le dessin peut avoir SA mise en jambes
     e.hold('proud');                            // l'air de celui qui va faire un exploit
   },
@@ -978,10 +988,14 @@ const GAGS = {
 
   // LA MÉDUSE PART EN LOOPING. Elle n'a pas de tête : le courant la retourne,
   // et elle en ressort avec les yeux qui tournent.
+  // Cadence d'aquarium, comme tout gag périodique : un `U.rand(55, 120)` par
+  // individu en donnait ~25 par minute pour une trentaine de méduses.
+  // Le PREMIER délai est dispersé sur tout l'intervalle : tiré plein, aucune
+  // des trente méduses ne bouclait avant onze minutes de jeu.
   meduse(e, dt, t) {
-    e._loopCd = (e._loopCd ?? U.rand(10, 30)) - dt;
+    e._loopCd = (e._loopCd ?? U.rand(0.05, 1) * Ecosystem.cadence(e, CADENCE.looping)) - dt;
     if (e._loopCd > 0) return;
-    e._loopCd = U.rand(55, 120);
+    e._loopCd = Ecosystem.cadence(e, CADENCE.looping);
     e.emote('dizzy', 2.6, Math.random() < 0.2);
     e.vy -= 60; e.vx += U.rand(-1, 1) * 50;
   },
@@ -1143,6 +1157,7 @@ const GAGS = {
         e._crispe = 0; e._fuseeJet = 0.7;
         const dir = e._facing >= 0 ? -1 : 1;      // il part À RECULONS
         e.vx += dir * 260; e.vy -= 90;
+        Particles.son('fusee', e.x, e.y, e.size);
         Particles.bubble(e.x - dir * e.size, e.y, 6);
         Particles.burst(e.x - dir * e.size, e.y, '#cfd8ff', 7);
         e.emote('surprise', 1.6);
@@ -1159,17 +1174,44 @@ const GAGS = {
 
   // LA MURÈNE BÂILLE. Un jaillissement pour rien, qui fait détaler tout le
   // récif — c'est le seul moment où on la voit en entier.
+  // LE BÂILLEMENT SE VOIT. Elle ouvrait la bouche au fond de son trou, une
+  // seconde : de loin, rien ne bougeait. Elle se HISSE maintenant à moitié hors
+  // de son rocher (`_sortie`, le canal de son jaillissement, sans l'attaque),
+  // ouvre une gueule immense les yeux fermés, puis rentre. Les petits voisins
+  // détalent au moment où la gueule s'ouvre — c'est tout le gag : elle ne
+  // chassait même pas. Une scène qui attend son public, comme les grandes.
   murene(e, dt, t) {
+    if (e._baillePh) { this._baillement(e, dt); return; }
     e._bailleCd = (e._bailleCd ?? Ecosystem.cadence(e, CADENCE.baille)) - dt;
-    if (e._bailleCd > 0) return;
+    if (e._bailleCd > 0 || e.state !== 'wander' || !this._enVue(e)) return;
     e._bailleCd = Ecosystem.cadence(e, CADENCE.baille);
-    e.emote('eating', 2.2, false);                // la gueule grande ouverte
-    let fuyards = 0;
-    for (const o of Ecosystem.neighbors(e.x, e.y)) {
-      if (o === e || o.dead || o.def.size > 40) continue;
-      if (U.dist2(e.x, e.y, o.x, o.y) > 220 * 220) continue;
-      o.state = 'flee'; o.target = e; o.stateTimer = 1.4;
-      if (fuyards++ < 3) o.emote('scared', 1.4);
+    e._baillePh = 'sort'; e._bailleT = 0;
+  },
+
+  _baillement(e, dt) {
+    // Interrompue — elle jaillit sur une proie, s'endort, est sonnée : la scène
+    // se referme d'elle-même, sinon `_sortie` resterait gravé.
+    if (e.state !== 'wander' || e.dead) { e._baillePh = null; e._sortie = 0; return; }
+    const T = (e._bailleT += dt), lisse = k => { k = U.clamp(k, 0, 1); return k * k * (3 - 2 * k); };
+    if (e._baillePh === 'sort') {                  // 0,8 s : elle se hisse hors du trou
+      e._sortie = 0.6 * lisse(T / 0.8);
+      if (T < 0.8) return;
+      e._baillePh = 'baille'; e._bailleT = 0;
+      e.emote('yawn', 1.9, false);
+      Particles.son('baille', e.x, e.y, e.size);
+      let fuyards = 0;
+      for (const o of Ecosystem.neighbors(e.x, e.y)) {
+        if (o === e || o.dead || o.def.size > 40 || !Entity.passe(o)) continue;
+        if (U.dist2(e.x, e.y, o.x, o.y) > 220 * 220) continue;
+        o.state = 'flee'; o.target = e; o.stateTimer = 1.4;
+        if (fuyards++ < 3) o.emote('scared', 1.4);
+      }
+    } else if (e._baillePh === 'baille') {         // 1,6 s : la gueule s'ouvre, elle s'étire
+      e._sortie = 0.6 + 0.1 * Math.sin(Math.min(1, T / 1.6) * Math.PI);
+      if (T >= 1.6) { e._baillePh = 'rentre'; e._bailleT = 0; }
+    } else {                                       // 0,9 s : elle rentre, satisfaite
+      e._sortie = 0.6 * (1 - lisse(T / 0.9));
+      if (T >= 0.9) { e._baillePh = null; e._sortie = 0; }
     }
   },
 
@@ -1574,6 +1616,7 @@ const GAGS = {
     e._aspire = U.lerp(e._aspire ?? 0, e.state === 'strike' ? 1 : 0, Math.min(1, dt * 10));
     if (e.state === 'strike' && !e._slurp) {
       e._slurp = true;
+      Particles.son('aspire', e.x, e.y, e.size);
       e.emote('eating', 1.4, false);
       Particles.bubble(e.x + e.size * 0.8, e.y, 5);
     }
@@ -1581,6 +1624,7 @@ const GAGS = {
       e._slurp = false;
       if (!(e._chew > 0)) {                        // raté : PATATRAS
         e.choc(0.9);
+        Particles.son('bloing', e.x, e.y, e.size);
         e.emote('dizzy', 1.4, false);
         const fy = World.floorY(e.x);
         if (fy - e.y < e.size * 2.5) Particles.sandCloud(e.x, fy - 4, true);
@@ -1678,6 +1722,7 @@ const GAGS = {
         if (Math.random() < dt * 6) Particles.sandCloud(e.x - e.size * 0.9, sol + e.size * 0.2, true);
         if (e._plageT <= 0) {
           e._plagePh = 'ponte'; e._plageT = 2.6;
+          Particles.son('soupir', e.x, e.y, e.size);
           for (let k = 0; k < U.randInt(2, 4); k++) {
             Ecosystem.layEgg(e, e.x - e.size * 0.8 + U.rand(-14, 14), sol + U.rand(0, 10));
           }
@@ -1830,7 +1875,31 @@ const GAGS = {
 
   // LE GOÉLAND VOLE LA PRISE DES AUTRES. Il ne chasse rien lui-même : il guette
   // un oiseau qui vient d'attraper quelque chose, fond dessus, et repart avec.
+  // Il FOND dessus : il se posait d'un coup au-dessus de sa victime, jusqu'à
+  // ~200 px plus loin — une téléportation, qui se lisait comme un saut
+  // d'image. Le piqué dure un quart de seconde, assez vite pour être un
+  // hold-up, assez pour qu'on le voie arriver.
   goeland(e, dt, t) {
+    const o = e._volCible;
+    if (o) {
+      e._volT -= dt;
+      if (o.dead || e._saisi || e._lache) { e._volCible = null; return; }
+      const cx = o.x + e._volDx, cy = o.y - 30, k = Math.min(1, dt * 12);
+      e.x += (cx - e.x) * k; e.y += (cy - e.y) * k;
+      e.vx = (cx - e.x) * 6; e.vy = (cy - e.y) * 6;
+      if (U.dist2(e.x, e.y, cx, cy) > 20 * 20 && e._volT > 0) return;
+      e._volCible = null;
+      if (o._chew <= 0 && !(o._poche > 0)) { e.emote('sad', 1.2); return; }   // trop tard : il a tout avalé
+      // Le hold-up
+      e._vol = 1.4;
+      o._chew = 0; o._chewPrey = null; o._poche = 0;
+      o.emote('angry', 2.2);
+      e.emote('smug', 2.2);
+      e.hunger = Math.max(0, e.hunger - 0.25);
+      Particles.comic(e.x, e.y - e.size, '😈');
+      Particles.burst(o.x, o.y, '#ffe08a', 6);
+      return;
+    }
     if (e._vol > 0) { e._vol -= dt; return; }
     e._volCd = (e._volCd ?? Ecosystem.cadence(e, CADENCE.chapardage)) - dt;
     if (e._volCd > 0) return;
@@ -1838,15 +1907,8 @@ const GAGS = {
       if (o === e || o.dead || !o.def.aerial) continue;
       if (o._chew <= 0 && !(o._poche > 0)) continue;      // il n'a rien à voler
       if (U.dist2(e.x, e.y, o.x, o.y) > 320 * 320) continue;
-      // Le hold-up
-      e._volCd = Ecosystem.cadence(e, CADENCE.chapardage); e._vol = 1.4;
-      e.x = o.x + U.rand(-30, 30); e.y = o.y - 30;
-      o._chew = 0; o._chewPrey = null; o._poche = 0;
-      o.emote('angry', 2.2);
-      e.emote('smug', 2.2);
-      e.hunger = Math.max(0, e.hunger - 0.25);
-      Particles.comic(e.x, e.y - e.size, '😈');
-      Particles.burst(o.x, o.y, '#ffe08a', 6);
+      e._volCd = Ecosystem.cadence(e, CADENCE.chapardage);
+      e._volCible = o; e._volT = 0.6; e._volDx = U.rand(-30, 30);
       return;
     }
     e._volCd = 2;
@@ -1941,19 +2003,21 @@ const GAGS = {
     if (!charge) return;
     const p = e.target;
     if (U.dist2(e.x, e.y, p.x, p.y) > (e.size + p.size) ** 2) return;
-    if (p.dead) return;
+    if (p.dead || p._saisi || p._lache) return;
     // BOUM : le ballon crève. Le barracuda ne prend pas le malaise (perceBallon)
     // — mais il encaisse le CONTRECOUP : on ne crève pas un ballon à pleine
     // vitesse sans s'écraser un peu le nez dessus.
     Particles.boom(p.x, p.y, p.size * 2);
+    Particles.son('pan', p.x, p.y, p.size);
     Particles.burst(p.x, p.y, '#ffe08a', 12);
     e.choc(0.7);
     e.vx *= -0.3; e.vy *= 0.5;                     // le souffle le repousse
+    // Le repas passe par `Ecosystem.eat`, comme tous les autres. Le fugu était
+    // crevé à la main (`p.dead = true`) : ni scène de mort, ni caca, ni
+    // témoins qui détalent — et l'audit, qui compte les repas dans `eat`,
+    // concluait que le Barracuda ne mangeait JAMAIS de Fugu.
+    Ecosystem.eat(e, p);
     e.emote('smug', 2);
-    p.dead = true;
-    e._chew = 0.55; e._chewPrey = p.def;
-    e.hunger = Math.max(0, e.hunger - 0.45);
-    e.wellFed = Math.min(1.6, e.wellFed + 0.55);
     e.target = null; e.state = 'wander';
   },
 
@@ -2136,6 +2200,7 @@ const GAGS = {
         && U.dist2(c.x, c.y, v.x, v.y) < (c.size + 24) ** 2
         && Math.random() < 0.8;                    // il arrive qu'il esquive
       if (touche) {
+        Particles.son('couac', c.x, c.y, c.size);
         c._abattu = U.rand(3.5, 6.5);
         c.assomme(null, true);
         c.stateTimer = c._abattu + 0.2;

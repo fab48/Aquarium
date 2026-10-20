@@ -360,6 +360,7 @@ const Saisie = {
         if (vi > 80) {
           e.choc(U.clamp(vi / 520, 0.35, 1), 'y');
           Particles.sandCloud(e.x, fy - 3, s > 24);
+          Particles.son('flop', e.x, e.y, s);
         }
         L.hops++;
         if (L.hops === 1) e.emote('dizzy', 1.4, false);

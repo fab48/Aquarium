@@ -28,15 +28,16 @@ Comment c'est branché, en un coup d'œil :
   mouettes de jour en surface, chant de cétacé lointain au fond, « bloup »
   isolés la nuit.
 
-Mesuré (2 min, caméra réelle au départ, au rivage) : **~23 sons/min**, dont
-la moitié de ploufs de sauteurs — un son toutes les 2,5 s. Borne haute
-(caméra qui « voit » tout l'aquarium) : ~150/min, aucun type au-delà de 35.
-Deux réglages en sont sortis : le plouf ne rejoue pas avant 2,5 s, et le
-« bleuh » n'est que pour le caca avalé — la piqûre d'oursin se lit sur le
-visage.
+Mesuré (2 min, caméra réelle au départ, au récif, trois graines) : **28 à 38
+sons/min** — un son toutes les deux secondes environ, dont un tiers de ploufs
+de sauteurs. Borne haute (caméra qui « voit » tout l'aquarium) : ~170/min,
+aucun type au-delà de 35. Les réglages qui en sont sortis : le plouf ne
+rejoue pas avant 4 s, le hérissement de l'oursin et le plat ventre du volant
+avant 5 à 6 s, et le « bleuh » n'est que pour le caca avalé — la piqûre
+d'oursin se lit sur le visage.
 
 Les tableaux ci-dessous sont la liste d'origine ; la recette réelle est dans
-`Son.R` sous le nom indiqué entre crochets, **(à faire)** sinon.
+`Son.R` sous le nom indiqué entre crochets ; **(muet)** quand c'est voulu.
 
 ## Les règles d'abord (elles valent plus que la liste)
 
@@ -65,7 +66,7 @@ doit la suivre, pas la défaire :
 7. **Bouton 🔇** dans le HUD, et rien ne joue avant le premier geste du joueur
    (règle des navigateurs).
 
-## P1 — le joueur (à faire en premier)
+## P1 — le joueur
 
 Ce sont les seuls sons qui répondent à **un geste**. Ce sont aussi les plus
 fréquents : ils doivent être courts, doux, et se fondre.
@@ -79,7 +80,7 @@ fréquents : ils doivent être courts, doux, et se fondre.
 | **Saisie** : prise [pop] | l'anneau se remplit, la créature est à vous | `saisie.js` | « pop » de ventouse |
 | **HÉ !** [he] | la créature se débat / proteste | `saisie.js:169` | couinement aigu court |
 | **TROP LOURD !** [lourd] | tentative sur un colosse | `saisie.js:150` | « hnnngh » grave, effort raté |
-| **Relâché** dans l'eau / sur la plage [plouf ; le « flop » sur le sable : à faire] | retombée, frétillement | `saisie.js` (splash) | plouf ; sur le sable, petits « flop » |
+| **Relâché** dans l'eau / sur la plage [plouf, flop] | retombée, frétillement | `saisie.js` (splash) | plouf ; sur le sable, petits « flop » |
 
 ## P2 — les scènes BRUYANTES (0,3–0,5 /min)
 
@@ -137,7 +138,7 @@ bruyantes. Si on hésite : pas de son.
 
 | Son | Espèce / scène | Branché sur | Recette |
 |---|---|---|---|
-| Boule disco **(à faire)** | Crabe Disco danse | `gags.js:148` | 4 mesures de basse funky, très bas |
+| Boule disco [disco] | Crabe Disco danse | `gags.js:148` | 4 mesures de basse funky, très bas |
 | ♪ musique [harpe] | Anémone qui balance ses bras | `gags.js:1314` | deux notes de harpe |
 | **BONK !** [bonk] | Dauphin, galipette qui heurte un oiseau | `gags.js:552` | « bonk » de tête creuse |
 | **WOUHOU !** [wouhou] | Dauphin en l'air | `gags.js:616`, `:685` | petit sifflement joyeux de dauphin |
@@ -145,23 +146,23 @@ bruyantes. Si on hésite : pas de son.
 | Sirène 🚨 [sirene] | Poisson Police gronde | `gags.js:1545` | « pin-pon » minuscule, deux notes |
 | Brossage 🪥 [brosse] | Poisson Dentiste | `gags.js:1517` | « scritch-scritch » |
 | Dent qui tombe 🦷 [tink] | Requin Dents-Molles | `gags.js:1376` | « tink » cristallin |
-| Ronflement **(à faire)** | Baleine Gros Dodo | `gags.js:944` | ronflement très grave, une expiration toutes les 2,6 s — **à n'entendre qu'en zoom proche** |
-| Bada-boum **(à faire)** | Poisson-lune qui coule et touche le fond | `gags.js:979` | « boum » mou + nuage |
-| Gloups de poche **(à faire)** | Pélican rate, le poisson ressort | `gags.js:806` | « gloup » puis « pop » |
-| Plongeon + ébrouement **(à faire (le plouf joue))** | Cormoran | `gags.js:1839` | plouf, puis frrr de plumes |
+| Ronflement [ronfle] | Baleine Gros Dodo | `gags.js:944` | ronflement très grave, une expiration toutes les 2,6 s — **à n'entendre qu'en zoom proche** |
+| Bada-boum [badaboum] | Poisson-lune qui coule et touche le fond | `gags.js:979` | « boum » mou + nuage |
+| Gloups de poche [gloups] | Pélican rate, le poisson ressort | `gags.js:806` | « gloup » puis « pop » |
+| Plongeon + ébrouement [plouf, ebroue] | Cormoran | `gags.js:1839` | plouf, puis frrr de plumes |
 | Algue trophée [hmpf] | Fou Moustachu | `gags.js:1160` | plouf + « hmpf » |
-| Saut raté **(à faire)** | Poisson Volant | `gags.js:1169` | plat ventre (« flac ») |
+| Saut raté [flac] | Poisson Volant | `gags.js:1169` | plat ventre (« flac ») |
 | Vol à la tire 😈 [goeland] | Goéland chapardeur | `gags.js:1815` | cri de goéland moqueur |
-| Zip **(à faire)** | Anguilles-Jardinières rentrent toutes | `gags.js:1854` | « zwip » collectif, rapide |
+| Zip [zip] | Anguilles-Jardinières rentrent toutes | `gags.js:1854` | « zwip » collectif, rapide |
 | Déménagement 🐚 [coquille] | Bernard-l'Ermite | `gags.js:1873` | toc-toc de coquille + « pop » |
 | Ventouse 🎢 [ventouse] | Étoile collée à un passant | `gags.js:1273` | « schlop » de ventouse au collage et au décollage |
 | Aspiration ratée [aspire] | Mérou Patatras | `gags.js:1555` | aspirateur qui monte, puis « splotch » |
 | Repli gêné **(muet)** | Calamar Géant timide | `gags.js:752` | rien, ou un « oh » minuscule |
 | Ponte 🥚 + soupir [soupir] | Tortue sur la plage | `gags.js:1693` | soupir d'aise |
 | Gonflement [gonfle] | Fugu (avertissement) | `gags.js:788` | baudruche qui se remplit (couinement) |
-| Hérissement **(à faire)** | Oursin | `_piquantGonfle` | « tchk » sec |
+| Hérissement [tchk] | Oursin | `_piquantGonfle` | « tchk » sec |
 | Bisou [smack] | couples (`tryMate`), Papillons | `entity.js:1702` | « smack » |
-| Perle ✨ **(à faire)** | Coquillage rieur | `gags.js:930` | ting de carillon |
+| Perle ✨ [perle] | Coquillage rieur | `gags.js:930` | ting de carillon |
 
 ## P4 — l'ambiance (le liant) — les cinq couches sont codées
 
@@ -191,9 +192,10 @@ de mélodie qui tourne en boucle (on l'entendrait au bout de cinq minutes).
 
 ## Combien de sons au total
 
-**Codés : 57 recettes** (`Son.R`) et les cinq couches d'ambiance. Restent
-**à faire** les scènes marquées ainsi plus haut — toutes silencieuses, donc
-sans urgence : la règle est « si on hésite : pas de son ».
+**Codés : 67 recettes** (`Son.R`) et les cinq couches d'ambiance — toute la
+liste. Restent muets, volontairement, la mastication (le chomp suffit) et le
+repli du Calamar Géant, en plus de tout ce que la section précédente garde
+silencieux.
 
 L'estimation de départ :
 

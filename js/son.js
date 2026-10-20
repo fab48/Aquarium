@@ -278,8 +278,8 @@ const Son = {
       S.voix(o, t, 120 * p.h, 85 * p.h, 0.55 * p.d, [[420, 5, 2.4], [900, 6, 0.8]], 0.8, 9);
       return 0.6;
     } },
-    // Les sauteurs éclaboussent sans arrêt : un plouf toutes les 2,5 s au plus.
-    plouf: { cd: 2.5, vol: 0.28, f(S, o, t, p) {
+    // Les sauteurs éclaboussent sans arrêt : un plouf toutes les 4 s au plus.
+    plouf: { cd: 4, vol: 0.28, f(S, o, t, p) {
       S.bruit(o, t, 0.28 * p.d, 'bandpass', 1400 * p.h, 300 * p.h, 1.4, 0.7, 0.003);
       S.osc(o, t, 'sine', 190 * p.h, 60 * p.h, 0.16, 0.6, 0.004);
       return 0.32;
@@ -601,7 +601,7 @@ const Son = {
       S.osc(o, t + 0.01, 'sine', 900, 500, 0.05, 0.4, 0.002);
       return 0.08;
     } },
-    gonfle: { cd: 2, vol: 0.2, f(S, o, t, p) {
+    gonfle: { cd: 5, vol: 0.2, f(S, o, t, p) {
       // La baudruche qui se remplit (l'avertissement du Fugu).
       S.osc(o, t, 'triangle', 280 * p.h, 720 * p.h, 0.5, 0.7, 0.05, 0.1);
       return 0.55;
@@ -609,6 +609,71 @@ const Son = {
     soupir: { cd: 3, vol: 0.25, f(S, o, t, p) {
       S.bruit(o, t, 0.9, 'bandpass', 900, 500, 1.2, 0.7, 0.25, 0.1);
       return 0.95;
+    } },
+    disco: { cd: 4, vol: 0.2, f(S, o, t, p) {
+      // Le Crabe Disco : une mesure de basse funky et son charleston.
+      const c = S.ctx, lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 650; lp.connect(o);
+      [82.4, 98, 110, 98, 123.5, 110].forEach((f, i) => S.osc(lp, t + i * 0.15, 'square', f, f, 0.13, 0.5, 0.004));
+      for (let i = 0; i < 6; i++) S.bruit(o, t + i * 0.15 + 0.075, 0.03, 'highpass', 7000, 7000, 0.7, 0.25, 0.001);
+      return 0.95;
+    } },
+    ronfle: { cd: 2, vol: 0.3, zoomMin: 1.3, f(S, o, t, p) {
+      // La Baleine Gros Dodo : une expiration de ronfleur — à n'entendre
+      // qu'en zoom proche (`zoomMin`), sinon elle ronflerait tout l'aquarium.
+      const c = S.ctx, am = c.createGain(); am.gain.value = 0.6; am.connect(o);
+      const l = c.createOscillator(); l.frequency.value = 24; const lg = c.createGain(); lg.gain.value = 0.5;
+      l.connect(lg).connect(am.gain); l.start(t); l.stop(t + 1.1);
+      S.osc(am, t, 'sawtooth', 58 * p.h, 46 * p.h, 1, 0.5, 0.25, 0.3);
+      S.bruit(am, t, 1, 'lowpass', 420, 260, 1, 0.5, 0.25, 0.3);
+      return 1.1;
+    } },
+    badaboum: { cd: 2, vol: 0.35, f(S, o, t, p) {
+      // Le Poisson-lune touche le fond : un « boum » mou dans le sable.
+      S.osc(o, t, 'sine', 120 * p.h, 48 * p.h, 0.28, 0.8, 0.004);
+      S.bruit(o, t, 0.3, 'lowpass', 600, 200, 0.7, 0.5, 0.004);
+      return 0.32;
+    } },
+    gloups: { cd: 2, vol: 0.3, air: true, f(S, o, t, p) {
+      // La poche du Pélican : « gloup »… et le poisson ressort, « pop ».
+      S.osc(o, t, 'sine', 300 * p.h, 620 * p.h, 0.12, 0.6, 0.005);
+      S.osc(o, t + 0.26, 'sine', 720, 210, 0.05, 0.6, 0.002);
+      return 0.33;
+    } },
+    ebroue: { cd: 2, vol: 0.25, air: true, f(S, o, t, p) {
+      // Le Cormoran ressort et s'ébroue : un « frrr » de plumes.
+      const c = S.ctx, am = c.createGain(); am.gain.value = 0.5; am.connect(o);
+      const l = c.createOscillator(); l.frequency.value = 28; const lg = c.createGain(); lg.gain.value = 0.5;
+      l.connect(lg).connect(am.gain); l.start(t); l.stop(t + 0.45);
+      S.bruit(am, t, 0.4, 'bandpass', 2600, 1800, 1.2, 1.5, 0.02);
+      return 0.45;
+    } },
+    flac: { cd: 5, vol: 0.3, f(S, o, t, p) {
+      // Le plat ventre du Poisson Volant qui frimait.
+      S.bruit(o, t, 0.07, 'lowpass', 1600, 700, 0.7, 0.8, 0.001);
+      S.osc(o, t, 'sine', 260 * p.h, 90 * p.h, 0.06, 0.5, 0.002);
+      return 0.09;
+    } },
+    zip: { cd: 1.5, vol: 0.22, f(S, o, t, p) {
+      // Les Anguilles-Jardinières rentrent toutes : « zwip ».
+      S.osc(o, t, 'sine', 600, 2400, 0.12, 0.5, 0.005);
+      S.bruit(o, t, 0.1, 'bandpass', 1500, 4000, 2, 0.4, 0.005);
+      return 0.14;
+    } },
+    tchk: { cd: 6, vol: 0.22, f(S, o, t, p) {
+      // L'Oursin hérisse ses piquants : un « tchk » sec.
+      for (let i = 0; i < 2; i++) S.bruit(o, t + i * 0.045, 0.03, 'highpass', 3200, 3200, 0.8, 0.8, 0.001);
+      return 0.09;
+    } },
+    perle: { cd: 2, vol: 0.2, f(S, o, t, p) {
+      // La perle du Coquillage Rieur : un carillon de trois notes.
+      [2093, 2637, 3136].forEach((f, i) => S.osc(o, t + i * 0.07, 'sine', f, f, 0.45, 0.4, 0.002));
+      return 0.6;
+    } },
+    flop: { cd: 0.4, vol: 0.3, f(S, o, t, p) {
+      // Lâché sur le sable : un « flop » à chaque rebond vers la mer.
+      S.osc(o, t, 'sine', 170 * p.h, 70 * p.h, 0.07, 0.6, 0.002);
+      S.bruit(o, t, 0.05, 'lowpass', 600, 300, 0.7, 0.4, 0.001);
+      return 0.09;
     } },
   },
 

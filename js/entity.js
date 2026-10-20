@@ -791,6 +791,7 @@ class Entity {
             // LE PÉLICAN RATE : il referme le bec, sa poche se remplit… et le
             // poisson en ressort par le haut. Toute la scène est là.
             this._poche = 1;
+            Particles.son('gloups', this.x, this.y, this.size);
             this.state = 'wander';
             p.emote('scared', 2);
             p.vy -= 160; p.vx += U.rand(-1, 1) * 90;
@@ -1000,7 +1001,9 @@ class Entity {
       // La baudruche se remplit : une fois par gonflement, pas à chaque frame.
       if (this._piquantGonfle > 0.5 && !this._gonfleSon) { this._gonfleSon = true; Particles.son('gonfle', this.x, this.y, this.size); }
       else if (this._piquantGonfle < 0.2) this._gonfleSon = false;
-    }
+    } else if (this._piquantGonfle > 0.5 && !this._gonfleSon) {
+      this._gonfleSon = true; Particles.son('tchk', this.x, this.y, this.size);   // il hérisse ses piquants
+    } else if (this._piquantGonfle < 0.2) this._gonfleSon = false;
   }
 
   // Facteur de taille appliqué par le rendu quand l'animal est gonflé.

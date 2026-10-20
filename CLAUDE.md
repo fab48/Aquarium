@@ -94,7 +94,7 @@ au-delà de Safari 13.1).
 - `saiyan.js` — le Requin Super Saïyen (surnombre).
 - `svgexport.js` / `svgimport.js` — le pont SVG de l'atelier.
 - `save.js` — sauvegarde `localStorage` + fichier.
-- `son.js` — **le son**, synthèse Web Audio procédurale (57 recettes, ambiance) ; cf. SONS.md.
+- `son.js` — **le son**, synthèse Web Audio procédurale (67 recettes, ambiance) ; cf. SONS.md.
 - `fps.js` — compteur de performance (touche F).
 - `main.js` — boucle, jour/nuit, HUD.
 

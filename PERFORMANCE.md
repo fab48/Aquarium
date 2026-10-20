@@ -793,3 +793,24 @@ attribuait des lectures de `size` à `neighbors`, qui n'en fait aucune). Le
 prochain levier serait structurel : faire de la taille un champ simple, mis à
 jour une fois par frame dans `update`, et regrouper les boucles de voisinage de
 `move`.
+
+## 12. La taille en champ, et une fusion qui n'avait pas lieu d'être (20 octobre 2026)
+
+**La taille devient un champ.** `e.size` était un accesseur mémoïsé par frame
+(§11) : deux tests et un appel à chacune des dizaines de milliers de lectures
+par frame. `Entity.poserTaille()` la pose désormais en **champ propre** une
+fois par frame, dans la boucle qu'`Ecosystem.buildGrid` faisait déjà ; le champ
+masque l'accesseur du prototype, qui reste pour l'atelier (qui ne simule pas)
+et pour une créature née dans la frame. Mesuré en A/B entrelacé sur le même
+monde (7 tours, médiane) : **2,96 → 2,66 ms de simulation à 500 créatures,
+−10 %**, le recalcul de toutes les tailles compris. Prix : une bouchée qui fait
+grossir se voit à la frame suivante. Le banc d'essai passe à l'identique
+(53/53, aucun NaN, plafond et Super Saïyen inchangés).
+
+**« Regrouper les boucles de voisinage de `move()` » ne mène nulle part.**
+`move()` n'en a qu'une — l'anti-chevauchement, sur `Ecosystem.neighbors`, dont
+la liste est d'ailleurs déjà partagée par cellule (`_nbCache`). L'autre boucle
+est celle des boids, sur les **camarades de banc** (`byGroup`), un ensemble
+différent : un banc s'étend bien au-delà des 195 px de la grille, et un voisin
+n'est pas forcément du banc. Les fusionner changerait le comportement, pas le
+coût. La piste est close.

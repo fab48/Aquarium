@@ -158,6 +158,7 @@ const GAGS = {
     if (e._discoCd <= 0 && !e._dancing) {
         e._dancing = U.rand(2.5, 4.5);
         e.emote('happy', 3, false);      // pas d'étincelles : ce sont des NOTES
+        Particles.son('disco', e.x, e.y, e.size);
         Particles.notes(e.x, e.y - e.size * 1.5, 3);
       }
     if (!e._dancing) return;
@@ -961,6 +962,7 @@ const GAGS = {
     if (!e._perle) {
       e._perle = 1;
       e.emote('proud', 3);
+      Particles.son('perle', e.x, e.y, e.size);
       Particles.sparkles(e.x, e.y - e.size * 0.8, 6);
     }
     e._perleCd = Ecosystem.cadence(e, CADENCE.perle);
@@ -975,6 +977,7 @@ const GAGS = {
     if (e._ronfle < 2.6) return;
     e._ronfle = 0;
     Particles.zzz(e.x, e.y - e.size * 0.6);
+    Particles.son('ronfle', e.x, e.y, e.size);
     const devant = e._facing >= 0 ? 1 : -1;
     for (const o of Ecosystem.neighbors(e.x, e.y)) {
       if (o === e || o.dead || o.def.size >= 70) continue;
@@ -1019,6 +1022,7 @@ const GAGS = {
     e._coule = false; e._diveTargetY = null;
     e.state = 'wander'; e.stateTimer = 6;
     e.choc(1, 'y');                              // BADA-BOUM : il s'aplatit en gelée
+    Particles.son('badaboum', e.x, e.y, e.size);
     e.emote('surprise', 2.4);
     Particles.sandCloud(e.x, sol + e.size * 0.4, true);
     Particles.comic(e.x, e.y - e.size, '❗');
@@ -1229,9 +1233,14 @@ const GAGS = {
   volant(e, dt, t) {
     if (e.jumpState === 'air' && !e._frime) {
       e._frime = true;
-      if (Math.random() < 0.25) e.emote('proud', 1.8);
+      e._fier = Math.random() < 0.25;
+      if (e._fier) e.emote('proud', 1.8);
     }
-    if (e.jumpState !== 'air') e._frime = false;
+    if (e.jumpState !== 'air') {
+      // Il frimait : la retombée est un plat ventre, et ça s'entend.
+      if (e._frime && e._fier) Particles.son('flac', e.x, CONFIG.SURFACE_Y + 5, e.size);
+      e._frime = false; e._fier = false;
+    }
   },
 
   // LE BANC DE CONFETTIS DESSINE UNE FORME, puis se disperse, gêné d'avoir été
@@ -1924,6 +1933,7 @@ const GAGS = {
       e._sousLeau = false;
       e.wet = 2.4;
       Particles.splash(e.x);
+      Particles.son('ebroue', e.x, CONFIG.SURFACE_Y - 10, e.size);
       e.emote('surprise', 1.4, false);
     }
   },
@@ -1942,6 +1952,7 @@ const GAGS = {
     e._rentre = U.lerp(e._rentre ?? 0, cible, Math.min(1, dt * (menace ? 9 : 1.2)));
     if (menace && !e._planque) {
       e._planque = true;
+      Particles.son('zip', e.x, e.y, e.size);     // le délai par type en fait UN pour la colonie
       if (Math.random() < 0.15) e.emote('scared', 1.4, false);
     }
     if (!menace) e._planque = false;

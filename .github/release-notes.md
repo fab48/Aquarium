@@ -1,3 +1,10 @@
+## ✨ Nouveautés de la 1.1.0
+
+- **Le son.** Tout est synthétisé en direct par le navigateur, sans un seul fichier audio : les cris des grandes scènes (PROUT, BOUH, VROUUUM, ECHOOO…), les bruits de cartoon (crash en accordéon, boing, chomp), les petites scènes, et une ambiance qui change avec la profondeur — ressac au rivage, rumeur sourde des abysses, mouettes de jour, chants lointains au fond. On n'entend que ce qui est à l'écran. Bouton 🔊 pour couper ; rien ne joue avant le premier clic.
+- **Le Requin Super Saïyen.** Faites proliférer une espèce et un requin se transforme pour remettre de l'ordre dans l'aquarium — et l'ordinateur ne s'essouffle plus quand l'aquarium déborde.
+- **Plus fluide sur les petits ordinateurs** : les dessins des créatures sont gardés en image entre deux images.
+- **La Murène bâille vraiment** (elle sort de son trou), le **Mérou** mange enfin les oursins, le **Goéland** fond sur ses victimes, les poissons volants ne restent plus suspendus en l'air, et l'aquarium démarre à l'équilibre au lieu d'une hécatombe.
+
 ## 🐠 Jouer
 
 **En ligne, sans rien installer :** https://fab48.github.io/Aquarium/. Sur téléphone, « Ajouter à l'écran d'accueil » l'installe comme une application, et il marche ensuite sans connexion.
